@@ -20,4 +20,4 @@ plugins:
             show_source: false
       custom_templates: templates
       watch:
-        - src/chromatic_fitting
+        - src
