@@ -80,14 +80,14 @@ class synthetic_planet(PlanetarySpectrumModel):
 
                 elif ld_eqn == "threeparam":
                     print("Using three-paramter LD equation\n")
-                    ld_coeffs.append(result[5:9])
+                    ld_coeffs.append(result[6:9])
                     mask.append(0)
 
                 else:
                     print("No valid LD equation method chosen!\n")
 
-        self.modemask = mask
-        self.ld_coeffs = ld_coeffs
+        self.modemask = np.array(mask)
+        self.ld_coeffs = np.array(ld_coeffs)
 
 def semi_major_axis(per,M,R):
     per_s = per * 24 * 60 * 60 * u.s
@@ -99,7 +99,7 @@ def semi_major_axis(per,M,R):
 
     return a_radii
 
-def main(wavelength, depth, star_params,planet_params,dirsen,snr=100,dt=1,res=50,mode='NIRCam_F322W2',ld_eqn='quadratic',ld_model='1D',plot_model=True):
+def generate_spectrum_ld(wavelength, depth, star_params,planet_params,dirsen,mode='NIRCam_F322W2',ld_eqn='quadratic',ld_model='1D',plot_model=True):
     # M_H,teff,logg in star_params
     table = Table(dict(wavelength=wavelength, depth=depth), meta=planet_params)
     model = synthetic_planet(table=table, label='injected model')
@@ -113,18 +113,21 @@ def main(wavelength, depth, star_params,planet_params,dirsen,snr=100,dt=1,res=50
         plt.show()
         plt.close()
 
+    return model
+
+def inject_spectrum(model,ld_eqn='quadratic',snr=100,dt=1,res=50):
+
     modemask = model.modemask
 
     r = SimulatedRainbow(
         signal_to_noise=snr,
         dt=dt * u.minute,
-        wavelength=model.table["wavelength"][modemask==0] * u.micron,
+        wavelength=np.array(model.table["wavelength"][modemask==0])*u.micron,
         R=res
     )
     i = r.inject_transit(
         planet_radius=np.array(model.table['depth'][modemask==0]),
-        planet_params= {"limb_dark": ld_eqn, 'u':model.ld_coeffs[modemask==0]} #planet_params
+        planet_params= {"limb_dark": ld_eqn, 'u':list(model.ld_coeffs[modemask==0])} #planet_params
     )
 
     return r,i
-

@@ -10,7 +10,7 @@ from astropy.constants import G
 from astropy import units as u
 import math
 import pickle
-import spectrum
+import src.spectrum
 from astropy.table import Table
 
 print("chromatic version = " + str(chromatic.version()))
