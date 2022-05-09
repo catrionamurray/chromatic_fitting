@@ -12,6 +12,8 @@ import math
 import pickle
 import src.spectrum
 from astropy.table import Table
+import warnings
+import matplotlib.pyplot as plt
 
 print("chromatic version = " + str(chromatic.version()))
 print("numpy version = " + str(np.__version__))
