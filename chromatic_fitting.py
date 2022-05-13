@@ -12,15 +12,8 @@ M_sun = 1.989 * 10 ** 30 * u.kg
 R_earth = 6371000 * u.m
 
 bintime=5 # minutes
-binwave=0.1 # microns
+binwave=0.2 # microns
 RANDOM_SEED = 58
-
-# r_prior = pm.Uniform("r", lower=0.01, upper=0.5, testval=np.array(init_r))
-# mean_prior =  pm.Normal("mean", mu=init_mean, sigma=0.1)
-# t0_prior = pm.Normal("t0", mu=init_t0, sigma=1.0)
-# logP = pm.Normal("logP", mu=np.log(init_period), sigma=period_error)
-# period = pm.Deterministic("period", pm.math.exp(logP))
-
 
 
 class chromatic_model:
@@ -158,8 +151,8 @@ class chromatic_model:
             # Draw 50 samples from the prior distributions (gives an idea of how good your priors are)
             prior_checks = pm.sample_prior_predictive(samples=50, random_seed=RANDOM_SEED)
 
-            start_time = ttime.time()
             # Fit for the maximum a posteriori parameters given the actual lightcurve
+            start_time = ttime.time()
             map_soln = pmx.optimize(start=model.test_point)
             print("Optimising model took --- %s seconds ---" % (ttime.time() - start_time))
 
@@ -338,14 +331,23 @@ class chromatic_model:
         # ******************
         try:
             firstprior = True
-            for period,r,t0,b,u_ld,mean in zip(prior_checks["period"], prior_checks["r"],prior_checks["t0"],prior_checks["b"],prior_checks["u"],prior_checks["mean"]):
-                # for each prior sample extract the transit model and plot
-                light_curve = generate_xo_orbit(period, t0, b, u_ld, r, self.x) + mean
+            for lc,mean in zip(prior_checks['light_curves'],prior_checks['mean']):
                 if firstprior:
-                    ax[0].plot(self.x, light_curve, color="C1", lw=1, alpha=0.5, label="Prior Sample (n=50)")
+                    ax[0].plot(self.x, lc+mean, color="C1", lw=1, alpha=0.5, label="Prior Sample (n=50)")
                     firstprior = False
                 else:
-                    ax[0].plot(self.x, light_curve, color="C1", lw=1, alpha=0.5)
+                    ax[0].plot(self.x, lc+mean, color="C1", lw=1, alpha=0.5)
+
+            # regenerating the orbit for each prior is SUPER SLOW!! And there's no need - each lc is already stored!
+
+            # for period,r,t0,b,u_ld,mean in zip(prior_checks["period"], prior_checks["r"],prior_checks["t0"],prior_checks["b"],prior_checks["u"],prior_checks["mean"]):
+                # for each prior sample extract the transit model and plot
+                # light_curve = generate_xo_orbit(period, t0, b, u_ld, r, self.x) + mean
+                # if firstprior:
+                #     ax[0].plot(self.x, light_curve, color="C1", lw=1, alpha=0.5, label="Prior Sample (n=50)")
+                #     firstprior = False
+                # else:
+                #     ax[0].plot(self.x, light_curve, color="C1", lw=1, alpha=0.5)
         except Exception as e:
             print(e)
         # ******************
@@ -414,6 +416,47 @@ def generate_xo_orbit(period,t0,b,u,r,x):
     light_curve = xo.LimbDarkLightCurve([u[0], u[1]]).get_light_curve(
         orbit=orbit, r=r, t=list(x)).eval()
     return light_curve
+
+def import_patricio_model():
+    x = pickle.load(open('data_challenge_spectra_v01.pickle', 'rb'))
+    # lets load a model
+    planet = x['WASP39b_NIRSpec']
+    planet_params = x['WASP39b_parameters']
+    # print(planet_params)
+
+    wavelength = planet['wl']
+    transmission = planet['transmission']
+    table = Table(dict(wavelength=planet['wl'], depth=np.sqrt(planet['transmission'])), meta=planet_params)
+
+    # set up a new model spectrum
+    model = PlanetarySpectrumModel(table=table, label='injected model')
+    return model, planet_params, wavelength,transmission
+
+def add_ld_coeffs(model, planet_params, wavelength,transmission,star_params,ld_eqn = 'quadratic',mode = "NIRSpec_Prism" ):
+    #  define where the zenodo LD files are stored (needed for ExoTiC)
+    dirsen = '/Users/catrionamurray/Documents/Postdoc/CUBoulder/exotic-ld_data'
+     # "NIRCam_F322W2"
+    #  calculate the LD coeffs for a series of wavelengths and transit depths
+    model_ld = generate_spectrum_ld(wavelength, np.sqrt(transmission), star_params, planet_params, dirsen, mode=mode,
+                                    ld_eqn=ld_eqn, ld_model='1D', plot_model=True)
+
+    return model_ld
+
+# def inject_wavedep_spectrum(model,snr=1000,res=50):
+#     # return synthetic rainbow + rainbow with injected transit
+#     # bintime = 5
+#     # binwave = 0.2
+#     r,i = inject_spectrum(model,snr=snr,dt=bintime,res=res)
+#     b_withouttransit = r.bin(
+#         dw=binwave * u.micron, dt=bintime * u.minute
+#     )
+#     b_withtransit = i.bin(
+#         dw=binwave * u.micron, dt=bintime * u.minute
+#     )
+#
+#     return b_withtransit, b_withouttransit
+
+
 
 #
 # def plot_model_and_recovered(trans_spect_file,model):
