@@ -1,22 +1,26 @@
 from .imports import *
+# from .pymc import *
 import arviz as az
 import pymc3 as pm
 import pymc3_ext as pmx
+# import pymc as pm
+# import pymc_ext as pmx
 import exoplanet as xo
 import corner
 # import theano
 # import theano.tensor as tt
 xo.utils.docs_setup()
 # plot the samples from the gp posterior with samples and shading
-from pymc3.gp.util import plot_gp_dist
+# from pymc3.gp.util import plot_gp_dist
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 # %config InlineBackend.figure_format = 'retina'
 az.style.use("arviz-darkgrid")
 
-print(f"Running on PyMC3 v{pm.__version__}")
+print(f"Running on PyMC v{pm.__version__}")
+# print(f"Running on PyMC4 v{pm4.__version__}")
 print(f"Running on ArviZ v{az.__version__}")
-print(f"exoplanet.__version__ = '{xo.__version__}'")
+print(f"Running on Exoplanet v{xo.__version__}")
 
 
 def fit_transit(x, y, yerr, init_r, init_t0, init_period, init_b, init_mean, init_u, period_error, fixed_var=[]):
@@ -131,20 +135,23 @@ def fit_transit(x, y, yerr, init_r, init_t0, init_period, init_b, init_mean, ini
         return map_soln, model, [period, r, t0, b, u_ld, mean]
 
 
-def plot_fit(x, y, yerr, map_soln):
+def plot_fit(x, y, yerr, map_soln,trace=[]):
     plt.plot(x, y, ".k", ms=4, label="data")
     plt.plot(x, map_soln["light_curves"], lw=1)
 
     # plot 50 chains from MCMC:
-    #     for i in np.random.randint(len(trace) * trace.nchains, size=50):
+    if len(trace)>0:
+        for i in np.random.randint(len(trace) * trace.nchains, size=50):
+            plt.plot(x, trace['light_curves'][i], color="C1", lw=1, alpha=0.2)
     #         # Set up a Keplerian orbit for the planets
     #         orbit = xo.orbits.KeplerianOrbit(period=trace['period'][i], t0=trace['t0'][i], b=trace['b'][i])
-    #         # Compute the model light curve using starry
+    # #         # Compute the model light curve using starry
     #         light_curves = xo.LimbDarkLightCurve(trace['u[0]'][i], trace['u[1]']).get_light_curve(
     #             orbit=orbit, r=trace['r'], t=list(x)
     #         )
     #         light_curve = pm.math.sum(light_curves, axis=-1) + trace['mean'][i]
     #         plt.plot(x, light_curve, color="C1", lw=1, alpha=0.3)
+
 
     plt.errorbar(x, y, yerr, c='k', alpha=0.2)
     plt.xlim(x.min(), x.max())
