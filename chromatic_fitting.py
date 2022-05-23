@@ -614,7 +614,7 @@ def generate_xo_orbit(period,t0,b,u,r,x):
         u : list or np.array
             Quadratic limb-darkening coefficients
         r : float
-            CHECK! Is this radius ratio or planetary radius?
+            planetary radius in solar radii
         x : list or np.array
             x-axis (time)
     Returns
@@ -690,6 +690,61 @@ def add_ld_coeffs(model, planet_params, wavelength,transmission,star_params,ld_e
                                     ld_eqn=ld_eqn, ld_model='1D', plot_model=True)
 
     return model_ld
+
+def mathilde_test(datasets):
+    with pm.Model() as model:
+        # Stellar parameters
+        # -----------------
+        m_s = pm.Normal('m_s', 1, 0.05)
+        r_s = pm.Normal('r_s', 1, 0.05)
+        # u = xo.distributions.QuadLimbDark(“u”, testval=np.array([0.226, 0.4154]))
+        # star = xo.LimbDarkLightCurve(u[0],u[1])
+        # Orbital parameters
+        # -----------------
+        t0 = pm.Normal("t0", mu=4.35, sigma=1.0)
+        p = pm.Normal('P', 7.2, 0.5)  # If log_p, use Deterministic here : pm.Deterministic(“period”, tt.exp(log_period))
+        b = xo.distributions.ImpactParameter("b", ror=0.04, testval=0.35)
+        # b=pm.Deterministic(‘b’,tt.as_tensor_variable(0))
+
+        # Keplerian orbit
+        # ---------------
+        orbit = xo.orbits.KeplerianOrbit(period=p, t0=t0, r_star=r_s, b=b, m_star=m_s)
+        pm.Deterministic('a', orbit.a)
+        pm.Deterministic('i', orbit.incl * 180 / np.pi)
+        pm.Deterministic('a/r_s', orbit.a / orbit.r_star)
+        # Loop over the instruments
+        # -------------------------
+        # depth = []
+        for n, (name, (x, y, yerr, d, ldc)) in enumerate(datasets.items()):
+            # We define the per-instrument parameters in a submodel so that we don’t have to prefix the names manually
+            with pm.Model(name=name, model=model):
+                # The limb darkening #It’s the same filter in this case
+                u = xo.QuadLimbDark('u', testval = np.array(ldc))
+                star = xo.LimbDarkLightCurve(u)
+                # The radius ratio
+                depth = pm.Uniform('depth', 0.001, 0.01, testval = d)  # Prior normal sur log(param) = prior uniform sur param
+                # depth.append(depths)
+                # depth=pm.Deterministic(“depth”,tt.as_tensor_variable(4e-3))
+                ror = pm.Deterministic('ror', star.get_ror_from_approx_transit_depth(depth, b))
+                r_p = pm.Deterministic('r_p', ror * r_s)  # In solar radius
+                r = pm.Deterministic('r', r_p * 1 / R_sun)
+                # starry light-curve
+                light_curves = star.get_light_curve(orbit=orbit, r=r_p, t=x)
+                transit = pm.Deterministic('light_curves', pm.math.sum(light_curves, axis=-1))
+                # Systematics and final model
+                # w = pm.Flat('w', shape = len(X))
+                # systematics = pm.Deterministic('systematics', w @ X)
+                # residuals = pm.Deterministic(“residuals”, y - transit)
+                # systematics=X
+                mu = pm.Deterministic('mu', transit)
+                # Likelihood function
+                pm.Normal('obs', mu = mu, sd = yerr, observed = y)
+                # Maximum a posteriori
+                # --------------------
+        opt = pmx.optimize(start=model.test_point)
+        opt = pmx.optimize(start=opt, vars=[depth])
+         # opt = pmx.optimize(start=opt, vars=[depth[1]])
+        return opt, model
 
 # def inject_wavedep_spectrum(model,snr=1000,res=50):
 #     # return synthetic rainbow + rainbow with injected transit
