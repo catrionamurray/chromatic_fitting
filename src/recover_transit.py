@@ -45,7 +45,7 @@ def fit_transit(x, y, yerr, init_r, init_t0, init_period, init_b, init_mean, ini
             Initial guess for the mean out-of-transit flux
         init_u : float
             Initial guess for the limb-darkening parameters.
-        fixed_var : list
+        fixed_var : list (optional)
             List of variables that should remain constant in this fitting process.
 
         Returns

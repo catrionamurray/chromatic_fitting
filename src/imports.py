@@ -15,6 +15,7 @@ from astropy.constants import G
 from astropy import units as u
 import math
 import pickle
+# import pickle5 as pickle # needed for Python v3.7!
 import src.spectrum
 from astropy.table import Table
 import warnings
