@@ -18,7 +18,15 @@ RANDOM_SEED = 58
 
 class chromatic_model:
     def sample_posterior(self,plot=True):
-        # sample the posterior
+        ''' Use PyMC3 to sample the posterior distributions
+        Parameters
+        ----------
+            plot : boolean
+                (optional, default=True)
+                Boolean specifying whether to plot the posterior sample on top of the lightcurve
+        '''
+
+        # time the sampling
         start_time = ttime.time()
         trace = sample(self.result, self.model)
         print("Sampling the posterior too --- %s seconds ---" % (ttime.time() - start_time))
@@ -29,35 +37,81 @@ class chromatic_model:
             self.plot_fit()
 
     def cornerplot(self):
+        ''' Use corner.py to generate the corner plot of the posterior distributions for each variable
+        '''
+
         # plot corner plot (posterior distribution for each variable)
         cornerplot(self.model, self.trace, self.P, self.r, self.t0, self.b, self.u_ld, self.mean)
 
     def summarise(self):
-        # plot summary (mean, std etc.)
+        ''' Summarise the results (mean, stddev etc.) of the posterior sampling
+        Returns
+        ----------
+            Arviz summary
+        '''
         return summarise(self.model, self.trace)
 
     def Normal(self,name,mu,sigma,observed=None):
+        ''' Specify a normal distribution for the given variable based on PyMC3 format
+        Parameters
+        ----------
+            name : str
+                The name of the parameter
+            mu : float
+                The initial mu value of the normal distribution
+            sigma : float
+                The initial sigma value of the normal distribution
+            observed : float
+                (optional, default=None)
+                The fixed value of the parameter if we do not want to optimise it
+        Returns
+        ----------
+            dict
+                The prior in a dictionary format
+        '''
         prior = {'name':name,'dist':"Normal",'mu':mu,'sigma':sigma}
         if observed is not None:
             prior['observed']=observed
         return prior
 
     def Uniform(self,name,testval,lower,upper,observed=None):
+        ''' Specify a uniform distribution for the given variable based on PyMC3 format
+        Parameters
+        ----------
+            name : str
+                The name of the parameter
+            testval : float
+                The initial value of the uniform distribution
+            lower : float
+                The lower bound for the uniform distribution
+            upper : float
+                The upper bound for the uniform distribution
+            observed : float
+                (optional, default=None)
+                The fixed value of the parameter if we do not want to optimise it
+        Returns
+        ----------
+            dict
+                The prior in a dictionary format
+        '''
         prior = {"name":name,"dist":"Uniform", "testval":testval,"lower":lower, "upper":upper}
         if observed is not None:
             prior['observed']=observed
         return prior
 
     def initialise_model(self,r_s_prior, m_s_prior, r_prior, logP_prior, t0_prior,mean_prior, init_b, init_u, reinit=False):
-        '''
-        Create chromatic model (only the wavelength-independent part)
-        Thoughts:
-        - at the moment we have to reinitialise to reuse this model.
-        - I hope there's a better way, but pyMC3/theano doesn't like you reassigning variable names.
-        - I have tried creating a subclass of 'chromatic_model' but it also updates the master model
-         when you optimise the submodel.
-        - copy.deepclone() doesn't seem to work either
+        ''' Create chromatic model (only the wavelength-independent part)
 
+        Thoughts:
+
+        - at the moment we have to reinitialise to reuse this model.
+
+        - I hope there's a better way, but pyMC3/theano doesn't like you reassigning variable names.
+
+        - I have tried creating a subclass of 'chromatic_model' but it also updates the master model when you optimise the submodel.
+
+        - copy.deepclone() doesn't seem to work either
+s
         Parameters
         ----------
         logP_prior : dictionary
@@ -122,7 +176,8 @@ class chromatic_model:
             self.model = model
 
     def initialise_model_staticwavelength(self):
-        # Update chromatic model (with the wavelength-dependent part)
+        ''' Update chromatic model (with the wavelength-dependent part)
+        '''
 
         with self.model as model:
             def init_prior(prior):
@@ -140,12 +195,33 @@ class chromatic_model:
 
 
     def reinitialise(self):
+        ''' Reinitialise chromatic model to redo the optimisation - we can't overwrite variable names
+        '''
         self.initialise_model(self.r_s_prior, self.m_s_prior, self.r_prior, self.logP_prior, self.t0_prior, self.mean_prior, self.init_b, self.init_u, reinit=True)
 
     def set_model(self,model):
+        ''' Replace the model with another (PROBABLY NOT WORKING YET)
+        Parameters
+        ----------
+            model : PyMC3 model
+                The PyMC3 we want to replace the current chromatic_model.model with
+        '''
         self.model = model
 
     def optimise_model(self,plot=True):
+        ''' Optimise the model using PyMC3 and the defined prior distributions
+        Parameters
+        ----------
+            plot : boolean
+                (optional, default=True)
+                Boolean to decide if we plot the results of the optimisation process
+        Returns
+        ----------
+            PyMC3 optimisation result
+                The result of the optimisation for each parameter
+            PyMC3 model
+                The optimised PyMC3 model
+        '''
         # use our predefined model to optimise the parameters
         with self.model as model:
             self.r_p = pm.Deterministic('r_p', self.r * self.r_s) # radius of planet in solar radii
@@ -182,7 +258,23 @@ class chromatic_model:
 
 
     def run(self, r, optimisation="weighted_average",plot=True,nwave=10):
-        # r is a rainbow object
+        ''' Run the optimisation process, using the method chosen by the user
+
+        Parameters
+        ----------
+            r : rainbow object
+                Rainbow object (chromatic) of the spectrum to fit
+            optimisation : str
+                (optional, default="weighted_average")
+                The optimisation method chosen by the user - currently three available: weighted_average, simultaneous and separate_wavelengths
+            plot : boolean
+                (optional, default=True)
+                Boolean to decide if we plot the results of the optimisation process
+            nwave : int
+                (optional, default=10)
+                Number of wavelengths to fit simultaneously if optimisation="simultaneous"
+        '''
+
         flux, flux_error, time, wavelength = rainbow_to_vector(r)
 
         if len(time) < 100:
@@ -307,6 +399,13 @@ class chromatic_model:
         return map_soln, model
 
     def optimise_model_sim(self,datasets):
+        ''' Run the simultaneous optimisation process using PyMC3
+
+        Parameters
+        ----------
+            datasets : dict
+                Dictionary containing the data for each wavelength to fit
+        '''
         xs,ys,yerrs = [],[],[]
 
         # THANKS MATHILDE/LIONEL!!
@@ -368,9 +467,7 @@ class chromatic_model:
         return opt, model
 
     def plot_fit(self):
-        '''
-        Plot the lightcurve compared to samples from both the priors and posteriors (only available after fitting)
-        :return: None
+        ''' Plot the lightcurve compared to samples from both the priors and posteriors (only available after fitting)
         '''
 
         # we need to treat the different opt methods slightly differently
@@ -504,12 +601,45 @@ class chromatic_submodel(chromatic_model):
         self.orbit = chromatic_model.orbit
 
 def generate_xo_orbit(period,t0,b,u,r,x):
+    ''' Generate the Exoplanet orbit from orbital parameters
+
+    Parameters
+    ----------
+        period : float
+            Orbital period
+        t0 : float
+            Epoch of the transit (days)
+        b : float
+            Impact parameter
+        u : list or np.array
+            Quadratic limb-darkening coefficients
+        r : float
+            CHECK! Is this radius ratio or planetary radius?
+        x : list or np.array
+            x-axis (time)
+    Returns
+    ---------
+        LimbDarkLightCurve
+            Light curve (with quadratic limb-darkening) from Exoplanet
+    '''
     orbit = xo.orbits.KeplerianOrbit(period=period, t0=t0, b=b)
     light_curve = xo.LimbDarkLightCurve([u[0], u[1]]).get_light_curve(
         orbit=orbit, r=r, t=list(x)).eval()
     return light_curve
 
 def import_patricio_model():
+    ''' Import spectral model
+    Returns
+    ---------
+        model : PlanetarySpectrumModel
+            Planetary spectrum model
+        planet_params : dict
+            Planetary parameters
+        wavelength : np.array
+            Wavelengths
+        transmission : np.array
+            Transmission values
+    '''
     x = pickle.load(open('data_challenge_spectra_v01.pickle', 'rb'))
     # lets load a model
     planet = x['WASP39b_NIRSpec']
@@ -522,12 +652,39 @@ def import_patricio_model():
 
     # set up a new model spectrum
     model = PlanetarySpectrumModel(table=table, label='injected model')
-    return model, planet_params, wavelength,transmission
+    return model, planet_params, wavelength, transmission
 
 def add_ld_coeffs(model, planet_params, wavelength,transmission,star_params,ld_eqn = 'quadratic',mode = "NIRSpec_Prism" ):
+    ''' Add the wavelength-dep limb-darkening coefficients to the transit model to inject
+
+    Parameters
+    ----------
+        model : PlanetarySpectrumModel
+            The spectral model of the injected planet
+        planet_params : dict
+            Synthetic planet parameters from user.
+        wavelength : np.array or list
+            The centres of the wavelength bins to calculate the LD coeffs over.
+        transmission : np.array or list
+            The transit depths as a function of wavelength.
+        star_params : dict
+            Stellar parameters from user. For now, must contain: M_H, teff, logg.
+        ld_eqn : str
+            (optional, default="quadratic")
+            The equation used to calculate the limb-darkening coeffs, options "linear", "quadratic", "nonlinear" and
+            "threeparam" (NOTE: There is a current issue open in ExoTiC to add a selection criteria so that only the
+            desired coefficients are returned).
+        mode : str
+            (optional, default="NIRCam_F322W2")
+            The instrument/wavelength band defined by ExoTiC-LD - several available for JWST.
+    Returns
+    ---------
+        model : synthetic_planet
+            Synthetic planet object to inject into Rainbow object.
+    '''
+
     #  define where the zenodo LD files are stored (needed for ExoTiC)
     dirsen = '/Users/catrionamurray/Documents/Postdoc/CUBoulder/exotic-ld_data'
-     # "NIRCam_F322W2"
     #  calculate the LD coeffs for a series of wavelengths and transit depths
     model_ld = generate_spectrum_ld(wavelength, np.sqrt(transmission), star_params, planet_params, dirsen, mode=mode,
                                     ld_eqn=ld_eqn, ld_model='1D', plot_model=True)

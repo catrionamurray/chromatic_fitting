@@ -214,14 +214,18 @@ def generate_spectrum_ld(wavelength, depth, star_params,planet_params,dirsen,mod
     dirsen : str
         The directory path where the stellar model grid and instrument information files required by ExoTiC are stored.
     mode : str
-            The instrument/wavelength band defined by ExoTiC-LD - several available for JWST.
+        (optional, default="NIRCam_F322W2")
+        The instrument/wavelength band defined by ExoTiC-LD - several available for JWST.
     ld_eqn : str
+        (optional, default="quadratic")
         The equation used to calculate the limb-darkening coeffs, options "linear", "quadratic", "nonlinear" and
         "threeparam" (NOTE: There is a current issue open in ExoTiC to add a selection criteria so that only the
         desired coefficients are returned).
     ld_model : str
+        (optional, default="1D")
          Either use "1D" or "3D" stellar model grid.
     plot_model : bool
+        (optional, default=True)
         Plot the synthetic spectrum and the LD coeffs against wavelength
 
     Returns
@@ -246,8 +250,6 @@ def generate_spectrum_ld(wavelength, depth, star_params,planet_params,dirsen,mod
         ax2.legend(frameon=False)
         plt.show()
         plt.close()
-
-
 
     return model
 
