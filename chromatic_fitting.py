@@ -416,41 +416,41 @@ s
             for n, (name, (x, y, yerr, r_ratio, mean, ldc)) in enumerate(datasets.items()):
                 if len(x) > 0:
                     # We define the per-instrument parameters in a submodel so that we don’t have to prefix the names manually
-                    with pm.Model(name=name, model=model):
-                        # The limb darkening #It’s the same filter in this case
-                        u = xo.QuadLimbDark('u', testval=ldc)
-                        star = xo.LimbDarkLightCurve(u)
+                    # with pm.Model(name=name, model=model):
+                    # The limb darkening #It’s the same filter in this case
+                    u = xo.QuadLimbDark(f'{name}_u', testval=ldc)
+                    star = xo.LimbDarkLightCurve(u)
 
-                        # The radius ratio
-                        # depth = pm.Uniform('depth',lower=0,upper=1,testval=r_ratio**2)
-                        # ror = star.get_ror_from_approx_transit_depth(depth, self.b)# pm.Deterministic('ror',depth)
-                        ror = pm.Uniform('ror', lower=0.01, upper=0.5,
-                                         testval=r_ratio)  # star.get_ror_from_approx_transit_depth(depth, b))
-                        r_p = pm.Deterministic('r_p', ror * self.r_s)  # In solar radius
-                        r = pm.Deterministic('r', r_p * 1 / R_sun)
+                    # The radius ratio
+                    # depth = pm.Uniform('depth',lower=0,upper=1,testval=r_ratio**2)
+                    # ror = star.get_ror_from_approx_transit_depth(depth, self.b)# pm.Deterministic('ror',depth)
+                    ror = pm.Uniform(f'{name}_ror', lower=0.01, upper=0.5,
+                                     testval=r_ratio)  # star.get_ror_from_approx_transit_depth(depth, b))
+                    r_p = pm.Deterministic(f'{name}_r_p', ror * self.r_s)  # In solar radius
+                    r = pm.Deterministic(f'{name}_r', r_p * 1 / R_sun)
 
-                        # lightcurve mean
-                        mean = pm.Normal("mean", mu=mean, sigma=0.1)
+                    # lightcurve mean
+                    mean = pm.Normal(f'{name}_mean', mu=mean, sigma=0.1)
 
-                        # starry light-curve
-                        light_curve = star.get_light_curve(orbit=self.orbit, r=r_p, t=x)
-                        light_curves = pm.Deterministic('light_curves', pm.math.sum(light_curve, axis=-1) + mean)
+                    # starry light-curve
+                    light_curve = star.get_light_curve(orbit=self.orbit, r=r_p, t=x)
+                    light_curves = pm.Deterministic(f'{name}_light_curves', pm.math.sum(light_curve, axis=-1) + mean)
 
-                        if firstrun:
-                            prior_checks = pm.sample_prior_predictive(samples=50, random_seed=RANDOM_SEED)
-                            firstrun = False
-                        # Systematics and final model
-                        #             w = pm.Flat('w',shape=len(X))
-                        #             systematics = pm.Deterministic('systematics',w@X)
-                        # residuals = pm.Deterministic(“residuals”, y - transit)
-                        # systematics=X
-                        # mu = pm.Deterministic('mu', transit)  # +systematics)
-                        # Likelihood function
-                        pm.Normal('obs', mu=light_curves, sd=yerr, observed=y)
+                    if firstrun:
+                        prior_checks = pm.sample_prior_predictive(samples=50, random_seed=RANDOM_SEED)
+                        firstrun = False
+                    # Systematics and final model
+                    #             w = pm.Flat('w',shape=len(X))
+                    #             systematics = pm.Deterministic('systematics',w@X)
+                    # residuals = pm.Deterministic(“residuals”, y - transit)
+                    # systematics=X
+                    # mu = pm.Deterministic('mu', transit)  # +systematics)
+                    # Likelihood function
+                    pm.Normal(f'{name}_obs', mu=light_curves, sd=yerr, observed=y)
 
-                        xs.append(x)
-                        ys.append(y)
-                        yerrs.append(yerr)
+                    xs.append(x)
+                    ys.append(y)
+                    yerrs.append(yerr)
             # Maximum a posteriori
             # --------------------
             opt = pmx.optimize(start=model.test_point)
@@ -469,6 +469,7 @@ s
     def plot_fit(self):
         ''' Plot the lightcurve compared to samples from both the priors and posteriors (only available after fitting)
         '''
+        sim_wavelengths = False
 
         # we need to treat the different opt methods slightly differently
         if 'light_curves' in self.result.keys():
@@ -484,9 +485,9 @@ s
                 print(e)
         else:
             # if we have done simultaneous wavelength optimisation
-            figsize=(12,24)
             lc_model, priors, mean_priors = [], [], []
             nrows = 0
+            sim_wavelengths = True
             for k, v in self.result.items():
                 if "light_curves" in k:
                     lc_model.append(v)
@@ -500,6 +501,7 @@ s
             except Exception as e:
                 print(e)
             x, y, yerr = self.x.copy(), self.y.copy(), self.yerr.copy()
+            figsize = (12, 4*nrows)
 
         # set up plot
         _,ax = plt.subplots(ncols=2,nrows=nrows,sharex=True,sharey=True,figsize=figsize)
@@ -538,7 +540,7 @@ s
             # plot initial parameter guess
             # ******************
             light_curve = generate_xo_orbit(self.init_period, self.init_t0, self.init_b, self.init_u, self.init_r, x[n]) + self.init_mean
-            ax_prior.plot(x[n], light_curve, color="green", lw=1, alpha=0.5,linestyle='--',label="Initial Guess")
+            ax_prior.plot(x[n], light_curve, color="green", lw=1, alpha=1,linestyle='--',label="Initial Guess")
             # ******************
 
 
@@ -548,18 +550,31 @@ s
                 firsttrace = True
 
                 # plot the 16-84th posterior percentile region
-                q16, q50, q84 = np.percentile(self.trace["light_curves"], [16, 50, 84], axis=(0))
-                ax[1].fill_between(x[n], q16.flatten(), q84.flatten(),color="C1", alpha=0.2, label="Posterior (16-84th percentile)")
+                if sim_wavelengths:
+                    trace = self.trace[f"wavelength_{n+1}_light_curves"]
+                else:
+                    trace = self.trace["light_curves"]
+
+                q16, q50, q84 = np.percentile(trace, [16, 50, 84], axis=(0))
+
+                ax_posterior.fill_between(x[n], q16.flatten(), q84.flatten(),color="C1", alpha=0.2, label="Posterior (16-84th percentile)")
 
                 # plot 50 individual posterior samples
                 for i in np.random.randint(len(self.trace) * self.trace.nchains, size=50):
                     if firsttrace:
                         # add the legend label to only the first prior line (to avoid 50 legend entries)
-                        ax_posterior.plot(x[n], self.trace['light_curves'][i], color="C1", lw=1, alpha=0.3,
-                                 label='Posterior Sample (n=50)')
+                        if sim_wavelengths:
+                            ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3,
+                                     label='Posterior Sample (n=50)')
+                        else:
+                            ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3,
+                                              label='Posterior Sample (n=50)')
                         firsttrace = False
                     else:
-                        ax_posterior.plot(x[n], self.trace['light_curves'][i], color="C1", lw=1, alpha=0.3)
+                        if sim_wavelengths:
+                            ax_posterior.plot(x[n], self.trace[f'wavelength_{n}_light_curves'][i], color="C1", lw=1, alpha=0.3)
+                        else:
+                            ax_posterior.plot(x[n], self.trace['light_curves'][i], color="C1", lw=1, alpha=0.3)
             except Exception as e:
                 print(e)
             # ******************
@@ -687,7 +702,7 @@ def add_ld_coeffs(model, planet_params, wavelength,transmission,star_params,ld_e
     dirsen = '/Users/catrionamurray/Documents/Postdoc/CUBoulder/exotic-ld_data'
     #  calculate the LD coeffs for a series of wavelengths and transit depths
     model_ld = generate_spectrum_ld(wavelength, np.sqrt(transmission), star_params, planet_params, dirsen, mode=mode,
-                                    ld_eqn=ld_eqn, ld_model='1D', plot_model=True)
+                                    ld_eqn=ld_eqn, ld_model='1D', plot_model=False)
 
     return model_ld
 
@@ -981,3 +996,56 @@ def mathilde_test(datasets):
 #
 #     summary = single_transit_recover(time,weighted_lc,weighted_err,model_ld)
 #     trans_spect = multiple_transit_recover(summary,time,flux,flux_error,wavelength,bintime,binwave)
+
+def main():
+    # set initial parameter estimates:
+    init_t0 = 0.1
+    init_period = 2  # 4.055259
+    period_error = 2  # 0.000009
+    init_b = 0.44
+    init_r = 0.14
+    init_mean = 0.0
+    init_u = [1.3, -0.5]
+    r_s = 1
+    m_s = 1
+
+    # create chromatic model:
+    cm = chromatic_model()
+
+    # init priors (use same distribution format as pyMC3):
+    m_s_prior = cm.Normal('m_s', mu=1, sigma=0.05, observed=r_s)
+    r_s_prior = cm.Normal('r_s', mu=1, sigma=0.05, observed=m_s)
+    r_prior = cm.Uniform("r", lower=0.01, upper=0.3, testval=init_r)
+    mean_prior = cm.Normal("mean", mu=init_mean, sigma=0.005)
+    t0_prior = cm.Normal("t0", mu=init_t0, sigma=0.05)
+    logP_prior = cm.Normal("logP", mu=np.log(init_period), sigma=np.log(period_error))
+
+    # Initialise the (wavelength-independent) model:
+    start_time = ttime.time()
+    cm.initialise_model(r_s_prior, m_s_prior, r_prior, logP_prior, t0_prior, mean_prior, init_b=init_b, init_u=init_u)
+    print("Initialising (static) model took --- %s seconds ---" % (ttime.time() - start_time))
+
+    # load Patricio's spectrum model:
+    model_staticld, planet_params, wavelength, transmission = import_patricio_model()
+
+    # add wavelength-dep limb-darkening coeffs:
+    model_ld = add_ld_coeffs(model_staticld, planet_params, wavelength, transmission,
+                             star_params={"M_H": -0.03, "Teff": 5326.6, "logg": 4.38933})
+
+    # return synthetic rainbow + rainbow with injected transit:
+    bintime = 5
+    binwave = 0.2
+    r, i = inject_spectrum(model_ld, snr=1000, dt=bintime, res=50)
+
+    # bin in time and wavelength (to speed up fitting)
+    b_withouttransit = r.bin(
+        dw=binwave * u.micron, dt=bintime * u.minute
+    )
+    b_withtransit = i.bin(
+        dw=binwave * u.micron, dt=bintime * u.minute
+    )
+
+    result, model = cm.run(b_withtransit, optimisation='simultaneous', nwave=5)
+    cm.sample_posterior(result)
+
+# main()
