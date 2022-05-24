@@ -176,7 +176,7 @@ def sample(map_soln, model):
         return trace
 
 
-def summarise(model, trace, fixed_var=[]):
+def summarise(model, trace, fixed_var=[], sim_wavelengths=False):
     all_varnames = ["period", "r", "t0", "b", "u", "mean"]
     nonfixed_varnames = [a for a in all_varnames if a not in fixed_var]
 
@@ -188,6 +188,29 @@ def summarise(model, trace, fixed_var=[]):
 
 
 def cornerplot(model, trace, period, r, t0, b, u, mean, fixed_var=[]):
+    ''' Generate and display a corner plot from the posterior distributions
+    Parameters
+    ----------
+        model : PyMC3 model
+            The PyMC3 model
+        trace : Arviz trace
+            The samples taken from the posterior distributions
+        period : float
+            Orbital period
+        r : float
+            Radius ratio
+        t0 : float
+            Transit epoch
+        b : float
+            Impact Parameter
+        u : list or np.array
+            Quadratic limb-darkening coeffs
+        mean : float
+            Mean of out-of-transit lightcurve
+        fixed_var : list
+            (optional, default=[])
+            List of variables to keep fixed (not optimised)
+    '''
     all_varnames = ["period", "r", "t0", "b", "u", "mean"]
     nonfixed_varnames = [a for a in all_varnames if a not in fixed_var]
     all_vars = [period, r, t0, b, u, mean]

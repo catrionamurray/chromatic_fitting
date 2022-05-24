@@ -15,8 +15,13 @@ bintime=5 # minutes
 binwave=0.2 # microns
 RANDOM_SEED = 58
 
+# def __repr__(self):
+#  return f"<{self.something}>"
 
 class chromatic_model:
+    def __repr__(self):
+        return "<chromatic_model>"
+
     def sample_posterior(self,plot=True):
         ''' Use PyMC3 to sample the posterior distributions
         Parameters
@@ -29,7 +34,7 @@ class chromatic_model:
         # time the sampling
         start_time = ttime.time()
         trace = sample(self.result, self.model)
-        print("Sampling the posterior too --- %s seconds ---" % (ttime.time() - start_time))
+        print("Sampling the posterior took --- %s seconds ---" % (ttime.time() - start_time))
         self.trace = trace
 
         if plot:
@@ -301,7 +306,7 @@ s
                     waves.append(rw)
                     count += 1
             start_time = ttime.time()
-            map_soln, model = self.optimise_model_sim(datasets)
+            map_soln, model = self.optimise_model_sim(datasets,plot=plot)
             self.x = xs
             self.y = ys
             self.yerr = yerrs
@@ -327,9 +332,10 @@ s
             self.y = y
             self.yerr = yerr
 
-            plt.plot(x, y, 'k.')
-            plt.show()
-            plt.close()
+            if plot:
+                plt.plot(x, y, 'k.')
+                plt.show()
+                plt.close()
 
             start_time = ttime.time()
             self.initialise_model_staticwavelength()
@@ -398,13 +404,15 @@ s
 
         return map_soln, model
 
-    def optimise_model_sim(self,datasets):
+    def optimise_model_sim(self,datasets,plot):
         ''' Run the simultaneous optimisation process using PyMC3
 
         Parameters
         ----------
             datasets : dict
                 Dictionary containing the data for each wavelength to fit
+            plot : boolean
+                Boolean whether to plot the results
         '''
         xs,ys,yerrs = [],[],[]
 
@@ -462,7 +470,8 @@ s
             self.y = ys
             self.yerr = yerrs
 
-        self.plot_fit()
+        if plot:
+            self.plot_fit()
 
         return opt, model
 
@@ -563,18 +572,11 @@ s
                 for i in np.random.randint(len(self.trace) * self.trace.nchains, size=50):
                     if firsttrace:
                         # add the legend label to only the first prior line (to avoid 50 legend entries)
-                        if sim_wavelengths:
-                            ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3,
-                                     label='Posterior Sample (n=50)')
-                        else:
-                            ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3,
+                        ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3,
                                               label='Posterior Sample (n=50)')
                         firsttrace = False
                     else:
-                        if sim_wavelengths:
-                            ax_posterior.plot(x[n], self.trace[f'wavelength_{n}_light_curves'][i], color="C1", lw=1, alpha=0.3)
-                        else:
-                            ax_posterior.plot(x[n], self.trace['light_curves'][i], color="C1", lw=1, alpha=0.3)
+                        ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3)
             except Exception as e:
                 print(e)
             # ******************
@@ -1045,7 +1047,8 @@ def main():
         dw=binwave * u.micron, dt=bintime * u.minute
     )
 
-    result, model = cm.run(b_withtransit, optimisation='simultaneous', nwave=5)
-    cm.sample_posterior(result)
+    result, model = cm.run(b_withtransit, optimisation='simultaneous', nwave=3, plot=False)
+    cm.sample_posterior(plot=False)
+    # print(cm.summarise())
 
-# main()
+main()

@@ -8,6 +8,13 @@ def rainbow_to_vector(r):
     rwavel = r.wavelike['wavelength']  # wavelength (microns) : [n_wavelengths]
     return rflux,rfluxe,rtime,rwavel
 
+def rainbow_to_df(r):
+    rflux, rfluxe, rtime, rwavel = rainbow_to_vector(r)
+    x, y = np.meshgrid(rtime.to_value(), rwavel.to_value())
+    rainbow_dict = {"Time (h)": x.ravel(), "Wavelength (microns)": y.ravel(), "Flux": rflux.ravel(),
+                    "Flux Error": rfluxe.ravel()}
+    df = pd.DataFrame(rainbow_dict)
+    return df
 
 def bin_data(jd, y, mins_jd):
     t = np.array(jd)
