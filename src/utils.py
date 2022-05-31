@@ -1,20 +1,76 @@
 from .imports import *
 
-def rainbow_to_vector(r):
-    # r: rainbow object
-    rflux = r.fluxlike['flux']         # flux (MJy/sr)        : [n_wavelengths x n_integrations]
-    rfluxe = r.fluxlike['uncertainty'] # flux error (MJy/sr)  : [n_wavelengths x n_integrations]
-    rtime = r.timelike['time']/24.     # time (BJD_TDB, days) : [n_integrations]
-    rwavel = r.wavelike['wavelength']  # wavelength (microns) : [n_wavelengths]
-    return rflux,rfluxe,rtime,rwavel
 
-def rainbow_to_df(r):
-    rflux, rfluxe, rtime, rwavel = rainbow_to_vector(r)
+def rainbow_to_vector(r, timeformat='h'):
+    """ Convert Rainbow object to np.arrays
+    Parameters
+    ----------
+        r : Rainbow object
+            chromatic Rainbow object to convert into array format
+        timeformat : str
+            (optional, default='hours')
+            The time format to use (seconds, minutes, hours, days etc.)
+    Returns
+    ----------
+        rflux : np.array
+            flux (MJy/sr)        [n_wavelengths x n_integrations]
+        rfluxe : np.array
+            flux error (MJy/sr)  [n_wavelengths x n_integrations]
+        rtime : np.array
+            time (BJD_TDB, houra) [n_integrations]
+        rwavel : np.array
+            wavelength (microns) [n_wavelengths]
+    """
+    secondformat = ['second', 'seconds', 'sec', 's']
+    minuteformat = ['minute', 'minutes', 'min', 'm']
+    hourformat = ['hour', 'hours', 'h']
+    dayformat = ['day', 'days', 'd']
+    yearformat = ['year', 'years', 'y']
+
+    rflux = r.fluxlike['flux']  # flux (MJy/sr)        : [n_wavelengths x n_integrations]
+    rfluxe = r.fluxlike['uncertainty']  # flux error (MJy/sr)  : [n_wavelengths x n_integrations]
+    rtime = r.timelike['time']  # time (BJD_TDB, hours) : [n_integrations]
+    rwavel = r.wavelike['wavelength']  # wavelength (microns) : [n_wavelengths]
+
+    # change the time array into the requested format (e.g. seconds, minutes, days etc.)
+    if timeformat in secondformat:
+        rtime = rtime * 3600
+    elif timeformat in minuteformat:
+        rtime = rtime * 60
+    elif timeformat in hourformat:
+        # hours is the default time setting
+        pass
+    elif timeformat in dayformat:
+        rtime = rtime / 24.
+    elif timeformat in yearformat:
+        rtime = rtime / (24 * 365.)
+    else:
+        warnings.warn("Unrecognised Time Format!")
+        return
+
+    return rflux, rfluxe, rtime, rwavel
+
+
+def rainbow_to_df(r, timeformat='h'):
+    """ Convert Rainbow object to pandas dataframe
+    Parameters
+    ----------
+        r : Rainbow object
+            chromatic Rainbow object to convert into pandas df format
+        timeformat : str
+            (optional, default='hours')
+            The time format to use (seconds, minutes, hours, days etc.)
+    Returns
+    ----------
+        pd.DataFrame
+    """
+    rflux, rfluxe, rtime, rwavel = rainbow_to_vector(r, timeformat)
     x, y = np.meshgrid(rtime.to_value(), rwavel.to_value())
-    rainbow_dict = {"Time (h)": x.ravel(), "Wavelength (microns)": y.ravel(), "Flux": rflux.ravel(),
+    rainbow_dict = {f"Time ({timeformat})": x.ravel(), "Wavelength (microns)": y.ravel(), "Flux": rflux.ravel(),
                     "Flux Error": rfluxe.ravel()}
     df = pd.DataFrame(rainbow_dict)
     return df
+
 
 def bin_data(jd, y, mins_jd):
     t = np.array(jd)
@@ -32,6 +88,7 @@ def bin_data(jd, y, mins_jd):
             if ind_st != split[-1]:
                 split.append(ind_st)
                 time = sorted_t[ind_st:]
+        #   need to add defn for time here?
         else:
             split.append(ind_st)
             time = sorted_t[ind_st:]
@@ -54,6 +111,7 @@ def bin_data(jd, y, mins_jd):
                 # binned_err[i] = 1.253 * np.nanstd(ys[i]) / np.sqrt(n)
                 binned_err[i] = np.nanstd(ys[i]) / np.sqrt(n)
             except Exception as e:
+                print(e)
                 pass
 
     bin_t = bins[binned_y != 0]
@@ -62,7 +120,15 @@ def bin_data(jd, y, mins_jd):
 
     return bin_t, bin_y, bin_e
 
+
 def find_nearest(array, value):
     # array = np.asarray(array)
     idx = (np.abs(array - value)).argmin()
     return idx
+
+def remove_nans(arr_with_nans,*otherarrs):
+    nanfree_arrs = []
+    for arr in otherarrs:
+        nanfree_arrs.append(arr[~np.isnan(arr_with_nans)])
+    arr_without_nans = arr_with_nans[~np.isnan(arr_with_nans)]
+    return arr_without_nans, nanfree_arrs

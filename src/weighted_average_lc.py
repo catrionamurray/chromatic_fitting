@@ -67,8 +67,8 @@ def weighted_avg_lc(time, flux, fluxe, wavelength, wavelength_range):
     sigma_sq = np.nanmedian(weight, axis=1)
 
     # Calculate the running median and standard dev of the weights (remove outliers!)
-    running_median = running_box(wavelength[i_start:i_end], sigma_sq, boxsize* u.Unit("micron"), 'median')
-    running_std = running_box(wavelength[i_start:i_end], sigma_sq, boxsize* u.Unit("micron"), 'clipped_std')
+    running_median = running_box(wavelength[i_start:i_end], sigma_sq, boxsize, 'median') #* u.Unit("micron")
+    running_std = running_box(wavelength[i_start:i_end], sigma_sq, boxsize, 'clipped_std') #* u.Unit("micron")
 
     # Remove the outlier weights
     new_sigma_sq = sigma_sq[sigma_sq < (running_median + (5 * running_std))]

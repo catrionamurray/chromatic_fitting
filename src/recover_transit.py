@@ -24,7 +24,7 @@ print(f"Running on Exoplanet v{xo.__version__}")
 
 
 def fit_transit(x, y, yerr, init_r, init_t0, init_period, init_b, init_mean, init_u, period_error, fixed_var=[]):
-    '''
+    """
         Use PyMC3 and Exoplanet codes to fit a transit
 
         Parameters
@@ -57,13 +57,13 @@ def fit_transit(x, y, yerr, init_r, init_t0, init_period, init_b, init_mean, ini
         [period, r, t0, b, u_ld, mean] : list
             List of distributions for each of the given params.
 
-        '''
+        """
 
     with pm.Model() as model:
 
         # The baseline flux
         if 'mean' in fixed_var:
-            mean = pm.Normal("mean", mu=init_mean, sigma=0.1, observed=init_mean)
+            mean = pm.Normal('mean', mu=init_mean, sigma=0.1, observed=init_mean)
         else:
             mean = pm.Normal("mean", mu=init_mean, sigma=0.1)
 
@@ -162,16 +162,35 @@ def plot_fit(x, y, yerr, map_soln,trace=[]):
     plt.show()
     plt.close()
 
-def sample(map_soln, model):
+def sample(map_soln, model, tune_steps=4000,draws=8000,cores=12,chains=4,target_accept=0.9):
+    """
+    This function samples the posterior distribution of the model parameters
+    :param map_soln:
+        The result of the pyMC3 fit
+    :param model:
+        The pyMC3 model object
+    :param tune_steps: int
+        The number of tuning steps
+    :param draws: int
+        The number of samples to draw
+    :param cores: int
+        The number of cores to use
+    :param chains: int
+        The number of MCMC chains to use
+    :param target_accept: float
+        The target acceptance rate
+    :return:
+        The trace object from the MCMC sampling
+    """
     np.random.seed(42)
     with model:
         trace = pmx.sample(
-            tune=4000,
-            draws=8000,
+            tune=tune_steps,
+            draws=draws,
             start=map_soln,
-            cores=12,
-            chains=4,
-            target_accept=0.9,
+            cores=cores,
+            chains=chains,
+            target_accept=target_accept,
         )
         return trace
 
@@ -201,7 +220,7 @@ def cornerplot(model, trace, period, r, t0, b, u, mean, fixed_var=[]):
             Radius ratio
         t0 : float
             Transit epoch
-        b : float
+        b : ImpactParameter
             Impact Parameter
         u : list or np.array
             Quadratic limb-darkening coeffs
