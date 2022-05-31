@@ -69,11 +69,14 @@ class chromatic_model:
             # plot the priors vs posterior again, now with posterior sample!
             self.plot_fit()
 
+    def plot_trace(self):
+        """ Plot the trace of the posterior distribution (see the MCMC chains)
+        """
+        az.plot_trace(self.trace)
+
     def cornerplot(self):
         """ Use corner.py to generate the corner plot of the posterior distributions for each variable
         """
-
-        # plot corner plot (posterior distribution for each variable)
         cornerplot(self.model, self.trace, self.P, self.r, self.t0, self.b, self.u_ld, self.mean)
 
     def summarise(self):
@@ -689,11 +692,11 @@ s
             lc_model = [self.result["light_curves"]]
             x,y,yerr = [self.x.copy()],[self.y.copy()],[self.yerr.copy()]
             nrows = 1
-            try:
-                priors = [self.priors['light_curves']]
-                mean_priors = [self.priors['mean']]
-            except Exception as e:
-                print(e)
+            # try:
+            #     priors = [self.priors['light_curves']]
+            #     mean_priors = [self.priors['mean']]
+            # except Exception as e:
+            #     print(e)
         else:
             lc_model, priors, mean_priors = [],[],[]
             nrows = 0
@@ -702,14 +705,14 @@ s
                 if "light_curves" in k:
                     lc_model.append(v)
                     nrows = nrows + 1
-            try:
-                for k, v in self.priors.items():
-                    if "light_curves" in k:
-                        priors.append(v)
-                    if "mean" in k:
-                        mean_priors.append(v)
-            except Exception as e:
-                print(e)
+            # try:
+            #     for k, v in self.priors.items():
+            #         if "light_curves" in k:
+            #             priors.append(v)
+            #         if "mean" in k:
+            #             mean_priors.append(v)
+            # except Exception as e:
+            #     print(e)
             x, y, yerr = self.x.copy(), self.y.copy(), self.yerr.copy()
             wavelengths = self.wavelength
 
