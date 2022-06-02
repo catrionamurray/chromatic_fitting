@@ -41,13 +41,16 @@ class TransitModel(chromatic_model):
                 Setting a single scalar value means that
                 the value will be fixed to that value through
                 the fitting.
-            `stellar_radius = Fitted('stellar_radius', lower=0.1, upper=2.0)`
-                Setting a PyMC3 prior will indicate that the
+            `stellar_radius = Fitted(pm.Uniform, lower=0.1, upper=2.0)`
+                Setting a Fitted Parameter will indicate that the
                 parameter should be inferred during the fit,
-                with the given prior applied.
-            `radius_ratio = WavelikeNormalPrior(mu=0.1, sigma=0.05)`
-                Sett
-
+                with the given prior applied, and it will be
+                shared across all wavelengths.
+            `radius_ratio = WavelikeFitted(pm.Normal, mu=0.1, sigma=0.05)`
+                Setting a WavelikeFitted Parameter will indicate that the
+                parameter should be inferred during the fit,
+                with the given prior applied, and it will be
+                unique to each wavelength.
         """
         # define some default parameter values (all fixed!)
         defaults = dict(
@@ -80,16 +83,22 @@ class TransitModel(chromatic_model):
             assert k in self.parameters
 
     def summarize_parameters(self):
+        """
+        Print a friendly summary of the parameters.
+        """
         for k, v in self.parameters.items():
             print(f"{k} =\n  {v}\n")
 
     def initialize_empty_model(self):
+        """
+        Restart with an empty model.
+        """
         self.model = pm.Model()
 
     def setup_orbit(self):
         """
-        Create a PyMC3 transit model, given the stored parameters.
-        (This should be run after the )
+        Create an `exoplanet` orbit model, given the stored parameters.
+        [This should be run after .setup_parameters()]
         """
 
         with self.model:
@@ -104,9 +113,16 @@ class TransitModel(chromatic_model):
             )
 
     def attach_data(self, rainbow):
+        """
+        Connect a `chromatic` Rainbow dataset to this object.
+        """
         self.data = rainbow
 
     def setup_lightcurves(self):
+        """
+        Create an `exoplanet` light curve model, given the stored parameters.
+        [This should be run after .setup_orbit() and .attach_data()]
+        """
         with self.model:
             self.every_light_curve = {}
             for i, w in enumerate(self.data.wavelength):
@@ -127,6 +143,9 @@ class TransitModel(chromatic_model):
             ]
 
     def setup_likelihood(self):
+        """
+        Connect the light curve model to the actual data it aims to explain.
+        """
         with self.model:
             for i, w in enumerate(self.data.wavelength):
                 k = f"wavelength_{i}"
