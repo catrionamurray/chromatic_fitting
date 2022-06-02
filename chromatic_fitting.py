@@ -52,22 +52,44 @@ class chromatic_model:
         # set the random seed
         np.random.seed(42)
 
-        with self.model:
-            trace = pmx.sample(
-                tune=tune_steps,
-                draws=draws,
-                start=self.result,
-                cores=cores,
-                chains=chains,
-                target_accept=target_accept,
-            )
-        print("Sampling the posterior took --- %s seconds ---" % (ttime.time() - start_time))
+        if self.optimisation == "separate_wavelengths":
+            self.trace = []
+            for model,result in zip(self.model, self.result):
+                with model:
+                    trace = pmx.sample(
+                        tune=tune_steps,
+                        draws=draws,
+                        start=result,
+                        cores=cores,
+                        chains=chains,
+                        target_accept=target_accept,
+                    )
+                print("Sampling the posterior took --- %s seconds ---" % (ttime.time() - start_time))
 
-        self.trace = trace
+                self.trace.append(trace)
 
-        if plot:
-            # plot the priors vs posterior again, now with posterior sample!
-            self.plot_fit()
+            if plot:
+                # plot the priors vs posterior again, now with posterior sample!
+                self.plot_fit()
+
+        else:
+
+            with self.model:
+                trace = pmx.sample(
+                    tune=tune_steps,
+                    draws=draws,
+                    start=self.result,
+                    cores=cores,
+                    chains=chains,
+                    target_accept=target_accept,
+                )
+            print("Sampling the posterior took --- %s seconds ---" % (ttime.time() - start_time))
+
+            self.trace = trace
+
+            if plot:
+                # plot the priors vs posterior again, now with posterior sample!
+                self.plot_fit()
 
     def plot_trace(self):
         """ Plot the trace of the posterior distribution (see the MCMC chains)
@@ -229,9 +251,9 @@ s
 
             # Set up a Keplerian orbit for the planets
             self.orbit = xo.orbits.KeplerianOrbit(period=self.P, t0=self.t0, b=self.b, r_star=self.r_s, m_star=self.m_s)
-            # pm.Deterministic('a', self.orbit.a)
-            # pm.Deterministic('i', self.orbit.incl * 180 / np.pi)
-            # pm.Deterministic('a/r_s', self.orbit.a / self.orbit.r_star)
+            pm.Deterministic('a', self.orbit.a)
+            pm.Deterministic('i', self.orbit.incl * 180 / np.pi)
+            pm.Deterministic('a/r_s', self.orbit.a / self.orbit.r_star)
 
             self.model = model
         print("Initialising (static) model took --- %s seconds ---" % (ttime.time() - start_time))
@@ -355,6 +377,8 @@ s
         else:
             endpoints = 50
 
+        self.optimisation = optimisation
+
         if optimisation == "simultaneous":
             datasets = OrderedDict([])
             count = 1
@@ -409,43 +433,42 @@ s
             self.initialise_model_staticwavelength()
             map_soln, model = self.optimise_model(plot=plot)
 
-
         elif optimisation == "separate_wavelengths":
             firstrun = True
-            xs,ys, yerrs, models,results, waves= [],[],[],[],[],[]
+            xs, ys, yerrs, models, results, waves = [], [], [], [], [], []
 
             for rf, re, rw in zip(flux, flux_error, wavelength):
                 print("Wavelength: ",rw)
-                try:
+                # try:
 
-                    x = np.array(time) # - min(time))
-                    y = np.array(rf)
-                    y = y / np.nanmedian(y[-endpoints:])
-                    y = y - np.nanmedian(y[-endpoints:])
-                    yerr = np.array(re)
+                x = np.array(time)  # - min(time))
+                y = np.array(rf)
+                y = y / np.nanmedian(y[-endpoints:])
+                y = y - np.nanmedian(y[-endpoints:])
+                yerr = np.array(re)
 
-                    y,[x,yerr] = remove_nans(y,x,yerr)
+                y,[x,yerr] = remove_nans(y,x,yerr)
 
-                    self.x = x
-                    self.y = y
-                    self.yerr = yerr
-                    xs.append(x)
-                    ys.append(y)
-                    yerrs.append(yerr)
+                self.x = x
+                self.y = y
+                self.yerr = yerr
+                xs.append(x)
+                ys.append(y)
+                yerrs.append(yerr)
 
-                    if not firstrun:
-                        self.reinitialise()
-                    else:
-                        firstrun=False
+                if not firstrun:
+                    self.reinitialise()
+                else:
+                    firstrun=False
 
-                    self.initialise_model_staticwavelength()
-                    map_soln, model = self.optimise_model(plot=plot)
-                    models.append(model)
-                    results.append(map_soln)
-                    waves.append(rw)
+                self.initialise_model_staticwavelength()
+                map_soln, model = self.optimise_model(plot=plot)
+                models.append(model)
+                results.append(map_soln)
+                waves.append(rw)
 
-                except Exception as e:
-                    print(e)
+                # except Exception as e:
+                #     print(e)
 
             # if we run 'separate_wavelengths' then save lists rather than individual params (model, result etc)
             self.x = xs
@@ -457,12 +480,9 @@ s
 
         else:
             print("Unrecognised optimisation type, current options are: simultaneous, weighted_average and separate_wavelengths")
+            self.optimisation = None
             return None, None
 
-        # model_copy = copy.deepcopy(self.model)
-        # model_copy2 = theano.clone(self.model)
-
-        # map_soln, model = optimise_model(self, x, y, yerr)
 
     def optimise_model_sim(self,datasets,plot):
         """ Run the simultaneous optimisation process using PyMC3
@@ -559,25 +579,23 @@ s
     def plot_fit(self):
         """ Plot the lightcurve compared to samples from both the priors and posteriors (only available after fitting)
         """
-        sim_wavelengths = False
 
-        # we need to treat the different opt methods slightly differently
-        if 'light_curves' in self.result.keys():
-            figsize = (12, 6)
-            # if we have either used the weighted_average or separate_wavelengths:
-            lc_model = [self.result["light_curves"]]
+        # determine whether x/y/yerr are 1D or 2D
+        if len(np.shape(self.x))>1:
+            # 2D: multiple lightcurves (multi-wavelength simultaneous or separate fit)
+            x, y, yerr = self.x.copy(), self.y.copy(), self.yerr.copy()
+            nrows = np.shape(x)[0]
+        else:
+            # 1D: single lightcurve (weighted_average)
             x, y, yerr = [self.x.copy()], [self.y.copy()], [self.yerr.copy()]
             nrows = 1
-            try:
-                priors = [self.priors['light_curves']]
-                mean_priors = [self.priors['mean']]
-            except Exception as e:
-                print(e)
-        else:
+
+        # we need to treat the different opt methods slightly differently
+        if self.optimisation == "simultaneous":
             # if we have done simultaneous wavelength optimisation
             lc_model, priors, mean_priors = [], [], []
+            # x, y, yerr = self.x.copy(), self.y.copy(), self.yerr.copy()
             nrows = 0
-            sim_wavelengths = True
             for k, v in self.result.items():
                 if "light_curves" in k:
                     lc_model.append(v)
@@ -590,8 +608,28 @@ s
                         mean_priors.append(v)
             except Exception as e:
                 print(e)
-            x, y, yerr = self.x.copy(), self.y.copy(), self.yerr.copy()
-            figsize = (12, 4*nrows)
+        else:
+            # if we have either used the weighted_average or separate_wavelengths:
+            if self.optimisation == "weighted_average":
+                lc_model = [self.result["light_curves"]]
+                # x, y, yerr = [self.x.copy()], [self.y.copy()], [self.yerr.copy()]
+                # nrows = 1
+            if self.optimisation == "separate_wavelengths":
+                try:
+                    lc_model = [result["light_curves"] for result in self.result]
+                    # x, y, yerr = self.x.copy(), self.y.copy(), self.yerr.copy()
+                    # nrows = len(self.wavelength)
+                except:
+                    lc_model = [self.result["light_curves"]]
+                    # x,y,yerr = [self.x.copy()], [self.y.copy()], [self.yerr.copy()]
+                    # nrows = 1
+            try:
+                priors = [self.priors['light_curves']]
+                mean_priors = [self.priors['mean']]
+            except Exception as e:
+                print(e)
+
+        figsize = (12, 4 * nrows)
 
         # set up plot
         _,ax = plt.subplots(ncols=2,nrows=nrows,sharex=True,sharey=True,figsize=figsize)
@@ -640,29 +678,35 @@ s
                 firsttrace = True
 
                 # plot the 16-84th posterior percentile region
-                if sim_wavelengths:
-                    trace = self.trace[f"wavelength_{n+1}_light_curves"]
-                else:
-                    trace = self.trace["light_curves"]
+                if self.optimisation == "simultaneous":
+                    traces = [self.trace[f"wavelength_{n+1}_light_curves"]]
+                    nchains = [self.trace.nchains]
+                elif self.optimisation == "separate_wavelengths":
+                    traces = [trace["light_curves"] for trace in self.trace]
+                    nchains = [trace.nchains for trace in self.trace]
+                elif self.optimisation == "weighted_average":
+                    traces = [self.trace["light_curves"]]
+                    nchains = [self.trace.nchains]
 
-                q16, q50, q84 = np.percentile(trace, [16, 50, 84], axis=(0))
+                for trace, nchain in zip(traces, nchains):
+                    q16, q50, q84 = np.percentile(trace, [16, 50, 84], axis=(0))
 
-                ax_posterior.fill_between(x[n], q16.flatten(), q84.flatten(),color="C1", alpha=0.2, label="Posterior (16-84th percentile)")
+                    ax_posterior.fill_between(x[n], q16.flatten(), q84.flatten(),color="C1", alpha=0.2, label="Posterior (16-84th percentile)")
 
-                # plot 50 individual posterior samples
-                for i in np.random.randint(len(self.trace) * self.trace.nchains, size=50):
-                    if firsttrace:
-                        # add the legend label to only the first prior line (to avoid 50 legend entries)
-                        ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3,
-                                              label='Posterior Sample (n=50)')
-                        firsttrace = False
-                    else:
-                        ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3)
+                    # plot 50 individual posterior samples
+                    for i in np.random.randint(len(trace) * nchain, size=50):
+                        if firsttrace:
+                            # add the legend label to only the first prior line (to avoid 50 legend entries)
+                            ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3,
+                                                  label='Posterior Sample (n=50)')
+                            firsttrace = False
+                        else:
+                            ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3)
             except Exception as e:
                 print(e)
             # ******************
 
-            ax_prior.errorbar(x[n], y[n],yerr[n], c='k', alpha=0.2)
+            ax_prior.errorbar(x[n], y[n], yerr[n], c='k', alpha=0.2)
             ax_posterior.errorbar(x[n], y[n], yerr[n], c='k', alpha=0.2)
             ax_posterior.plot(x[n], lc_model[n], lw=1, label="model")
             ax_prior.set_xlim(x[n].min(), x[n].max())
@@ -686,35 +730,22 @@ s
         plt.close()
 
     def plot_simultaneous_fit(self):
-        # we need to treat the different opt methods slightly differently
-        sim_wavelengths = False
-        if 'light_curves' in self.result.keys():
-            lc_model = [self.result["light_curves"]]
-            x,y,yerr = [self.x.copy()],[self.y.copy()],[self.yerr.copy()]
-            nrows = 1
-            # try:
-            #     priors = [self.priors['light_curves']]
-            #     mean_priors = [self.priors['mean']]
-            # except Exception as e:
-            #     print(e)
+        """ Plot the results of the simultaneous fit.
+        """
+
+        if self.optimisation != "simultaneous":
+            lc_model = [result["light_curves"] for result in self.result]
+            x,y,yerr = self.x.copy(),self.y.copy(),self.yerr.copy()
+            nrows = len(self.wavelength)
         else:
             lc_model, priors, mean_priors = [],[],[]
             nrows = 0
-            sim_wavelengths = True
             for k, v in self.result.items():
                 if "light_curves" in k:
                     lc_model.append(v)
                     nrows = nrows + 1
-            # try:
-            #     for k, v in self.priors.items():
-            #         if "light_curves" in k:
-            #             priors.append(v)
-            #         if "mean" in k:
-            #             mean_priors.append(v)
-            # except Exception as e:
-            #     print(e)
             x, y, yerr = self.x.copy(), self.y.copy(), self.yerr.copy()
-            wavelengths = self.wavelength
+            # wavelengths = self.wavelength
 
         # set up plot
     #     _,ax = plt.subplots(ncols=2,nrows=nrows,sharex=True,sharey=True,figsize=(12,12))
@@ -750,7 +781,7 @@ s
             try:
 
                 # plot the 16-84th posterior percentile region
-                if sim_wavelengths:
+                if self.optimisation != "simultaneous":
                     trace = self.trace[f'wavelength_{n+1}_light_curves']
                 else:
                     trace = self.trace["light_curves"]
@@ -797,17 +828,17 @@ s
         plt.close()
 
 
-class chromatic_submodel(chromatic_model):
-
-    def __init__(self,chromatic_model):
-        self.model = chromatic_model.model
-        self.r = chromatic_model.r
-        self.P = chromatic_model.P
-        self.t0 = chromatic_model.t0
-        self.mean = chromatic_model.mean
-        self.u_ld = chromatic_model.u_ld
-        self.b = chromatic_model.b
-        self.orbit = chromatic_model.orbit
+# class chromatic_submodel(chromatic_model):
+#
+#     def __init__(self,chromatic_model):
+#         self.model = chromatic_model.model
+#         self.r = chromatic_model.r
+#         self.P = chromatic_model.P
+#         self.t0 = chromatic_model.t0
+#         self.mean = chromatic_model.mean
+#         self.u_ld = chromatic_model.u_ld
+#         self.b = chromatic_model.b
+#         self.orbit = chromatic_model.orbit
 
 def quicklook_priors(r,cm):
     """
@@ -874,7 +905,7 @@ def import_patricio_model():
 
     wavelength = planet['wl']
     transmission = planet['transmission']
-    table = Table(dict(wavelength=planet['wl'], depth=np.sqrt(planet['transmission'])), meta=planet_params)
+    table = Table(dict(wavelength=planet['wl'], depth=planet['transmission']), meta=planet_params)
 
     # set up a new model spectrum
     model = PlanetarySpectrumModel(table=table, label='injected model')
@@ -912,7 +943,7 @@ def add_ld_coeffs(model, planet_params, wavelength,transmission,star_params,ld_e
     #  define where the zenodo LD files are stored (needed for ExoTiC)
     dirsen = '/Users/catrionamurray/Documents/Postdoc/CUBoulder/exotic-ld_data'
     #  calculate the LD coeffs for a series of wavelengths and transit depths
-    model_ld = generate_spectrum_ld(wavelength, np.sqrt(transmission), star_params, planet_params, dirsen, mode=mode,
+    model_ld = generate_spectrum_ld(wavelength, transmission, star_params, planet_params, dirsen, mode=mode,
                                     ld_eqn=ld_eqn, ld_model='1D', plot_model=plot)
 
     return model_ld

@@ -254,13 +254,15 @@ def generate_spectrum_ld(wavelength, depth, star_params,planet_params,dirsen,mod
     return model
 
 def inject_spectrum(model,snr=100,dt=1,res=50,planet_params={}):
-    '''
+    """
     Inject the synthetic model into chromatic Rainbow
 
     Parameters
     ----------
     model : synthetic_planet
         Synthetic planet object with wavelength-varying limb-darkening coefficients, as defined in generate_spectrum_ld
+    r_star : float
+        Stellar radius (Solar radii)
     snr : int
         Signal-to-noise ratio of the resulting light curve.
     dt : int
@@ -277,7 +279,7 @@ def inject_spectrum(model,snr=100,dt=1,res=50,planet_params={}):
     i : SimulatedRainbow
         Simulated Rainbow object (r) with injected transit.
 
-    '''
+    """
 
     modemask = model.modemask
 
@@ -290,7 +292,7 @@ def inject_spectrum(model,snr=100,dt=1,res=50,planet_params={}):
         R=res
     )
     i = r.inject_transit(
-        planet_radius=np.array(model.table['depth'][modemask==0]),
+        planet_radius=np.array(np.sqrt(model.table['depth'][modemask==0])),
         planet_params= planet_params #{"limb_dark": model.ld_eqn, 'u':list(model.ld_coeffs[modemask==0])} #planet_params
     )
 
