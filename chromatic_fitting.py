@@ -15,15 +15,16 @@ M_sun = 1.989 * 10 ** 30 * u.kg
 R_earth = 6371000 * u.m
 
 # Define some parameters
-bintime=5  #minutes
-binwave=0.2  #microns
+bintime = 5  # minutes
+binwave = 0.2  # microns
 RANDOM_SEED = 58
+
 
 class chromatic_model:
     def __repr__(self):
         return "<chromatic_model 🌈>"
 
-    def sample_posterior(self, tune_steps=4000, draws=8000, cores=12, chains=4, target_accept=0.9,plot=True):
+    def sample_posterior(self, tune_steps=4000, draws=8000, cores=12, chains=4, target_accept=0.9, plot=True):
         """
         This function samples the posterior distribution of the model parameters
         :param map_soln:
@@ -46,60 +47,84 @@ class chromatic_model:
             The trace object from the MCMC sampling
         """
 
-        # time the sampling
-        start_time = ttime.time()
+        if self.optimisation != "separate_wavelengths":
+            model = [self.model]
+            result = [self.result]
+        else:
+            model = self.model
+            result = self.result
 
         # set the random seed
         np.random.seed(42)
 
-        if self.optimisation == "separate_wavelengths":
-            self.trace = []
-            for model,result in zip(self.model, self.result):
-                with model:
-                    trace = pmx.sample(
-                        tune=tune_steps,
-                        draws=draws,
-                        start=result,
-                        cores=cores,
-                        chains=chains,
-                        target_accept=target_accept,
-                    )
-                print("Sampling the posterior took --- %s seconds ---" % (ttime.time() - start_time))
-
-                self.trace.append(trace)
-
-            if plot:
-                # plot the priors vs posterior again, now with posterior sample!
-                self.plot_fit()
-
-        else:
-
-            with self.model:
-                trace = pmx.sample(
+        # if self.optimisation == "separate_wavelengths":
+        trace = []
+        for mod, res in zip(model, result):
+            # time the sampling
+            start_time = ttime.time()
+            with mod:
+                tra = pmx.sample(
                     tune=tune_steps,
                     draws=draws,
-                    start=self.result,
+                    start=res,
                     cores=cores,
                     chains=chains,
                     target_accept=target_accept,
                 )
             print("Sampling the posterior took --- %s seconds ---" % (ttime.time() - start_time))
 
-            self.trace = trace
+            trace.append(tra)
+            self.trace = tra
 
             if plot:
                 # plot the priors vs posterior again, now with posterior sample!
                 self.plot_fit()
 
+        if len(trace) > 1:
+            self.trace = trace
+
     def plot_trace(self):
         """ Plot the trace of the posterior distribution (see the MCMC chains)
         """
-        az.plot_trace(self.trace)
+        for trace in self.trace:
+            az.plot_trace(trace)
 
     def cornerplot(self):
         """ Use corner.py to generate the corner plot of the posterior distributions for each variable
         """
-        cornerplot(self.model, self.trace, self.P, self.r, self.t0, self.b, self.u_ld, self.mean)
+        if self.optimisation != "separate_wavelengths":
+            trace = [self.trace]
+            model = [self.model]
+        else:
+            trace = self.trace
+            model = self.model
+
+        for mod, tra in zip(model, trace):
+            if self.optimisation != "simultaneous":
+                cornerplot(mod, tra, self.P, self.r, self.t0, self.b, self.u_ld, self.mean)
+            else:
+                print("Not implemented yet")
+                varnames = ['period', 't0', 'b']
+                all_vars = [mod.period, mod.t0, mod.b]
+                for n in self.wavelength:
+                    varnames.append(f"wavelength_{n}_mean")
+                    varnames.append(f"wavelength_{n}_ror")
+                    varnames.append(f"wavelength_{n}_u")
+                    all_vars.append(mod[f"wavelength_{n}_mean"])
+                    all_vars.append(mod[f"wavelength_{n}_ror"])
+                    all_vars.append(mod[f"wavelength_{n}_u"])
+
+                truth = dict(
+                    zip(
+                        varnames,
+                        pmx.eval_in_model(all_vars, mod.test_point, model=mod),
+                    )
+                )
+                _ = corner.corner(
+                    tra,
+                    var_names=varnames,
+                    truths=truth,
+                )
 
     def summarise(self):
         """ Summarise the results (mean, stddev etc.) of the posterior sampling
@@ -109,7 +134,7 @@ class chromatic_model:
         """
         return summarise(self.model, self.trace)
 
-    def change_prior(self,new_prior):
+    def change_prior(self, new_prior):
         """ Change the prior distribution of a variable
         """
 
@@ -117,14 +142,14 @@ class chromatic_model:
         priors_dict = {}
 
         for p in priors:
-            if p['name']==new_prior['name']:
+            if p['name'] == new_prior['name']:
                 priors_dict[p['name']] = new_prior
             else:
                 priors_dict[p['name']] = p
 
-        self.initialise_model(*priors_dict.values(), init_b=self.init_b,init_u=self.init_u)
+        self.initialise_model(*priors_dict.values(), init_b=self.init_b, init_u=self.init_u)
 
-    def Normal(self,name,mu,sigma,observed=None):
+    def Normal(self, name, mu, sigma, observed=None):
         """ Specify a normal distribution for the given variable based on PyMC3 format
         Parameters
         ----------
@@ -142,12 +167,12 @@ class chromatic_model:
             dict
                 The prior in a dictionary format
         """
-        prior = {'name':name,'dist':"Normal",'mu':mu,'sigma':sigma}
+        prior = {'name': name, 'dist': "Normal", 'mu': mu, 'sigma': sigma}
         if observed is not None:
-            prior['observed']=observed
+            prior['observed'] = observed
         return prior
 
-    def Uniform(self,name,testval,lower,upper,observed=None):
+    def Uniform(self, name, testval, lower, upper, observed=None):
         """ Specify a uniform distribution for the given variable based on PyMC3 format
         Parameters
         ----------
@@ -167,12 +192,13 @@ class chromatic_model:
             dict
                 The prior in a dictionary format
         """
-        prior = {"name":name,"dist":"Uniform", "testval":testval,"lower":lower, "upper":upper}
+        prior = {"name": name, "dist": "Uniform", "testval": testval, "lower": lower, "upper": upper}
         if observed is not None:
-            prior['observed']=observed
+            prior['observed'] = observed
         return prior
 
-    def initialise_model(self,r_s_prior, m_s_prior, r_prior, logP_prior, t0_prior,mean_prior, init_b, init_u, reinit=False):
+    def initialise_model(self, r_s_prior, m_s_prior, r_prior, logP_prior, t0_prior, mean_prior, init_b, init_u,
+                         reinit=False):
         """ Create chromatic model (only the wavelength-independent part)
 
         Thoughts:
@@ -230,7 +256,7 @@ s
                                           observed=prior['observed']), prior['observed']
                     else:
                         return pm.Uniform(prior['name'], lower=prior['lower'], upper=prior['upper'],
-                                      testval=np.array(prior['testval'])), prior['testval']
+                                          testval=np.array(prior['testval'])), prior['testval']
                 if prior['dist'] == "Normal":
                     if 'observed' in prior.keys():
                         return pm.Normal(prior['name'], mu=prior['mu'], sigma=prior['sigma'],
@@ -263,7 +289,7 @@ s
         """
         start_time = ttime.time()
 
-        with self.model as model:
+        with self.model:
             def init_prior(prior):
                 if prior['dist'] == "Uniform":
                     if 'observed' in prior.keys():
@@ -290,9 +316,10 @@ s
     def reinitialise(self):
         """ Reinitialise chromatic model to redo the optimisation - we can't overwrite variable names
         """
-        self.initialise_model(self.r_s_prior, self.m_s_prior, self.r_prior, self.logP_prior, self.t0_prior, self.mean_prior, self.init_b, self.init_u, reinit=True)
+        self.initialise_model(self.r_s_prior, self.m_s_prior, self.r_prior, self.logP_prior, self.t0_prior,
+                              self.mean_prior, self.init_b, self.init_u, reinit=True)
 
-    def set_model(self,model):
+    def set_model(self, model):
         """ Replace the model with another (PROBABLY NOT WORKING YET)
         Parameters
         ----------
@@ -301,7 +328,7 @@ s
         """
         self.model = model
 
-    def optimise_model(self,plot=True):
+    def optimise_model(self, plot=True):
         """ Optimise the model using PyMC3 and the defined prior distributions
         Parameters
         ----------
@@ -318,7 +345,7 @@ s
         # use our predefined model to optimise the parameters
         # start_time = ttime.time()
         with self.model as model:
-            self.r_p = pm.Deterministic('r_p', self.r * self.r_s) # radius of planet in solar radii
+            self.r_p = pm.Deterministic('r_p', self.r * self.r_s)  # radius of planet in solar radii
 
             # Compute the model light curve using starry
             light_curves = xo.LimbDarkLightCurve(self.u_ld[0], self.u_ld[1]).get_light_curve(
@@ -342,17 +369,16 @@ s
             self.result = map_soln
             self.priors = prior_checks
 
-            if plot:
-                start_time = ttime.time()
-                # plot the priors vs posterior BEFORE sampling (only shows priors + best-fit model)
-                self.plot_fit()
-                print("Plotting took --- %s seconds ---" % (ttime.time() - start_time))
+        if plot:
+            start_time = ttime.time()
+            # plot the priors vs posterior BEFORE sampling (only shows priors + best-fit model)
+            self.plot_fit()
+            print("Plotting took --- %s seconds ---" % (ttime.time() - start_time))
 
         # print("Optimising model took --- %s seconds ---" % (ttime.time() - start_time))
-        return map_soln, model
+        # return map_soln, model
 
-
-    def run(self, r, optimisation="weighted_average",plot=True,nwave=10):
+    def run(self, r, optimisation="weighted_average", plot=True, nwave=10):
         """ Run the optimisation process, using the method chosen by the user
 
         Parameters
@@ -400,7 +426,7 @@ s
                     waves.append(rw)
                     count += 1
             start_time = ttime.time()
-            map_soln, model = self.optimise_model_sim(datasets,plot=plot)
+            self.optimise_model_sim(datasets, plot=plot)
             print("Optimising model took --- %s seconds ---" % (ttime.time() - start_time))
             self.x = xs
             self.y = ys
@@ -431,14 +457,14 @@ s
                 plt.close()
 
             self.initialise_model_staticwavelength()
-            map_soln, model = self.optimise_model(plot=plot)
+            self.optimise_model(plot=plot)
 
         elif optimisation == "separate_wavelengths":
             firstrun = True
             xs, ys, yerrs, models, results, waves = [], [], [], [], [], []
 
             for rf, re, rw in zip(flux, flux_error, wavelength):
-                print("Wavelength: ",rw)
+                print("Wavelength: ", rw)
                 # try:
 
                 x = np.array(time)  # - min(time))
@@ -447,7 +473,7 @@ s
                 y = y - np.nanmedian(y[-endpoints:])
                 yerr = np.array(re)
 
-                y,[x,yerr] = remove_nans(y,x,yerr)
+                y, [x, yerr] = remove_nans(y, x, yerr)
 
                 self.x = x
                 self.y = y
@@ -459,12 +485,12 @@ s
                 if not firstrun:
                     self.reinitialise()
                 else:
-                    firstrun=False
+                    firstrun = False
 
                 self.initialise_model_staticwavelength()
-                map_soln, model = self.optimise_model(plot=plot)
-                models.append(model)
-                results.append(map_soln)
+                self.optimise_model(plot=plot)
+                models.append(self.model[0])
+                results.append(self.result[0])
                 waves.append(rw)
 
                 # except Exception as e:
@@ -479,12 +505,12 @@ s
             self.wavelength = waves
 
         else:
-            print("Unrecognised optimisation type, current options are: simultaneous, weighted_average and separate_wavelengths")
+            print(
+                "Unrecognised optimisation type, current options are: simultaneous, weighted_average and separate_wavelengths")
             self.optimisation = None
             return None, None
 
-
-    def optimise_model_sim(self,datasets,plot):
+    def optimise_model_sim(self, datasets, plot):
         """ Run the simultaneous optimisation process using PyMC3
 
         Parameters
@@ -494,7 +520,7 @@ s
             plot : boolean
                 Boolean whether to plot the results
         """
-        xs,ys,yerrs = [],[],[]
+        xs, ys, yerrs = [], [], []
 
         # THANKS MATHILDE/LIONEL!!
         firstrun = True
@@ -539,7 +565,7 @@ s
                     # mean = pm.Normal(f'{name}_mean', mu=mean, sigma=0.1)
                     mean_prior = self.mean_prior.copy()
                     mean_prior['name'] = f'{name}_mean'
-                    mean,init_mean = init_prior(mean_prior)
+                    mean, init_mean = init_prior(mean_prior)
 
                     # starry light-curve
                     light_curve = star.get_light_curve(orbit=self.orbit, r=r_p, t=x)
@@ -565,36 +591,35 @@ s
             opt = pmx.optimize(start=model.test_point)
             opt = pmx.optimize(start=opt, vars=[ror, u, mean])
             # opt = pmx.optimize(start=opt, vars=[depth[1]])
-            self.result = opt
-            self.priors = prior_checks
-            self.x = xs
-            self.y = ys
-            self.yerr = yerrs
+        self.result = opt
+        self.priors = prior_checks
+        self.x = xs
+        self.y = ys
+        self.yerr = yerrs
 
         if plot:
             self.plot_fit()
 
-        return opt, model
+        # return opt, model
 
     def plot_fit(self):
         """ Plot the lightcurve compared to samples from both the priors and posteriors (only available after fitting)
         """
 
         # determine whether x/y/yerr are 1D or 2D
-        if len(np.shape(self.x))>1:
+        if len(np.shape(self.x)) > 1:
             # 2D: multiple lightcurves (multi-wavelength simultaneous or separate fit)
             x, y, yerr = self.x.copy(), self.y.copy(), self.yerr.copy()
-            nrows = np.shape(x)[0]
         else:
             # 1D: single lightcurve (weighted_average)
             x, y, yerr = [self.x.copy()], [self.y.copy()], [self.yerr.copy()]
-            nrows = 1
+        nrows = np.shape(x)[0]
+        print(f"Number of Wavelengths fit : {nrows}")
 
-        # we need to treat the different opt methods slightly differently
+        # we need to treat the different optimisation methods slightly differently
         if self.optimisation == "simultaneous":
             # if we have done simultaneous wavelength optimisation
             lc_model, priors, mean_priors = [], [], []
-            # x, y, yerr = self.x.copy(), self.y.copy(), self.yerr.copy()
             nrows = 0
             for k, v in self.result.items():
                 if "light_curves" in k:
@@ -612,17 +637,13 @@ s
             # if we have either used the weighted_average or separate_wavelengths:
             if self.optimisation == "weighted_average":
                 lc_model = [self.result["light_curves"]]
-                # x, y, yerr = [self.x.copy()], [self.y.copy()], [self.yerr.copy()]
-                # nrows = 1
             if self.optimisation == "separate_wavelengths":
                 try:
+                    # at the end we store a list of results for each wavelength
                     lc_model = [result["light_curves"] for result in self.result]
-                    # x, y, yerr = self.x.copy(), self.y.copy(), self.yerr.copy()
-                    # nrows = len(self.wavelength)
                 except:
+                    # for each individual run we have a single result
                     lc_model = [self.result["light_curves"]]
-                    # x,y,yerr = [self.x.copy()], [self.y.copy()], [self.yerr.copy()]
-                    # nrows = 1
             try:
                 priors = [self.priors['light_curves']]
                 mean_priors = [self.priors['mean']]
@@ -632,15 +653,15 @@ s
         figsize = (12, 4 * nrows)
 
         # set up plot
-        _,ax = plt.subplots(ncols=2,nrows=nrows,sharex=True,sharey=True,figsize=figsize)
+        _, ax = plt.subplots(ncols=2, nrows=nrows, sharex=True, sharey=True, figsize=figsize)
 
         for n in range(nrows):
             if nrows == 1:
                 ax_prior = ax[0]
                 ax_posterior = ax[1]
             else:
-                ax_prior = ax[n,0]
-                ax_posterior = ax[n,1]
+                ax_prior = ax[n, 0]
+                ax_posterior = ax[n, 1]
 
             ax_prior.plot(x[n], y[n], ".k", ms=4)
             ax_posterior.plot(x[n], y[n], ".k", ms=4)
@@ -652,65 +673,72 @@ s
                 # loop over all lightcurves (for every wavelength):
                 for prior, mean_prior in zip(priors, mean_priors):
                     # loop over every prior sample:
-                    for lc,mean in zip(prior,mean_prior):
+                    for lc, mean in zip(prior, mean_prior):
                         if firstprior:
-                            ax_prior.plot(x[n], lc+mean, color="C1", lw=1, alpha=0.3, label="Prior Sample (n=50)")
+                            ax_prior.plot(x[n], lc + mean, color="C1", lw=1, alpha=0.3, label="Prior Sample (n=50)")
                             firstprior = False
                         else:
-                            ax_prior.plot(x[n], lc+mean, color="C1", lw=1, alpha=0.3)
+                            ax_prior.plot(x[n], lc + mean, color="C1", lw=1, alpha=0.3)
                     # regenerating the orbit for each prior is SUPER SLOW!! And there's no need - each lc is already stored!
 
             except Exception as e:
                 print(e)
             # ******************
 
-
             # plot initial parameter guess
             # ******************
-            light_curve = generate_xo_orbit(self.init_period, self.init_t0, self.init_b, self.init_u, self.init_r, x[n]) + self.init_mean
-            ax_prior.plot(x[n], light_curve, color="green", lw=1, alpha=1,linestyle='--',label="Initial Guess")
+            light_curve = generate_xo_orbit(self.init_period, self.init_t0, self.init_b, self.init_u, self.init_r,
+                                            x[n]) + self.init_mean
+            ax_prior.plot(x[n], light_curve, color="green", lw=1, alpha=1, linestyle='--', label="Initial Guess")
             # ******************
-
 
             # plot 50 chains sampled from the psterior (MCMC):
             # ******************
             try:
                 firsttrace = True
 
-                # plot the 16-84th posterior percentile region
                 if self.optimisation == "simultaneous":
-                    traces = [self.trace[f"wavelength_{n+1}_light_curves"]]
+                    traces = [self.trace]
+                    traces_lcs = [self.trace[f"wavelength_{n + 1}_light_curves"]]
                     nchains = [self.trace.nchains]
                 elif self.optimisation == "separate_wavelengths":
-                    traces = [trace["light_curves"] for trace in self.trace]
+                    traces = self.trace
+                    traces_lcs = [trace["light_curves"] for trace in self.trace]
                     nchains = [trace.nchains for trace in self.trace]
                 elif self.optimisation == "weighted_average":
-                    traces = [self.trace["light_curves"]]
+                    traces = [self.trace]
+                    traces_lcs = [self.trace["light_curves"]]
                     nchains = [self.trace.nchains]
 
-                for trace, nchain in zip(traces, nchains):
-                    q16, q50, q84 = np.percentile(trace, [16, 50, 84], axis=(0))
-
-                    ax_posterior.fill_between(x[n], q16.flatten(), q84.flatten(),color="C1", alpha=0.2, label="Posterior (16-84th percentile)")
-
+                # plot the 16-84th posterior percentile region
+                for trace, trace_lc, nchain in zip(traces, traces_lcs, nchains):
+                    q16, q50, q84 = np.percentile(trace_lc, [16, 50, 84], axis=(0))
+                    ax_posterior.fill_between(x[n], q16.flatten(), q84.flatten(), color="C1", alpha=0.2,
+                                              label="Posterior (16-84th percentile)")
                     # plot 50 individual posterior samples
                     for i in np.random.randint(len(trace) * nchain, size=50):
                         if firsttrace:
                             # add the legend label to only the first prior line (to avoid 50 legend entries)
-                            ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3,
-                                                  label='Posterior Sample (n=50)')
+                            ax_posterior.plot(x[n], trace_lc[i], color="C1", lw=1, alpha=0.3,
+                                              label='Posterior Sample (n=50)')
                             firsttrace = False
                         else:
-                            ax_posterior.plot(x[n], trace[i], color="C1", lw=1, alpha=0.3)
+                            ax_posterior.plot(x[n], trace_lc[i], color="C1", lw=1, alpha=0.3)
             except Exception as e:
                 print(e)
+                # pass
+                # print(self.trace)
+                # print(traces)
+                # print(nchains)
+                # print(trace,nchain)
+
             # ******************
 
             ax_prior.errorbar(x[n], y[n], yerr[n], c='k', alpha=0.2)
             ax_posterior.errorbar(x[n], y[n], yerr[n], c='k', alpha=0.2)
             ax_posterior.plot(x[n], lc_model[n], lw=1, label="model")
             ax_prior.set_xlim(x[n].min(), x[n].max())
-            ax_posterior.set_ylim(y[n].min()-0.01, y[n].max()+0.01)
+            ax_posterior.set_ylim(y[n].min() - 0.01, y[n].max() + 0.01)
             ax_prior.set_ylabel("rel.\nflux")
             ax_prior.set_xlabel("time [days]")
             ax_posterior.set_xlabel("time [days]")
@@ -720,8 +748,8 @@ s
             # handles, labels = ax_posterior.gca().get_legend_handles_labels()
             # by_label = OrderedDict(zip(labels, handles))
             # ax_posterior.legend(by_label.values(), by_label.keys())
-            ax_prior.legend(loc="upper right",fontsize=10,facecolor='white', frameon=True,framealpha=0.6)
-            ax_posterior.legend(loc="upper right",fontsize=10, facecolor='white', frameon=True,framealpha=0.6)
+            ax_prior.legend(loc="upper right", fontsize=10, facecolor='white', frameon=True, framealpha=0.6)
+            ax_posterior.legend(loc="upper right", fontsize=10, facecolor='white', frameon=True, framealpha=0.6)
             ax_prior.set_title("Data + Prior Models")
             ax_posterior.set_title("Data + Posterior Models")
 
@@ -735,10 +763,10 @@ s
 
         if self.optimisation != "simultaneous":
             lc_model = [result["light_curves"] for result in self.result]
-            x,y,yerr = self.x.copy(),self.y.copy(),self.yerr.copy()
+            x, y, yerr = self.x.copy(), self.y.copy(), self.yerr.copy()
             nrows = len(self.wavelength)
         else:
-            lc_model, priors, mean_priors = [],[],[]
+            lc_model, priors, mean_priors = [], [], []
             nrows = 0
             for k, v in self.result.items():
                 if "light_curves" in k:
@@ -748,8 +776,8 @@ s
             # wavelengths = self.wavelength
 
         # set up plot
-    #     _,ax = plt.subplots(ncols=2,nrows=nrows,sharex=True,sharey=True,figsize=(12,12))
-        _,ax = plt.subplots(ncols=2,nrows=1,sharex=True,sharey=True,figsize=(12,12))
+        #     _,ax = plt.subplots(ncols=2,nrows=nrows,sharex=True,sharey=True,figsize=(12,12))
+        _, ax = plt.subplots(ncols=2, nrows=1, sharex=True, sharey=True, figsize=(12, 12))
 
         offset, dy, miny, maxy = -1, 0.03, 100, -100
         firsttrace = True
@@ -765,15 +793,17 @@ s
             else:
                 ax_prior.plot(x[n], y[n], ".k", ms=4)
 
-            ax_posterior.plot(x[n], y[n], ".k", ms=4)#, label="data")
+            ax_posterior.plot(x[n], y[n], ".k", ms=4)  # , label="data")
 
             # plot initial parameter guess
             # ******************
-            light_curve = generate_xo_orbit(self.init_period, self.init_t0, self.init_b, self.init_u, self.init_r, x[n]) + self.init_mean
+            light_curve = generate_xo_orbit(self.init_period, self.init_t0, self.init_b, self.init_u, self.init_r,
+                                            x[n]) + self.init_mean
             if firsttrace:
-                ax_prior.plot(x[n], light_curve-offset, color="green", lw=1, alpha=1,linestyle='--',label="Initial Guess")
+                ax_prior.plot(x[n], light_curve - offset, color="green", lw=1, alpha=1, linestyle='--',
+                              label="Initial Guess")
             else:
-                ax_prior.plot(x[n], light_curve-offset, color="green", lw=1, alpha=1,linestyle='--')
+                ax_prior.plot(x[n], light_curve - offset, color="green", lw=1, alpha=1, linestyle='--')
             # ******************
 
             # plot 50 chains sampled from the posterior (MCMC):
@@ -782,25 +812,27 @@ s
 
                 # plot the 16-84th posterior percentile region
                 if self.optimisation != "simultaneous":
-                    trace = self.trace[f'wavelength_{n+1}_light_curves']
+                    trace = self.trace[f'wavelength_{n + 1}_light_curves']
                 else:
                     trace = self.trace["light_curves"]
 
                 q16, q50, q84 = np.percentile(trace, [16, 50, 84], axis=(0))
                 if firsttrace:
-                    ax_posterior.fill_between(x[n], q16.flatten()-offset, q84.flatten()-offset,color="C1", alpha=0.2, label="Posterior (16-84th percentile)")
+                    ax_posterior.fill_between(x[n], q16.flatten() - offset, q84.flatten() - offset, color="C1",
+                                              alpha=0.2, label="Posterior (16-84th percentile)")
                 else:
-                    ax_posterior.fill_between(x[n], q16.flatten()-offset, q84.flatten()-offset,color="C1", alpha=0.2)
+                    ax_posterior.fill_between(x[n], q16.flatten() - offset, q84.flatten() - offset, color="C1",
+                                              alpha=0.2)
 
                 # plot 50 individual posterior samples
                 for i in np.random.randint(len(v.trace) * self.trace.nchains, size=50):
                     if firsttrace:
                         # add the legend label to only the first prior line (to avoid 50 legend entries)
-                        ax_posterior.plot(x[n], trace[i]-offset, color="C1", lw=1, alpha=0.3,
-                                     label='Posterior Sample (n=50)')
+                        ax_posterior.plot(x[n], trace[i] - offset, color="C1", lw=1, alpha=0.3,
+                                          label='Posterior Sample (n=50)')
                         firsttrace = False
                     else:
-                        ax_posterior.plot(x[n], trace[i]-offset, color="C1", lw=1, alpha=0.3)
+                        ax_posterior.plot(x[n], trace[i] - offset, color="C1", lw=1, alpha=0.3)
             except Exception as e:
                 print(e)
             # ******************
@@ -810,9 +842,9 @@ s
             if y[n].max() > maxy:
                 maxy = y[n].max() + 0.01
 
-            ax_prior.errorbar(x[n], y[n],yerr[n], c='k', alpha=0.2)
+            ax_prior.errorbar(x[n], y[n], yerr[n], c='k', alpha=0.2)
             ax_posterior.errorbar(x[n], y[n], yerr[n], c='k', alpha=0.2)
-            ax_posterior.plot(x[n], lc_model[n]-offset, lw=1, label="model")
+            ax_posterior.plot(x[n], lc_model[n] - offset, lw=1, label="model")
             ax_prior.set_xlim(x[n].min(), x[n].max())
             offset = offset + dy
 
@@ -820,8 +852,8 @@ s
         ax_prior.set_ylabel("relative flux")
         ax_prior.set_xlabel("time [days]")
         ax_posterior.set_xlabel("time [days]")
-        ax_prior.legend(loc="upper right",fontsize=10,facecolor='white',frameon=True, framealpha=0.6)
-        ax_posterior.legend(loc="upper right",fontsize=10, facecolor='white',frameon=True, framealpha=0.6)
+        ax_prior.legend(loc="upper right", fontsize=10, facecolor='white', frameon=True, framealpha=0.6)
+        ax_posterior.legend(loc="upper right", fontsize=10, facecolor='white', frameon=True, framealpha=0.6)
         ax_prior.set_title("Data + Prior Models")
         ax_posterior.set_title("Data + Posterior Models")
         plt.show()
@@ -840,7 +872,7 @@ s
 #         self.b = chromatic_model.b
 #         self.orbit = chromatic_model.orbit
 
-def quicklook_priors(r,cm):
+def quicklook_priors(r, cm):
     """
     Quicklook plot of the priors compared to the averaged LC
     Parameters
@@ -850,14 +882,15 @@ def quicklook_priors(r,cm):
         cm : chromatic_model object
             initialised chromatic_model object
     """
-    light_curve = generate_xo_orbit(cm.init_period, cm.init_t0, cm.init_b, cm.init_u, cm.init_r, np.array(r.time))\
+    light_curve = generate_xo_orbit(cm.init_period, cm.init_t0, cm.init_b, cm.init_u, cm.init_r, np.array(r.time)) \
                   + cm.init_mean
-    plt.plot(r.time, light_curve+1,'b')
-    plt.plot(r.time, np.median(r.flux,axis=0),'k.')
+    plt.plot(r.time, light_curve + 1, 'b')
+    plt.plot(r.time, np.median(r.flux, axis=0), 'k.')
     plt.show()
     plt.close()
 
-def generate_xo_orbit(period,t0,b,u,r,x):
+
+def generate_xo_orbit(period, t0, b, u, r, x):
     """ Generate the Exoplanet orbit from orbital parameters
 
     Parameters
@@ -883,6 +916,7 @@ def generate_xo_orbit(period,t0,b,u,r,x):
     light_curve = xo.LimbDarkLightCurve([u[0], u[1]]).get_light_curve(
         orbit=orbit, r=r, t=list(x)).eval()
     return light_curve
+
 
 def import_patricio_model():
     ''' Import spectral model
@@ -911,7 +945,9 @@ def import_patricio_model():
     model = PlanetarySpectrumModel(table=table, label='injected model')
     return model, planet_params, wavelength, transmission
 
-def add_ld_coeffs(model, planet_params, wavelength,transmission,star_params,ld_eqn = 'quadratic',mode = "NIRSpec_Prism",plot=False):
+
+def add_ld_coeffs(model, planet_params, wavelength, transmission, star_params, ld_eqn='quadratic', mode="NIRSpec_Prism",
+                  plot=False):
     ''' Add the wavelength-dep limb-darkening coefficients to the transit model to inject
 
     Parameters
@@ -947,6 +983,7 @@ def add_ld_coeffs(model, planet_params, wavelength,transmission,star_params,ld_e
                                     ld_eqn=ld_eqn, ld_model='1D', plot_model=plot)
 
     return model_ld
+
 
 def main():
     # set initial parameter estimates:
