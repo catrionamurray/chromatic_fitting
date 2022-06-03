@@ -76,9 +76,9 @@ class chromatic_model:
             trace.append(tra)
             self.trace = tra
 
-            if plot:
-                # plot the priors vs posterior again, now with posterior sample!
-                self.plot_fit()
+        if plot:
+            # plot the priors vs posterior again, now with posterior sample!
+            self.plot_fit()
 
         if len(trace) > 1:
             self.trace = trace
@@ -86,8 +86,11 @@ class chromatic_model:
     def plot_trace(self):
         """ Plot the trace of the posterior distribution (see the MCMC chains)
         """
-        for trace in self.trace:
-            az.plot_trace(trace)
+        if self.optimisation == "separate_wavelengths":
+            for trace in self.trace:
+                az.plot_trace(trace)
+        else:
+            az.plot_trace(self.trace)
 
     def cornerplot(self):
         """ Use corner.py to generate the corner plot of the posterior distributions for each variable
@@ -489,8 +492,8 @@ s
 
                 self.initialise_model_staticwavelength()
                 self.optimise_model(plot=plot)
-                models.append(self.model[0])
-                results.append(self.result[0])
+                models.append(self.model)
+                results.append(self.result)
                 waves.append(rw)
 
                 # except Exception as e:
