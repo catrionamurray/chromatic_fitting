@@ -1,6 +1,5 @@
 import pymc3 as pm
 
-
 class Parameter:
     """
     Parameter objects manage model parameters, which may be either fixed or fitted.
