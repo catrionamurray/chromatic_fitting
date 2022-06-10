@@ -6,6 +6,7 @@ from pymc3_ext import eval_in_model, optimize, sample
 from pymc3 import Normal, Uniform, Model, HalfNormal, Deterministic, plot_trace, sample_prior_predictive, \
     sample_posterior_predictive
 import warnings
+from collections import Counter
 
 class LightcurveModel:
     required_parameters = []
@@ -101,34 +102,62 @@ class LightcurveModel:
         """
         self.data = rainbow._create_copy()
 
+    def white_light_curve(self):
+        self.white_light = self.data.bin(nwavelengths=self.data.nwave)
+
+    def choose_optimization_method(self,optimization_method='simultaneous'):
+        possible_optimization_methods = ["simultaneous","white_light","separate"]
+        if optimization_method in possible_optimization_methods:
+            self.optimization = optimization_method
+        else:
+            print("Unrecognised optimization method, please select one of: " + str(", ".join(possible_optimization_methods)))
+            self.optimization = "simultaneous"
+
+    def get_data(self):
+        if hasattr(self, 'optimization'):
+            if self.optimization == "white_light":
+                self.white_light_curve()
+                return self.white_light
+        return self.data
+
     def setup_likelihood(self):
         """
         Connect the light curve model to the actual data it aims to explain.
         """
+        data = self.get_data()
+
         with self.model:
-            for i, w in enumerate(self.data.wavelength):
+            for i, w in enumerate(data.wavelength):
                 k = f"wavelength_{i}"
                 # mu = Deterministic(f'{k}_mu',self.every_light_curve[k])
                 pm.Normal(
                     f"{k}_data",
                     mu=self.every_light_curve[k],
-                    sd=self.data.uncertainty[i, :],
-                    observed=self.data.flux[i, :],
+                    sd=data.uncertainty[i, :],
+                    observed=data.flux[i, :],
                 )
 
-    def sample_prior(self, ndraws=5):
+    def sample_prior(self, ndraws=3):
         """
         Draw samples from the prior distribution.
         """
         with self.model:
             return sample_prior_predictive(ndraws)
 
-    def sample_posterior(self, trace, ndraws=5):
+    def sample_posterior(self, trace, ndraws=3):
         """
         Draw samples from the posterior distribution.
         """
         with self.model:
             return sample_posterior_predictive(trace, ndraws)
+
+    def plot_priors(self, n=3):
+        data = self.get_data()
+        prior_predictive_trace = self.sample_prior(ndraws=n)
+        for i in range(n):
+            flux_for_this_sample = np.array([prior_predictive_trace[f'wavelength_{w}_data'][i] for w in range(data.nwave)])
+            data.fluxlike[f'prior-predictive-{i}'] = flux_for_this_sample
+        data.imshow_quantities()
 
 class CombinedModel(LightcurveModel):
     def __repr__(self):
@@ -172,10 +201,16 @@ class CombinedModel(LightcurveModel):
                 print(e)
 
     def attach_data(self, rainbow):
+        """
+        Connect a `chromatic` Rainbow dataset to this object and the constituent models.
+        """
         self.data = rainbow._create_copy()
         self.apply_operation_to_constituent_models(LightcurveModel.attach_data,rainbow)
 
-    def setup_orbits(self):
+    def setup_orbit(self):
+        """
+        Create an `exoplanet` orbit model, given the stored parameters.
+        """
         transit_model_exists=False
         for mod in self.models_combined.values():
             if isinstance(mod,TransitModel):
@@ -187,24 +222,26 @@ class CombinedModel(LightcurveModel):
             TransitModel.setup_orbit(self)
 
     def setup_lightcurves(self):
-        for mod in self.models_combined.values():
-            if isinstance(mod, TransitModel):
-                TransitModel.setup_lightcurves(self)
-            elif isinstance(mod, PolynomialModel):
-                PolynomialModel.setup_lightcurves(self)
+        # I want to get this to work, but it doesn't seem to save the self.every_light_curve for both :(
+        # for mod in self.models_combined.values():
+        #     if isinstance(mod, TransitModel):
+        #         print("TRANSIT MODEL")
+        #         TransitModel.setup_lightcurves(self)
+        #     elif isinstance(mod, PolynomialModel):
+        #         print("POLYNOMIAL MODEL")
+        #         PolynomialModel.setup_lightcurves(self)
 
-        # ALSO WORKS BUT IS LESS NICE:
-        # with self.model:
-        #     self.every_light_curve = {}
-        #     for i, w in enumerate(self.data.wavelength):
-        #         if f"wavelength_{i}" not in self.every_light_curve.keys():
-        #             self.every_light_curve[f"wavelength_{i}"] = [0]*self.data.ntime
-        #         for mod in self.models_combined.values():
-        #             if isinstance(mod, TransitModel):
-        #                 self.every_light_curve[f"wavelength_{i}"] += TransitModel.get_prior(self,i)
-        #             elif isinstance(mod, PolynomialModel):
-        #                 self.every_light_curve[f"wavelength_{i}"] += PolynomialModel.get_prior(self,i)
-
+        # WORKS BUT IS LESS NICE:
+        with self.model:
+            self.every_light_curve = {}
+            for i, w in enumerate(self.data.wavelength):
+                if f"wavelength_{i}" not in self.every_light_curve.keys():
+                    self.every_light_curve[f"wavelength_{i}"] = [0]*self.data.ntime
+                for mod in self.models_combined.values():
+                    if isinstance(mod, TransitModel):
+                        self.every_light_curve[f"wavelength_{i}"] += TransitModel.get_prior(self,i)
+                    elif isinstance(mod, PolynomialModel):
+                        self.every_light_curve[f"wavelength_{i}"] += PolynomialModel.get_prior(self,i)
 
 class PolynomialModel(LightcurveModel):
 
@@ -321,24 +358,44 @@ class TransitModel(LightcurveModel):
         )
         return pm.math.sum(light_curves, axis=-1) #+ (self.parameters["baseline"].get_prior(i))
 
+    # def choose_optimization_method(self,optimization="simultaneous"):
+    #     if optimization=="simultaneous":
+    #         self.setup_lightcurves()
+    #     elif optimization=='weighted_average':
+    #         # not developed yet
+    #         pass
+    #     elif optimization=="separate":
+    #         # not developed yet
+    #         pass
+    #     else:
+    #         print("Unknown optimization method!")
+
     def setup_lightcurves(self):
         """
         Create an `exoplanet` light curve model, given the stored parameters.
         [This should be run after .setup_orbit() and .attach_data()]
         """
+
+        data = self.get_data()
+
         with self.model:
             if not hasattr(self,'every_lightcurve'):
                 self.every_light_curve = {}
 
-            for i, w in enumerate(self.data.wavelength):
+            for i, w in enumerate(data.wavelength):
                 limb_darkening = self.parameters["limb_darkening"].get_prior(i)
                 light_curves = xo.LimbDarkLightCurve(limb_darkening).get_light_curve(
                     orbit=self.orbit,
                     r=self.parameters["radius_ratio"].get_prior(i)
                       * self.parameters["stellar_radius"].get_prior(),
-                    t=list(self.data.time.to_value("day")),
+                    t=list(data.time.to_value("day")),
                 )
 
+                mu = pm.math.sum(
+                        light_curves, axis=-1
+                    ) + (self.parameters["baseline"].get_prior(i))
+
+                # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
                 if f"wavelength_{i}" not in self.every_light_curve.keys():
                     self.every_light_curve[f"wavelength_{i}"] = pm.math.sum(
                         light_curves, axis=-1
@@ -348,7 +405,7 @@ class TransitModel(LightcurveModel):
                         light_curves, axis=-1
                     ) + (self.parameters["baseline"].get_prior(i))
 
-            self.model_chromatic_flux = [
+            self.model_chromatic_transit_flux = [
                 self.every_light_curve[k] for k in tqdm(self.every_light_curve)
             ]
             # pm.Deterministic("model_chromatic_flux", self.model_chromatic_flux)
