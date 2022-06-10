@@ -2,6 +2,7 @@ from chromatic_fitting import *
 from tqdm import tqdm
 import aesara
 from parameters import *
+from arviz import summary
 from pymc3_ext import eval_in_model, optimize, sample
 from pymc3 import Normal, Uniform, Model, HalfNormal, Deterministic, plot_trace, sample_prior_predictive, \
     sample_posterior_predictive
@@ -15,20 +16,6 @@ class LightcurveModel:
         # define some default parameters (fixed):
         self.defaults = dict()
         pass
-
-    # def __add__(self, model_to_add):
-    #     # not working yet!
-    #
-    #     new_lcm = LightcurveModel()
-    #     new_lcm.initialize_empty_model()
-    #     new_lcm.defaults = self.defaults | model_to_add.defaults
-    #
-    #     # combine the parameters from the two separate models:
-    #     new_parameters = self.parameters | model_to_add.parameters
-    #
-    #     new_lcm.setup_parameters(**dict(new_parameters))
-    #
-    #     return new_lcm
 
     def setup_parameters(self, **kw):
         """
@@ -114,6 +101,9 @@ class LightcurveModel:
             self.optimization = "simultaneous"
 
     def get_data(self):
+        """
+        Extract the data to use for the optimization depending on the method chosen
+        """
         if hasattr(self, 'optimization'):
             if self.optimization == "white_light":
                 self.white_light_curve()
@@ -151,12 +141,29 @@ class LightcurveModel:
         with self.model:
             return sample_posterior_predictive(trace, ndraws)
 
+    def sample(self, **kw):
+        with self.model:
+            self.trace = sample(**kw)
+
+    def summarize(self, **kw):
+        with self.model:
+            self.summary = summary(self.trace, **kw)
+
     def plot_priors(self, n=3):
         data = self.get_data()
         prior_predictive_trace = self.sample_prior(ndraws=n)
         for i in range(n):
             flux_for_this_sample = np.array([prior_predictive_trace[f'wavelength_{w}_data'][i] for w in range(data.nwave)])
             data.fluxlike[f'prior-predictive-{i}'] = flux_for_this_sample
+        data.imshow_quantities()
+
+    def plot_posteriors(self, trace, n=3):
+        data = self.get_data()
+        posterior_predictive_trace = self.sample_posterior(trace, ndraws=n)
+        for i in range(n):
+            flux_for_this_sample = np.array(
+                [posterior_predictive_trace[f'wavelength_{w}_data'][i] for w in range(data.nwave)])
+            data.fluxlike[f'posterior-predictive-{i}'] = flux_for_this_sample
         data.imshow_quantities()
 
 class CombinedModel(LightcurveModel):
@@ -167,9 +174,14 @@ class CombinedModel(LightcurveModel):
             return "<experimental chromatic combined model 🌈>"
 
     def attach_models(self, models):
+        """
+        Attach multiple LightCurveModel in dictionary to the CombinedModel
+        """
         new_models = {}
         all_params = {}
+
         for name, model in models.items():
+            # check that the models passed to this function are LightcurveModels
             if isinstance(model, LightcurveModel):
                 # make a "copy" of each model:
                 new_model = model.__class__()
@@ -177,23 +189,32 @@ class CombinedModel(LightcurveModel):
                 # can't just do new_v.setup_parameters(**dict(v.parameters)) - runs into weird pymc3 inheritance
                 # issues!
                 model_params = {}
+                # for every parameter in the separate models redefine them in the separate and new models
                 for k, v in model.parameters.items():
                     if isinstance(v, Fixed):
+                        # parameter is Fixed
                         model_params[k] = v.__class__(v.value)
                     elif isinstance(v, WavelikeFixed):
+                        # parameter is WavelikeFixed
                         model_params[k] = v.__class__(v.values)
                     else:
+                        # parameter is Fitted or WavelikeFitted
                         model_params[k] = v.__class__(v.distribution, **v.inputs)
+                # set up parameters in new models
                 new_model.setup_parameters(**model_params)
                 new_models[name] = new_model
                 all_params = all_params | model_params
             else:
                 print("This class can only be used to combine LightcurveModels!")
 
+        # set up parameters in new combined model
         self.setup_parameters(**all_params)
         self.models_combined = new_models
 
     def apply_operation_to_constituent_models(self, operation, *args):
+        """
+        Apply an operation to all models within a combined model
+        """
         for m in self.models_combined.values():
             try:
                 operation(m, *args)
@@ -211,9 +232,9 @@ class CombinedModel(LightcurveModel):
         """
         Create an `exoplanet` orbit model, given the stored parameters.
         """
-        transit_model_exists=False
+        transit_model_exists = False
         for mod in self.models_combined.values():
-            if isinstance(mod,TransitModel):
+            if isinstance(mod, TransitModel):
                 # if you set up the individual orbits then for whatever reason the parameters
                 # aren't fitted in the combined model?
                 # mod.setup_orbit()
@@ -222,21 +243,24 @@ class CombinedModel(LightcurveModel):
             TransitModel.setup_orbit(self)
 
     def setup_lightcurves(self):
+        """
+        Set-up lightcurves in combined model : for each consituent model set-up the lightcurves according to their type
+        """
+
         # I want to get this to work, but it doesn't seem to save the self.every_light_curve for both :(
         # for mod in self.models_combined.values():
         #     if isinstance(mod, TransitModel):
-        #         print("TRANSIT MODEL")
         #         TransitModel.setup_lightcurves(self)
         #     elif isinstance(mod, PolynomialModel):
-        #         print("POLYNOMIAL MODEL")
         #         PolynomialModel.setup_lightcurves(self)
 
+        data = self.get_data()
         # WORKS BUT IS LESS NICE:
         with self.model:
             self.every_light_curve = {}
-            for i, w in enumerate(self.data.wavelength):
+            for i, w in enumerate(data.wavelength):
                 if f"wavelength_{i}" not in self.every_light_curve.keys():
-                    self.every_light_curve[f"wavelength_{i}"] = [0]*self.data.ntime
+                    self.every_light_curve[f"wavelength_{i}"] = [0]*data.ntime
                 for mod in self.models_combined.values():
                     if isinstance(mod, TransitModel):
                         self.every_light_curve[f"wavelength_{i}"] += TransitModel.get_prior(self,i)
@@ -272,15 +296,15 @@ class PolynomialModel(LightcurveModel):
         Create a polynomial model, given the stored parameters.
         [This should be run after .attach_data()]
         """
-
+        data = self.get_data()
         # find the number of polynomial degrees to fit based on the user input
         self.degree = self.parameters["p"].inputs['shape'] - 1
-        x = self.data.time.to_value()
+        x = data.time.to_value()
 
         with self.model:
             if not hasattr(self, 'every_lightcurve'):
                 self.every_light_curve = {}
-            for i, w in enumerate(self.data.wavelength):
+            for i, w in enumerate(data.wavelength):
                 # compute polynomial of user-defined degree
                 poly = []
                 p = self.parameters["p"].get_prior(i)
@@ -357,18 +381,6 @@ class TransitModel(LightcurveModel):
                     t=list(self.data.time.to_value("day")),
         )
         return pm.math.sum(light_curves, axis=-1) #+ (self.parameters["baseline"].get_prior(i))
-
-    # def choose_optimization_method(self,optimization="simultaneous"):
-    #     if optimization=="simultaneous":
-    #         self.setup_lightcurves()
-    #     elif optimization=='weighted_average':
-    #         # not developed yet
-    #         pass
-    #     elif optimization=="separate":
-    #         # not developed yet
-    #         pass
-    #     else:
-    #         print("Unknown optimization method!")
 
     def setup_lightcurves(self):
         """
