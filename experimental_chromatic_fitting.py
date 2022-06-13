@@ -100,7 +100,7 @@ class LightcurveModel:
         """
         Choose the optimization method
         """
-        possible_optimization_methods = ["simultaneous","white_light","separate"]
+        possible_optimization_methods = ["simultaneous", "white_light", "separate"]
         if optimization_method in possible_optimization_methods:
             self.optimization = optimization_method
         else:
@@ -232,7 +232,7 @@ class CombinedModel(LightcurveModel):
                 # set up parameters in new models
                 new_model.setup_parameters(**model_params)
                 new_models[name] = new_model
-                all_params = all_params | model_params
+                all_params = all_params | model_params # what happens if same keys?
             else:
                 print("This class can only be used to combine LightcurveModels!")
 
