@@ -1,13 +1,12 @@
-from chromatic_fitting import *
+from src.archive.chromatic_fitting import *
 from tqdm import tqdm
-import aesara
 from parameters import *
 from arviz import summary
 from pymc3_ext import eval_in_model, optimize, sample
-from pymc3 import Normal, Uniform, Model, HalfNormal, Deterministic, plot_trace, sample_prior_predictive, \
+from pymc3 import sample_prior_predictive, \
     sample_posterior_predictive
 import warnings
-from collections import Counter
+
 
 class LightcurveModel:
     required_parameters = []

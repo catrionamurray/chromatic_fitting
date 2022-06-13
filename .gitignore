@@ -3,3 +3,4 @@ chromatic
 src/pymc
 *.pyc
 .ipynb_checkpoints
+src/archive

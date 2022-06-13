@@ -1,8 +1,6 @@
-import matplotlib.pyplot as plt
-
 from src.inject_spectrum import *
 # from src.plot.interactive_plots import *
-from src.weighted_average_lc import *
+from src.archive.weighted_average_lc import *
 from src.recover_transit import *
 from src.utils import *
 # import theano
@@ -934,7 +932,7 @@ def import_patricio_model():
         transmission : np.array
             Transmission values
     '''
-    x = pickle.load(open('data_challenge_spectra_v01.pickle', 'rb'))
+    x = pickle.load(open('../../data_challenge_spectra_v01.pickle', 'rb'))
     # lets load a model
     planet = x['WASP39b_NIRSpec']
     planet_params = x['WASP39b_parameters']

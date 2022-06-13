@@ -1,6 +1,6 @@
-from .imports import *
+from src.imports import *
 # import sys
-from .utils import *
+from src.utils import *
 from astropy.stats import sigma_clip
 from scipy.stats import median_abs_deviation
 
