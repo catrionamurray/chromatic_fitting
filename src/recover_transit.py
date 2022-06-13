@@ -196,12 +196,12 @@ def sample(map_soln, model, tune_steps=4000,draws=8000,cores=12,chains=4,target_
 
 
 def summarise(model, trace, fixed_var=[], sim_wavelengths=False):
-    all_varnames = ["period", "r", "t0", "b", "u", "mean"]
-    nonfixed_varnames = [a for a in all_varnames if a not in fixed_var]
+    # all_varnames = ["period", "r", "t0", "b", "u", "mean"]
+    # nonfixed_varnames = [a for a in all_varnames if a not in fixed_var]
 
     with model:
         summary = az.summary(
-            trace, var_names=nonfixed_varnames, round_to=7, fmt='wide'
+            trace, round_to=7, fmt='wide'
         )
     return summary
 
