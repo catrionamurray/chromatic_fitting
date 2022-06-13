@@ -18,8 +18,8 @@ import matplotlib.pyplot as plt
 import sys
 import exoplanet as xo
 import arviz as az
-import pymc3 as pm
-import pymc3_ext as pmx
+# import pymc3 as pm
+# import pymc3_ext as pmx
 import time as ttime
 
 print(f"Running on Python v{sys.version}")
