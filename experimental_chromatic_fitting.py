@@ -15,6 +15,7 @@ class LightcurveModel:
     def __init__(self, **kw):
         # define some default parameters (fixed):
         self.defaults = dict()
+        self.optimization = "simultaneous"
         pass
 
     def setup_parameters(self, **kw):
@@ -90,9 +91,15 @@ class LightcurveModel:
         self.data = rainbow._create_copy()
 
     def white_light_curve(self):
+        """
+        Generate inverse-variance weighted white light curve by binning Rainbow to one bin
+        """
         self.white_light = self.data.bin(nwavelengths=self.data.nwave)
 
     def choose_optimization_method(self,optimization_method='simultaneous'):
+        """
+        Choose the optimization method
+        """
         possible_optimization_methods = ["simultaneous","white_light","separate"]
         if optimization_method in possible_optimization_methods:
             self.optimization = optimization_method
@@ -130,6 +137,8 @@ class LightcurveModel:
     def sample_prior(self, ndraws=3):
         """
         Draw samples from the prior distribution.
+        :parameter n
+        Number of priors to sample
         """
         with self.model:
             return sample_prior_predictive(ndraws)
@@ -137,19 +146,32 @@ class LightcurveModel:
     def sample_posterior(self, trace, ndraws=3):
         """
         Draw samples from the posterior distribution.
+        :parameter n
+        Number of posteriors to sample
         """
         with self.model:
             return sample_posterior_predictive(trace, ndraws)
 
     def sample(self, **kw):
+        """
+        Wrapper for PyMC3_ext sample
+        """
         with self.model:
             self.trace = sample(**kw)
 
     def summarize(self, **kw):
+        """
+        Wrapper for arviz summary
+        """
         with self.model:
             self.summary = summary(self.trace, **kw)
 
     def plot_priors(self, n=3):
+        """
+        Plot n prior samples from the parameter distributions defined by the user
+        :parameter n
+        Number of priors to plot (default=3)
+        """
         data = self.get_data()
         prior_predictive_trace = self.sample_prior(ndraws=n)
         for i in range(n):
@@ -158,6 +180,13 @@ class LightcurveModel:
         data.imshow_quantities()
 
     def plot_posteriors(self, trace, n=3):
+        """
+        Plot n posterior samples from the parameter distributions defined by the user
+        :parameter trace
+        PyMC3 trace object (need to run sample first)
+        :parameter n
+        Number of posteriors to plot (default=3)
+        """
         data = self.get_data()
         posterior_predictive_trace = self.sample_posterior(trace, ndraws=n)
         for i in range(n):
@@ -221,12 +250,14 @@ class CombinedModel(LightcurveModel):
             except Exception as e:
                 print(e)
 
-    def attach_data(self, rainbow):
+    def attach_data(self, r):
         """
         Connect a `chromatic` Rainbow dataset to this object and the constituent models.
+        :parameter r:
+        Rainbow object
         """
-        self.data = rainbow._create_copy()
-        self.apply_operation_to_constituent_models(LightcurveModel.attach_data,rainbow)
+        self.data = r._create_copy()
+        self.apply_operation_to_constituent_models(LightcurveModel.attach_data, r)
 
     def setup_orbit(self):
         """
@@ -279,7 +310,6 @@ class PolynomialModel(LightcurveModel):
         self.name = name
 
     def get_prior(self, i, *args, **kwargs):
-
         self.degree = self.parameters["p"].inputs['shape'] - 1
         x = self.data.time.to_value()
         poly = []
