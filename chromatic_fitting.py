@@ -82,7 +82,7 @@ class LightcurveModel:
         """
         Restart with an empty model.
         """
-        self.model = pm.Model()
+        self.pymc3_model = pm.Model()
 
     def attach_data(self, rainbow):
         """
@@ -123,7 +123,7 @@ class LightcurveModel:
         """
         data = self.get_data()
 
-        with self.model:
+        with self.pymc3_model:
             for i, w in enumerate(data.wavelength):
                 k = f"wavelength_{i}"
                 # mu = Deterministic(f'{k}_mu',self.every_light_curve[k])
@@ -140,7 +140,7 @@ class LightcurveModel:
         :parameter n
         Number of priors to sample
         """
-        with self.model:
+        with self.pymc3_model:
             return sample_prior_predictive(ndraws)
 
     def sample_posterior(self, trace, ndraws=3):
@@ -149,21 +149,21 @@ class LightcurveModel:
         :parameter n
         Number of posteriors to sample
         """
-        with self.model:
+        with self.pymc3_model:
             return sample_posterior_predictive(trace, ndraws)
 
     def sample(self, **kw):
         """
         Wrapper for PyMC3_ext sample
         """
-        with self.model:
+        with self.pymc3_model:
             self.trace = sample(**kw)
 
     def summarize(self, **kw):
         """
         Wrapper for arviz summary
         """
-        with self.model:
+        with self.pymc3_model:
             self.summary = summary(self.trace, **kw)
 
     def plot_priors(self, n=3):
@@ -287,7 +287,7 @@ class CombinedModel(LightcurveModel):
 
         data = self.get_data()
         # WORKS BUT IS LESS NICE:
-        with self.model:
+        with self.pymc3_model:
             self.every_light_curve = {}
             for i, w in enumerate(data.wavelength):
                 if f"wavelength_{i}" not in self.every_light_curve.keys():
@@ -331,7 +331,7 @@ class PolynomialModel(LightcurveModel):
         self.degree = self.parameters["p"].inputs['shape'] - 1
         x = data.time.to_value()
 
-        with self.model:
+        with self.pymc3_model:
             if not hasattr(self, 'every_lightcurve'):
                 self.every_light_curve = {}
             for i, w in enumerate(data.wavelength):
@@ -387,7 +387,7 @@ class TransitModel(LightcurveModel):
         [This should be run after .setup_parameters()]
         """
 
-        with self.model:
+        with self.pymc3_model:
             # Set up a Keplerian orbit for the planets
             self.orbit = xo.orbits.KeplerianOrbit(
                 period=self.parameters["period"].get_prior(),
@@ -420,7 +420,7 @@ class TransitModel(LightcurveModel):
 
         data = self.get_data()
 
-        with self.model:
+        with self.pymc3_model:
             if not hasattr(self,'every_lightcurve'):
                 self.every_light_curve = {}
 
@@ -460,8 +460,8 @@ class TransitModel(LightcurveModel):
         self.attach_data(r)
         self.setup_lightcurves()
         self.setup_likelihood()
-        with self.model:
-            opt = optimize(start=self.model.test_point)
+        with self.pymc3_model:
+            opt = optimize(start=self.pymc3_model.test_point)
             opt = optimize(start=opt)
             trace = sample(start=opt)
             summary = az.summary(trace, round_to=7, fmt='wide')
@@ -483,8 +483,8 @@ class TransitModel(LightcurveModel):
         else:
             timedata = self.data.time
 
-        with self.model:
-            x, y, z = [eval_in_model(bla, point=self.model.test_point) for bla in
+        with self.pymc3_model:
+            x, y, z = [eval_in_model(bla, point=self.pymc3_model.test_point) for bla in
                        self.orbit.get_planet_position(timedata)]  # {}
             plt.figure(figsize=(10, 3))
             theta = np.linspace(0, 2 * np.pi)
