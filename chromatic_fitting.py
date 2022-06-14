@@ -86,6 +86,12 @@ class LightcurveModel:
         for k, v in self.parameters.items():
             print(f"{k} =\n  {v}\n")
 
+    def reinitialize_parameters(self, exclude=[]):
+        for k, v in self.parameters.items():
+            if k not in exclude:
+                if isinstance(v, Fitted):
+                    v.clear_prior()
+
     def initialize_empty_model(self):
         """
         Restart with an empty model.
@@ -98,6 +104,7 @@ class LightcurveModel:
         """
         self.data = rainbow._create_copy()
 
+
     def white_light_curve(self):
         """
         Generate inverse-variance weighted white light curve by binning Rainbow to one bin
@@ -107,16 +114,58 @@ class LightcurveModel:
     def choose_optimization_method(self, optimization_method='simultaneous'):
         """
         Choose the optimization method
+        [attach_data has to be run before!]
         """
         possible_optimization_methods = ["simultaneous", "white_light", "separate"]
         if optimization_method in possible_optimization_methods:
             self.optimization = optimization_method
+            if self.optimization == "separate":
+                try:
+                    self.create_multiple_models()
+                    self.change_all_priors_to_Wavelike()
+                except:
+                    pass
         else:
             print("Unrecognised optimization method, please select one of: " + str(
                 ", ".join(possible_optimization_methods)))
             self.optimization = "simultaneous"
 
-    def get_data(self):
+
+    def create_multiple_models(self):
+        """
+        Create a list of models to process wavelengths separately
+        """
+        self.pymc3_model = [pm.Model() for n in range(self.data.nwave)]
+        # if the LightCurve model is a CombinedModel then update the constituent models too
+        if isinstance(self, CombinedModel):
+            for mod in self.pymc3_models.values():
+                mod.pymc3_model = self.pymc3_model
+                mod.optimization = self.optimization
+
+
+    def change_all_priors_to_Wavelike(self):
+        for k, v in self.parameters.items():
+            if isinstance(v, Fitted) and not isinstance(v, WavelikeFitted):
+                self.parameters[k] = WavelikeFitted(v.distribution, **v.inputs)
+            if isinstance(v, Fixed) and not isinstance(v, WavelikeFixed):
+                self.parameters[k] = WavelikeFixed([v.value] * self.data.nwave)
+
+    def change_all_priors_to_notWavelike(self):
+        for k, v in self.parameters.items():
+            if isinstance(v, WavelikeFitted):
+                self.parameters[k] = Fitted(v.distribution, **v.inputs)
+            if isinstance(v, WavelikeFixed):
+                self.parameters[k] = Fixed(v.values[0])
+
+    def separate_wavelengths(self, i):
+        data_copy = self.data._create_copy()
+        for k, v in data_copy.fluxlike.items():
+            data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
+        for k, v in data_copy.wavelike.items():
+            data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
+        return data_copy
+
+    def get_data(self, i=0):
         """
         Extract the data to use for the optimization depending on the method chosen
         """
@@ -124,24 +173,34 @@ class LightcurveModel:
             if self.optimization == "white_light":
                 self.white_light_curve()
                 return self.white_light
+            if self.optimization == 'separate':
+                return self.separate_wavelengths(i)
         return self.data
 
     def setup_likelihood(self):
         """
         Connect the light curve model to the actual data it aims to explain.
         """
-        data = self.get_data()
+        # data = self.get_data()
 
-        with self.pymc3_model:
-            for i, w in enumerate(data.wavelength):
-                k = f"wavelength_{i}"
-                # mu = Deterministic(f'{k}_mu',self.every_light_curve[k])
-                pm.Normal(
-                    f"{k}_data",
-                    mu=self.every_light_curve[k],
-                    sd=data.uncertainty[i, :],
-                    observed=data.flux[i, :],
-                )
+        if self.optimization == "separate":
+            models = self.pymc3_model
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+        else:
+            models = [self.pymc3_model]
+            datas = [self.get_data()]
+
+        for j, (mod, data) in enumerate(zip(models, datas)):
+            with mod:
+                for i, w in enumerate(data.wavelength):
+                    k = f"wavelength_{j+i}"
+                    # mu = Deterministic(f'{k}_mu',self.every_light_curve[k])
+                    pm.Normal(
+                        f"{k}_data",
+                        mu=self.every_light_curve[k],
+                        sd=data.uncertainty[i, :],
+                        observed=data.flux[i, :],
+                    )
 
     def sample_prior(self, ndraws=3):
         """
@@ -149,17 +208,36 @@ class LightcurveModel:
         :parameter n
         Number of priors to sample
         """
-        with self.pymc3_model:
-            return sample_prior_predictive(ndraws)
+        try:
+            with self.pymc3_model:
+                return sample_prior_predictive(ndraws)
+        except:
+            priors = []
+            for mod in self.pymc3_model:
+                with mod:
+                    priors.append(sample_prior_predictive(ndraws))
+            return priors
 
-    def sample_posterior(self, trace, ndraws=3):
+    def sample_posterior(self, ndraws=3):
         """
         Draw samples from the posterior distribution.
         :parameter n
         Number of posteriors to sample
         """
-        with self.pymc3_model:
-            return sample_posterior_predictive(trace, ndraws)
+        if not hasattr(self, 'trace'):
+            print("Sampling has not been run yet! Running now with defaults...")
+            self.sample()
+
+        try:
+            with self.pymc3_model:
+                return sample_posterior_predictive(self.trace, ndraws)
+        except:
+            posteriors = []
+            for mod, trace in zip(self.pymc3_model, self.trace):
+                with mod:
+                    posteriors.append(sample_posterior_predictive(trace, ndraws))
+            return posteriors
+
 
     def optimize(self, **kw):
         """
@@ -172,15 +250,31 @@ class LightcurveModel:
         """
         Wrapper for PyMC3_ext sample
         """
-        with self.pymc3_model:
-            self.trace = sample(**kw)
+        if self.optimization == "separate":
+            self.trace = []
+            for mod in self.pymc3_model:
+                with mod:
+                    self.trace.append(sample(**kw))
+        else:
+            with self.pymc3_model:
+                self.trace = sample(**kw)
 
     def summarize(self, **kw):
         """
         Wrapper for arviz summary
         """
-        with self.pymc3_model:
-            self.summary = summary(self.trace, **kw)
+        if not hasattr(self, 'trace'):
+            print("Sampling has not been run yet! Running now with defaults...")
+            self.sample()
+
+        if self.optimization == "separate":
+            self.summary = []
+            for mod, trace in zip(self.pymc3_model, self.trace):
+                with mod:
+                    self.summary.append(summary(trace, **kw))
+        else:
+            with self.pymc3_model:
+                self.summary = summary(self.trace, **kw)
 
     def plot_priors(self, n=3):
         """
@@ -188,15 +282,22 @@ class LightcurveModel:
         :parameter n
         Number of priors to plot (default=3)
         """
-        data = self.get_data()
-        prior_predictive_trace = self.sample_prior(ndraws=n)
-        for i in range(n):
-            flux_for_this_sample = np.array(
-                [prior_predictive_trace[f'wavelength_{w}_data'][i] for w in range(data.nwave)])
-            data.fluxlike[f'prior-predictive-{i}'] = flux_for_this_sample
-        data.imshow_quantities()
+        # setup the models, data and orbits in a format for looping
+        if self.optimization == "separate":
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+            prior_predictive_traces = self.sample_prior(ndraws=n)
+        else:
+            datas = [self.get_data()]
+            prior_predictive_traces = [self.sample_prior(ndraws=n)]
 
-    def plot_posteriors(self, trace, n=3):
+        for nm, (data, prior_predictive_trace) in enumerate(zip(datas, prior_predictive_traces)):
+            for i in range(n):
+                flux_for_this_sample = np.array(
+                    [prior_predictive_trace[f'wavelength_{w+nm}_data'][i] for w in range(data.nwave)])
+                data.fluxlike[f'prior-predictive-{i}'] = flux_for_this_sample
+            data.imshow_quantities()
+
+    def plot_posteriors(self, n=3):
         """
         Plot n posterior samples from the parameter distributions defined by the user
         :parameter trace
@@ -204,17 +305,25 @@ class LightcurveModel:
         :parameter n
         Number of posteriors to plot (default=3)
         """
-        data = self.get_data()
-        posterior_predictive_trace = self.sample_posterior(trace, ndraws=n)
-        for i in range(n):
-            flux_for_this_sample = np.array(
-                [posterior_predictive_trace[f'wavelength_{w}_data'][i] for w in range(data.nwave)])
-            data.fluxlike[f'posterior-predictive-{i}'] = flux_for_this_sample
-        data.imshow_quantities()
+        if self.optimization == "separate":
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+            # traces = self.trace
+            posterior_predictive_traces = self.sample_posterior(n)
+        else:
+            datas = [self.get_data()]
+            # traces = [self.trace]
+            posterior_predictive_traces = [self.sample_posterior(n)]
 
-    def extract_mean_posteriors(self, summary, i):
+        for nm, (data, posterior_predictive_trace) in enumerate(zip(datas, posterior_predictive_traces)):
+            for i in range(n):
+                flux_for_this_sample = np.array(
+                    [posterior_predictive_trace[f'wavelength_{w+nm}_data'][i] for w in range(data.nwave)])
+                data.fluxlike[f'posterior-predictive-{i}'] = flux_for_this_sample
+            data.imshow_quantities()
+
+    def extract_mean_posteriors(self, i):
         # there's definitely a sleeker way to do this
-        posterior_means = summary['mean']
+        posterior_means = self.summary['mean']
         fv = {}
         for k, v in self.parameters.items():
             if k in posterior_means.index:
@@ -243,8 +352,8 @@ class LightcurveModel:
 
 class CombinedModel(LightcurveModel):
     def __repr__(self):
-        if hasattr(self, 'models_combined'):
-            return f"<experimental chromatic combined model 🌈, models: {self.models_combined}>"
+        if hasattr(self, 'pymc3_models'):
+            return f"<experimental chromatic combined model 🌈, models: {self.pymc3_models}>"
         else:
             return "<experimental chromatic combined model 🌈>"
 
@@ -285,17 +394,18 @@ class CombinedModel(LightcurveModel):
 
         # set up parameters in new combined model
         # self.setup_parameters(**all_params)
-        self.models_combined = new_models
+        self.pymc3_models = new_models
 
     def apply_operation_to_constituent_models(self, operation, *args):
         """
         Apply an operation to all models within a combined model
         """
-        for m in self.models_combined.values():
+        for m in self.pymc3_models.values():
             try:
                 op = getattr(m, operation)
                 op(*args)
             except Exception as e:
+                print(m,operation)
                 print(e)
 
     def attach_data(self, r):
@@ -307,54 +417,26 @@ class CombinedModel(LightcurveModel):
         self.data = r._create_copy()
         self.apply_operation_to_constituent_models('attach_data', r)
 
+    def choose_optimization_method(self, optimization_method='simultaneous'):
+        LightcurveModel.choose_optimization_method(self, optimization_method)
+        # if self.optimization == "separate":
+        #     self.create_multiple_models()
+        # self.apply_operation_to_constituent_models('choose_optimization_method', optimization_method)
+
     def setup_orbit(self):
         """
         Create an `exoplanet` orbit model, given the stored parameters.
         """
-        # transit_model_exists = False
-        # for mod in self.models_combined.values():
-        #     if isinstance(mod, TransitModel):
-        #         # if you set up the individual orbits then for whatever reason the parameters
-        #         # aren't fitted in the combined model?
-        #         # mod.setup_orbit()
-        #         transit_model_exists = True
-        # if transit_model_exists:
-        #     TransitModel.setup_orbit(self)
-
         self.apply_operation_to_constituent_models('setup_orbit')
 
     def setup_lightcurves(self):
         """
         Set-up lightcurves in combined model : for each consituent model set-up the lightcurves according to their type
         """
-
-        # I want to get this to work, but it doesn't seem to save the self.every_light_curve for both :(
-        # for mod in self.models_combined.values():
-        #     if isinstance(mod, TransitModel):
-        #         TransitModel.setup_lightcurves(self)
-        #     elif isinstance(mod, PolynomialModel):
-        #         PolynomialModel.setup_lightcurves(self)
-
-        # data = self.get_data()
         self.every_light_curve = {}
-
         self.apply_operation_to_constituent_models('setup_lightcurves')
-
-        for mod in self.models_combined.values():
+        for mod in self.pymc3_models.values():
             self.every_light_curve = add_dicts(self.every_light_curve, mod.every_light_curve)
-
-        # WORKS BUT IS LESS NICE:
-        # with self.pymc3_model:
-        #     self.every_light_curve = {}
-        #     for i, w in enumerate(data.wavelength):
-        #         if f"wavelength_{i}" not in self.every_light_curve.keys():
-        #             self.every_light_curve[f"wavelength_{i}"] = [0]*data.ntime
-        #         for mod in self.models_combined.values():
-        #             if isinstance(mod, TransitModel):
-        #                 self.every_light_curve[f"wavelength_{i}"] += TransitModel.get_prior(self,i)
-        #             elif isinstance(mod, PolynomialModel):
-        #                 self.every_light_curve[f"wavelength_{i}"] += PolynomialModel.get_prior(self,i)
-
 
 class PolynomialModel(LightcurveModel):
 
@@ -385,30 +467,39 @@ class PolynomialModel(LightcurveModel):
         Create a polynomial model, given the stored parameters.
         [This should be run after .attach_data()]
         """
-        data = self.get_data()
         # find the number of polynomial degrees to fit based on the user input
         self.degree = self.parameters["p"].inputs['shape'] - 1
-        x = data.time.to_value()
 
-        with self.pymc3_model:
-            if not hasattr(self, 'every_lightcurve'):
-                self.every_light_curve = {}
-            for i, w in enumerate(data.wavelength):
-                # compute polynomial of user-defined degree
-                poly = []
-                p = self.parameters["p"].get_prior(i)
-                for d in range(self.degree + 1):
-                    poly.append(p[d] * (x ** d))
+        if self.optimization == "separate":
+            models = self.pymc3_model
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+        else:
+            models = [self.pymc3_model]
+            datas = [self.get_data()]
 
-                # rd = RegexDict(dict(self.parameters))
-                # models_to_add = rd.get_matching('add_.*')
-                # for j, mod in enumerate(models_to_add):
-                # models_to_add = pm.math.sum([mod.get_prior() for mod in models_to_add],axis=-1)
-                if f"wavelength_{i}" not in self.every_light_curve.keys():
-                    self.every_light_curve[f"wavelength_{i}"] = pm.math.sum(poly,
-                                                                            axis=0)  # + models_to_add #+ pm.math.sum(models_to_add, axis=0)
-                else:
-                    self.every_light_curve[f"wavelength_{i}"] += pm.math.sum(poly, axis=0)
+        if not hasattr(self, 'every_lightcurve'):
+            self.every_light_curve = {}
+
+        for mod, data in zip(models, datas):
+            with mod:
+                x = data.time.to_value()
+
+                for i, w in enumerate(data.wavelength):
+                    # compute polynomial of user-defined degree
+                    poly = []
+                    p = self.parameters["p"].get_prior(i)
+                    for d in range(self.degree + 1):
+                        poly.append(p[d] * (x ** d))
+
+                    # rd = RegexDict(dict(self.parameters))
+                    # models_to_add = rd.get_matching('add_.*')
+                    # for j, mod in enumerate(models_to_add):
+                    # models_to_add = pm.math.sum([mod.get_prior() for mod in models_to_add],axis=-1)
+                    if f"wavelength_{i}" not in self.every_light_curve.keys():
+                        self.every_light_curve[f"wavelength_{i}"] = pm.math.sum(poly,
+                                                                                axis=0)  # + models_to_add #+ pm.math.sum(models_to_add, axis=0)
+                    else:
+                        self.every_light_curve[f"wavelength_{i}"] += pm.math.sum(poly, axis=0)
 
     def polynomial_model(self, poly_params):
         data = self.get_data()
@@ -449,21 +540,37 @@ class TransitModel(LightcurveModel):
     def set_name(self, name):
         self.name = name
 
+
     def setup_orbit(self):
         """
         Create an `exoplanet` orbit model, given the stored parameters.
         [This should be run after .setup_parameters()]
         """
 
-        with self.pymc3_model:
-            # Set up a Keplerian orbit for the planets
-            self.orbit = xo.orbits.KeplerianOrbit(
-                period=self.parameters["period"].get_prior(),
-                t0=self.parameters["epoch"].get_prior(),
-                b=self.parameters["impact_parameter"].get_prior(),
-                r_star=self.parameters["stellar_radius"].get_prior(),
-                m_star=self.parameters["stellar_mass"].get_prior(),
-            )
+        if self.optimization == "separate":
+            models = self.pymc3_model
+        else:
+            models = [self.pymc3_model]
+
+        self.orbit = []
+        for j, mod in enumerate(models):
+            with mod:
+
+                # Set up a Keplerian orbit for the planets
+                orbit = xo.orbits.KeplerianOrbit(
+                    period=self.parameters["period"].get_prior(j),
+                    t0=self.parameters["epoch"].get_prior(j),
+                    b=self.parameters["impact_parameter"].get_prior(j),
+                    r_star=self.parameters["stellar_radius"].get_prior(j),
+                    m_star=self.parameters["stellar_mass"].get_prior(j),
+                )
+
+                # store a separate orbit for each model if we are optimizing wavelengths separately
+                if self.optimization == 'separate':
+                    self.orbit.append(orbit)
+                else:
+                    self.orbit = orbit
+
 
     def get_prior(self, i):
         try:
@@ -483,42 +590,62 @@ class TransitModel(LightcurveModel):
     def setup_lightcurves(self):
         """
         Create an `exoplanet` light curve model, given the stored parameters.
-        [This should be run after .setup_orbit() and .attach_data()]
+        [This should be run after .attach_data()]
         """
 
-        data = self.get_data()
+        # ensure that attach data has been run before setup_lightcurves
+        if not hasattr(self, 'data'):
+            print("You need to attach some data to this chromatic model!")
+            return
 
-        with self.pymc3_model:
-            if not hasattr(self, 'every_lightcurve'):
-                self.every_light_curve = {}
+        # ensure that setup_orbit has been run before setup_lightcurves
+        if not hasattr(self, 'orbit'):
+            self.setup_orbit()
 
-            for i, w in enumerate(data.wavelength):
-                limb_darkening = self.parameters["limb_darkening"].get_prior(i)
-                light_curves = xo.LimbDarkLightCurve(limb_darkening).get_light_curve(
-                    orbit=self.orbit,
-                    r=self.parameters["radius_ratio"].get_prior(i)
-                      * self.parameters["stellar_radius"].get_prior(),
-                    t=list(data.time.to_value("day")),
-                )
+        # setup the models, data and orbits in a format for looping
+        if self.optimization == "separate":
+            models = self.pymc3_model
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+            orbits = self.orbit
+        else:
+            models = [self.pymc3_model]
+            datas = [self.get_data()]
+            orbits = [self.orbit]
 
-                mu = pm.math.sum(
-                    light_curves, axis=-1
-                ) + (self.parameters["baseline"].get_prior(i))
+        if not hasattr(self, 'every_lightcurve'):
+            self.every_light_curve = {}
 
-                # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
-                if f"wavelength_{i}" not in self.every_light_curve.keys():
-                    self.every_light_curve[f"wavelength_{i}"] = pm.math.sum(
+        for j, (mod, data, orbit) in enumerate(zip(models, datas, orbits)):
+            with mod:
+                for i, w in enumerate(data.wavelength):
+                    # create quadratic limb-darkening lightcurves from Exoplanet
+                    limb_darkening = self.parameters["limb_darkening"].get_prior(j+i)
+                    planet_radius = self.parameters["radius_ratio"].get_prior(j+i) *\
+                                    self.parameters["stellar_radius"].get_prior(j+i)
+                    light_curves = xo.LimbDarkLightCurve(limb_darkening).get_light_curve(
+                        orbit=orbit,
+                        r=planet_radius,
+                        t=list(data.time.to_value("day")),
+                    )
+
+                    # calculate the transit + baseline model
+                    mu = pm.math.sum(
                         light_curves, axis=-1
-                    ) + (self.parameters["baseline"].get_prior(i))
-                else:
-                    self.every_light_curve[f"wavelength_{i}"] += pm.math.sum(
-                        light_curves, axis=-1
-                    ) + (self.parameters["baseline"].get_prior(i))
+                    ) + (self.parameters["baseline"].get_prior(j+i))
 
-            self.model_chromatic_transit_flux = [
-                self.every_light_curve[k] for k in tqdm(self.every_light_curve)
-            ]
-            # pm.Deterministic("model_chromatic_flux", self.model_chromatic_flux)
+                    # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
+                    if f"wavelength_{j+i}" not in self.every_light_curve.keys():
+                        self.every_light_curve[f"wavelength_{j+i}"] = pm.math.sum(
+                            light_curves, axis=-1
+                        ) + (self.parameters["baseline"].get_prior(j+i))
+                    else:
+                        self.every_light_curve[f"wavelength_{j+i}"] += pm.math.sum(
+                            light_curves, axis=-1
+                        ) + (self.parameters["baseline"].get_prior(j+i))
+
+                self.model_chromatic_transit_flux = [
+                    self.every_light_curve[k] for k in tqdm(self.every_light_curve)
+                ]
 
     def run_simultaneous_fit(self, r):
         """
@@ -552,7 +679,7 @@ class TransitModel(LightcurveModel):
               * transit_params["stellar_radius"],
             t=list(data.time.to_value("day")),
         ).eval()
-        return ldlc.transpose()[0]
+        return ldlc.transpose()[0] + transit_params["baseline"]
 
     def plot_orbit(self, timedata=None):
         """
