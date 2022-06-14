@@ -138,7 +138,7 @@ class LightcurveModel:
         self.pymc3_model = [pm.Model() for n in range(self.data.nwave)]
         # if the LightCurve model is a CombinedModel then update the constituent models too
         if isinstance(self, CombinedModel):
-            for mod in self.pymc3_models.values():
+            for mod in self.chromatic_models.values():
                 mod.pymc3_model = self.pymc3_model
                 mod.optimization = self.optimization
 
@@ -321,9 +321,9 @@ class LightcurveModel:
                 data.fluxlike[f'posterior-predictive-{i}'] = flux_for_this_sample
             data.imshow_quantities()
 
-    def extract_mean_posteriors(self, i):
+    def extract_mean_posteriors(self,summary, i):
         # there's definitely a sleeker way to do this
-        posterior_means = self.summary['mean']
+        posterior_means = summary['mean']
         fv = {}
         for k, v in self.parameters.items():
             if k in posterior_means.index:
@@ -345,15 +345,18 @@ class LightcurveModel:
             elif f"{k}_w{i}" in posterior_means.index:
                 fv[k] = posterior_means[f"{k}_w{i}"]
             else:
-                if isinstance(v, Fixed) and not isinstance(v, WavelikeFixed):
+                if isinstance(v, WavelikeFixed):
+                    fv[k] = v.values[0]
+                elif isinstance(v, Fixed):
                     fv[k] = v.value
+
         return fv
 
 
 class CombinedModel(LightcurveModel):
     def __repr__(self):
-        if hasattr(self, 'pymc3_models'):
-            return f"<experimental chromatic combined model 🌈, models: {self.pymc3_models}>"
+        if hasattr(self, 'chromatic_models'):
+            return f"<experimental chromatic combined model 🌈, models: {self.chromatic_models}>"
         else:
             return "<experimental chromatic combined model 🌈>"
 
@@ -376,12 +379,12 @@ class CombinedModel(LightcurveModel):
                 model_params = {}
                 # for every parameter in the separate models redefine them in the separate and new models
                 for k, v in model.parameters.items():
-                    if isinstance(v, Fixed):
-                        # parameter is Fixed
-                        model_params[k] = v.__class__(v.value)
-                    elif isinstance(v, WavelikeFixed):
+                    if isinstance(v, WavelikeFixed):
                         # parameter is WavelikeFixed
                         model_params[k] = v.__class__(v.values)
+                    elif isinstance(v, Fixed):
+                        # parameter is Fixed
+                        model_params[k] = v.__class__(v.value)
                     else:
                         # parameter is Fitted or WavelikeFitted
                         model_params[k] = v.__class__(v.distribution, **v.inputs)
@@ -394,13 +397,13 @@ class CombinedModel(LightcurveModel):
 
         # set up parameters in new combined model
         # self.setup_parameters(**all_params)
-        self.pymc3_models = new_models
+        self.chromatic_models = new_models
 
     def apply_operation_to_constituent_models(self, operation, *args):
         """
         Apply an operation to all models within a combined model
         """
-        for m in self.pymc3_models.values():
+        for m in self.chromatic_models.values():
             try:
                 op = getattr(m, operation)
                 op(*args)
@@ -419,9 +422,7 @@ class CombinedModel(LightcurveModel):
 
     def choose_optimization_method(self, optimization_method='simultaneous'):
         LightcurveModel.choose_optimization_method(self, optimization_method)
-        # if self.optimization == "separate":
-        #     self.create_multiple_models()
-        # self.apply_operation_to_constituent_models('choose_optimization_method', optimization_method)
+        self.apply_operation_to_constituent_models('change_all_priors_to_Wavelike')
 
     def setup_orbit(self):
         """
@@ -435,7 +436,7 @@ class CombinedModel(LightcurveModel):
         """
         self.every_light_curve = {}
         self.apply_operation_to_constituent_models('setup_lightcurves')
-        for mod in self.pymc3_models.values():
+        for mod in self.chromatic_models.values():
             self.every_light_curve = add_dicts(self.every_light_curve, mod.every_light_curve)
 
 class PolynomialModel(LightcurveModel):
@@ -480,14 +481,14 @@ class PolynomialModel(LightcurveModel):
         if not hasattr(self, 'every_lightcurve'):
             self.every_light_curve = {}
 
-        for mod, data in zip(models, datas):
+        for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
                 x = data.time.to_value()
 
                 for i, w in enumerate(data.wavelength):
                     # compute polynomial of user-defined degree
                     poly = []
-                    p = self.parameters["p"].get_prior(i)
+                    p = self.parameters["p"].get_prior(i+j)
                     for d in range(self.degree + 1):
                         poly.append(p[d] * (x ** d))
 
@@ -495,11 +496,11 @@ class PolynomialModel(LightcurveModel):
                     # models_to_add = rd.get_matching('add_.*')
                     # for j, mod in enumerate(models_to_add):
                     # models_to_add = pm.math.sum([mod.get_prior() for mod in models_to_add],axis=-1)
-                    if f"wavelength_{i}" not in self.every_light_curve.keys():
-                        self.every_light_curve[f"wavelength_{i}"] = pm.math.sum(poly,
+                    if f"wavelength_{i+j}" not in self.every_light_curve.keys():
+                        self.every_light_curve[f"wavelength_{i+j}"] = pm.math.sum(poly,
                                                                                 axis=0)  # + models_to_add #+ pm.math.sum(models_to_add, axis=0)
                     else:
-                        self.every_light_curve[f"wavelength_{i}"] += pm.math.sum(poly, axis=0)
+                        self.every_light_curve[f"wavelength_{i+j}"] += pm.math.sum(poly, axis=0)
 
     def polynomial_model(self, poly_params):
         data = self.get_data()
