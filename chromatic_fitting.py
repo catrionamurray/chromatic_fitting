@@ -422,7 +422,8 @@ class CombinedModel(LightcurveModel):
 
     def choose_optimization_method(self, optimization_method='simultaneous'):
         LightcurveModel.choose_optimization_method(self, optimization_method)
-        self.apply_operation_to_constituent_models('change_all_priors_to_Wavelike')
+        if optimization_method == "separate":
+            self.apply_operation_to_constituent_models('change_all_priors_to_Wavelike')
 
     def setup_orbit(self):
         """
