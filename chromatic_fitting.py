@@ -558,7 +558,7 @@ class PolynomialModel(LightcurveModel):
     def get_prior(self, i, *args, **kwargs):
         data = self.get_data()
         self.degree = self.parameters["p"].inputs['shape'] - 1
-        x = data.time.to_value()
+        x = data.time.to_value("day")
         poly = []
 
         p = self.parameters["p"].get_prior(i)
@@ -590,7 +590,7 @@ class PolynomialModel(LightcurveModel):
 
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
-                x = data.time.to_value()
+                x = data.time.to_value("day")
 
                 for i, w in enumerate(data.wavelength):
                     # compute polynomial of user-defined degree
@@ -609,7 +609,7 @@ class PolynomialModel(LightcurveModel):
         data = self.get_data()
         poly = []
         for d in range(self.degree + 1):
-            poly.append(poly_params['p'][d] * (data.time.to_value() ** d))
+            poly.append(poly_params['p'][d] * (data.time.to_value("day") ** d))
         return (np.sum(poly, axis=0))
 
 
