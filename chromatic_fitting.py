@@ -418,8 +418,15 @@ class LightcurveModel:
                 data.fluxlike[f'posterior-predictive-{i}'] = flux_for_this_sample
             data.imshow_quantities()
 
-    def extract_from_posteriors(self,summary,i, op='mean'):
+    def extract_from_posteriors(self, summary, i, op='mean'):
         # there's definitely a sleeker way to do this
+
+        # ensure that the specified operation is in the summary table!
+        if op not in summary:
+            print(f"Try a different operation or regenerate the summary table! "
+                  f"{op} is not currently in the summary table")
+            return None
+
         posterior_means = summary[op]
         fv = {}
         for k, v in self.parameters.items():
@@ -496,14 +503,14 @@ class CombinedModel(LightcurveModel):
         # self.setup_parameters(**all_params)
         self.chromatic_models = new_models
 
-    def apply_operation_to_constituent_models(self, operation, *args):
+    def apply_operation_to_constituent_models(self, operation, *args, **kwargs):
         """
         Apply an operation to all models within a combined model
         """
         for m in self.chromatic_models.values():
             try:
                 op = getattr(m, operation)
-                op(*args)
+                op(*args, **kwargs)
             except Exception as e:
                 print(m, operation)
                 print(e)
