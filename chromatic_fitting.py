@@ -1,5 +1,6 @@
 # from src.archive.chromatic_fitting import *
 from src.imports import *
+from src.spectrum import *
 from tqdm import tqdm
 from parameters import *
 from arviz import summary
@@ -7,6 +8,7 @@ from pymc3_ext import eval_in_model, optimize, sample
 from pymc3 import sample_prior_predictive, \
     sample_posterior_predictive
 import warnings
+import collections
 
 
 def add_dicts(dict_1, dict_2):
@@ -15,6 +17,33 @@ def add_dicts(dict_1, dict_2):
         if key in dict_1 and key in dict_2:
             dict_3[key] = value + dict_1[key]
     return dict_3
+
+def import_patricio_model():
+    ''' Import spectral model
+    Returns
+    ---------
+        model : PlanetarySpectrumModel
+            Planetary spectrum model
+        planet_params : dict
+            Planetary parameters
+        wavelength : np.array
+            Wavelengths
+        transmission : np.array
+            Transmission values
+    '''
+    x = pickle.load(open('../../data_challenge_spectra_v01.pickle', 'rb'))
+    # lets load a model
+    planet = x['WASP39b_NIRSpec']
+    planet_params = x['WASP39b_parameters']
+    # print(planet_params)
+
+    wavelength = planet['wl']
+    transmission = planet['transmission']
+    table = Table(dict(wavelength=planet['wl'], depth=planet['transmission']), meta=planet_params)
+
+    # set up a new model spectrum
+    model = PlanetarySpectrumModel(table=table, label='injected model')
+    return model, planet_params, wavelength, transmission
 
 
 class LightcurveModel:
@@ -78,6 +107,19 @@ class LightcurveModel:
         # check that all the necessary parameters are defined somehow
         for k in self.required_parameters:
             assert k in self.parameters
+
+    def get_parameter_shape(self, param):
+        inputs = param.inputs
+        for k in ['testval', 'mu', 'lower', 'upper', 'sigma']:
+            if k in inputs.keys():
+                if (type(inputs[k]) == int) or (type(inputs[k]) == float):
+                    inputs['shape'] = 1
+                elif len(inputs[k]) == 1:
+                    inputs['shape'] = 1
+                else:
+                    inputs['shape'] = len(inputs[k])
+                break
+        param.inputs = inputs
 
     def summarize_parameters(self):
         """
@@ -228,10 +270,10 @@ class LightcurveModel:
             print("Sampling has not been run yet! Running now with defaults...")
             self.sample()
 
-        try:
+        if self.optimization != "separate":
             with self.pymc3_model:
                 return sample_posterior_predictive(self.trace, ndraws)
-        except:
+        else:
             posteriors = []
             for mod, trace in zip(self.pymc3_model, self.trace):
                 with mod:
@@ -275,6 +317,61 @@ class LightcurveModel:
         else:
             with self.pymc3_model:
                 self.summary = summary(self.trace, **kw)
+
+        print(self.summary)
+
+    def get_results(self, as_df=True, uncertainty=["hdi_3%", "hdi_97%"]):
+        """
+        Extract mean results from summary
+        """
+
+        # if the user wants to have the same uncertainty for lower and upper error:
+        if type(uncertainty) == str:
+            uncertainty = [uncertainty, uncertainty]
+
+        results = {}
+        for i, w in enumerate(self.data.wavelength):
+            transit_params_mean = self.extract_from_posteriors(self.summary, i)
+            transit_params_lower_error = self.extract_from_posteriors(self.summary, i, op=uncertainty[0])
+            transit_params_lower_error = dict((key + f"_{uncertainty[0]}", value) for (key, value) in
+                                              transit_params_lower_error.items())
+            transit_params_upper_error = self.extract_from_posteriors(self.summary, i, op=uncertainty[1])
+            transit_params_upper_error = dict((key + f"_{uncertainty[1]}", value) for (key, value) in
+                                              transit_params_upper_error.items())
+            transit_params = transit_params_mean | transit_params_lower_error | transit_params_upper_error
+            ordered_transit_params = collections.OrderedDict(sorted(transit_params.items()))
+            results[f"w{i}"] = ordered_transit_params
+            results[f"w{i}"]['wavelength'] = w
+
+        if as_df:
+            # if the user wants to return the results as a pandas DataFrame:
+            return(pd.DataFrame(results).transpose())
+        else:
+            # otherwise return a dictionary of dictionaries
+            return results
+
+    def make_transmission_spectrum_table(self, uncertainty=["hdi_3%", "hdi_97%"]):
+        """
+        Generate and return a transmission spectrum table
+        """
+        results = self.get_results(uncertainty)[["wavelength", "radius_ratio",
+                                                 f"radius_ratio_{uncertainty[0]}",
+                                                 f"radius_ratio_{uncertainty[1]}"
+                                                 ]]
+        return results
+
+
+    def run_simultaneous_fit(self, r, **kwargs):
+        """
+            Run the entire simultaneous wavelength fit.
+        """
+        self.attach_data(r)
+        self.setup_lightcurves()
+        self.setup_likelihood()
+        opt = self.optimize(start=self.pymc3_model.test_point)
+        opt = self.optimize(start=opt)
+        self.sample(start=opt)
+        self.summarize(round_to=7, fmt='wide')
 
     def plot_priors(self, n=3):
         """
@@ -321,9 +418,9 @@ class LightcurveModel:
                 data.fluxlike[f'posterior-predictive-{i}'] = flux_for_this_sample
             data.imshow_quantities()
 
-    def extract_mean_posteriors(self,summary, i):
+    def extract_from_posteriors(self,summary,i, op='mean'):
         # there's definitely a sleeker way to do this
-        posterior_means = summary['mean']
+        posterior_means = summary[op]
         fv = {}
         for k, v in self.parameters.items():
             if k in posterior_means.index:
@@ -408,7 +505,7 @@ class CombinedModel(LightcurveModel):
                 op = getattr(m, operation)
                 op(*args)
             except Exception as e:
-                print(m,operation)
+                print(m, operation)
                 print(e)
 
     def attach_data(self, r):
@@ -470,6 +567,8 @@ class PolynomialModel(LightcurveModel):
         [This should be run after .attach_data()]
         """
         # find the number of polynomial degrees to fit based on the user input
+        if 'shape' not in self.parameters["p"].inputs.keys():
+            self.get_parameter_shape(self.parameters["p"])
         self.degree = self.parameters["p"].inputs['shape'] - 1
 
         if self.optimization == "separate":
@@ -493,13 +592,9 @@ class PolynomialModel(LightcurveModel):
                     for d in range(self.degree + 1):
                         poly.append(p[d] * (x ** d))
 
-                    # rd = RegexDict(dict(self.parameters))
-                    # models_to_add = rd.get_matching('add_.*')
-                    # for j, mod in enumerate(models_to_add):
-                    # models_to_add = pm.math.sum([mod.get_prior() for mod in models_to_add],axis=-1)
                     if f"wavelength_{i+j}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_{i+j}"] = pm.math.sum(poly,
-                                                                                axis=0)  # + models_to_add #+ pm.math.sum(models_to_add, axis=0)
+                                                                                axis=0)
                     else:
                         self.every_light_curve[f"wavelength_{i+j}"] += pm.math.sum(poly, axis=0)
 
@@ -575,9 +670,14 @@ class TransitModel(LightcurveModel):
 
 
     def get_prior(self, i):
-        try:
-            self.orbit
-        except AttributeError:
+
+        # ensure that attach data has been run before setup_lightcurves
+        if not hasattr(self, 'data'):
+            print("You need to attach some data to this chromatic model!")
+            return
+
+        # ensure that setup_orbit has been run before setup_lightcurves
+        if not hasattr(self, 'orbit'):
             self.setup_orbit()
 
         limb_darkening = self.parameters["limb_darkening"].get_prior(i)
@@ -649,22 +749,6 @@ class TransitModel(LightcurveModel):
                     self.every_light_curve[k] for k in tqdm(self.every_light_curve)
                 ]
 
-    def run_simultaneous_fit(self, r):
-        """
-            Run the entire simultaneous wavelength fit.
-        """
-        self.setup_orbit()
-        self.attach_data(r)
-        self.setup_lightcurves()
-        self.setup_likelihood()
-        with self.pymc3_model:
-            opt = optimize(start=self.pymc3_model.test_point)
-            opt = optimize(start=opt)
-            trace = sample(start=opt)
-            summary = az.summary(trace, round_to=7, fmt='wide')
-            print(summary)
-
-        return trace, summary
 
     def transit_model(self, transit_params):
         data = self.get_data()
@@ -743,7 +827,7 @@ class TransitModel(LightcurveModel):
 
             if trace is not None:
                 ndraws=50
-                posterior_traces = self.sample_posterior(trace, ndraws=ndraws)
+                posterior_traces = self.sample_posterior(ndraws=ndraws)
                 plt.plot(posterior_traces)
                 for i in range(ndraws):
                     flux_for_this_sample = np.array([posterior_traces[f'wavelength_{w}_data'][i] for w in range(data.nwave)])
