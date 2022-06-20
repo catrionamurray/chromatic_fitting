@@ -546,8 +546,12 @@ class CombinedModel(LightcurveModel):
 
 class PolynomialModel(LightcurveModel):
 
-    def __init__(self, **kw):
+    def __init__(self, degree, indep_var='time', **kw):
         super().__init__(**kw)
+        self.degree = degree
+        self.independant_variable = indep_var
+        self.set_defaults()
+
 
     def __repr__(self):
         return "<experimental chromatic polynomial model 🌈>"
@@ -555,49 +559,63 @@ class PolynomialModel(LightcurveModel):
     def set_name(self, name):
         self.name = name
 
+    def set_defaults(self):
+        for d in range(self.degree+1):
+            self.defaults = self.defaults | {f'p_{d}': 0.0}
+
     def get_prior(self, i, *args, **kwargs):
         data = self.get_data()
-        self.degree = self.parameters["p"].inputs['shape'] - 1
+        # self.degree = self.parameters["p"].inputs['shape'] - 1
         x = data.time.to_value("day")
         poly = []
 
         p = self.parameters["p"].get_prior(i)
 
         for d in range(self.degree + 1):
+            # p = self.parameters[f"p_{d}"].get_prior(i)
+            # fluxlike: x[i]
+            # x = self.data.get(fluxlike_thing:str)[i_wave,:]
             poly.append(p[d] * (x ** d))
 
         return pm.math.sum(poly, axis=0)
 
-    def setup_lightcurves(self):
+    def setup_lightcurves(self, timelike=None):
         """
         Create a polynomial model, given the stored parameters.
         [This should be run after .attach_data()]
         """
         # find the number of polynomial degrees to fit based on the user input
-        if 'shape' not in self.parameters["p"].inputs.keys():
-            self.get_parameter_shape(self.parameters["p"])
-        self.degree = self.parameters["p"].inputs['shape'] - 1
+        # if 'shape' not in self.parameters["p_0"].inputs.keys():
+        #     self.get_parameter_shape(self.parameters["p"])
+        # self.degree = self.parameters["p"].inputs['shape'] - 1
 
         if self.optimization == "separate":
             models = self.pymc3_model
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
+            if timelike is None:
+                datas = [self.get_data(i) for i in range(self.data.nwave)]
         else:
             models = [self.pymc3_model]
-            datas = [self.get_data()]
+            if timelike is None:
+                datas = [self.get_data()]
 
         if not hasattr(self, 'every_lightcurve'):
             self.every_light_curve = {}
 
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
-                x = data.time.to_value("day")
-
+                # x = data.time.to_value("day")
                 for i, w in enumerate(data.wavelength):
                     # compute polynomial of user-defined degree
                     poly = []
-                    p = self.parameters["p"].get_prior(i+j)
+                    # p = self.parameters["p"].get_prior(i+j)
                     for d in range(self.degree + 1):
-                        poly.append(p[d] * (x ** d))
+                        x = data.get(self.independant_variable)
+                        if len(np.shape(x))>1:
+                            x = x[i,:]
+                        if self.independant_variable == 'time':
+                            x = x.to_value('day')
+                        p = self.parameters[f"p_{d}"].get_prior(i+j)
+                        poly.append(p * (x ** d))
 
                     if f"wavelength_{i+j}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_{i+j}"] = pm.math.sum(poly,
