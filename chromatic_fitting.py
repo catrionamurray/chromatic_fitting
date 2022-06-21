@@ -18,6 +18,14 @@ def add_dicts(dict_1, dict_2):
             dict_3[key] = value + dict_1[key]
     return dict_3
 
+
+def add_string_before_each_dictionary_key(dict_old, string_to_add):
+    dict_new = {}
+    for k, v in dict_old.items():
+        dict_new[f"{string_to_add}_{k}"] = v
+    return dict_new
+
+
 def import_patricio_model():
     ''' Import spectral model
     Returns
@@ -129,10 +137,24 @@ class LightcurveModel:
             print(f"{k} =\n  {v}\n")
 
     def reinitialize_parameters(self, exclude=[]):
+        """
+        Remove the pymc3 prior model from every parameter not in exclude
+        """
         for k, v in self.parameters.items():
             if k not in exclude:
                 if isinstance(v, Fitted):
                     v.clear_prior()
+
+    def extract_extra_class_inputs(self):
+        """
+        Extract any additional keywords passed to the LightcurveModel
+        """
+        class_inputs = {}
+        varnames_to_remove = ['defaults', 'optimization', 'pymc3_model', 'parameters']
+        for k, v in self.__dict__.items():
+            if k not in varnames_to_remove:
+                class_inputs[k] = v
+        return class_inputs
 
     def initialize_empty_model(self):
         """
@@ -145,7 +167,6 @@ class LightcurveModel:
         Connect a `chromatic` Rainbow dataset to this object.
         """
         self.data = rainbow._create_copy()
-
 
     def white_light_curve(self):
         """
@@ -172,7 +193,6 @@ class LightcurveModel:
                 ", ".join(possible_optimization_methods)))
             self.optimization = "simultaneous"
 
-
     def create_multiple_models(self):
         """
         Create a list of models to process wavelengths separately
@@ -183,7 +203,6 @@ class LightcurveModel:
             for mod in self.chromatic_models.values():
                 mod.pymc3_model = self.pymc3_model
                 mod.optimization = self.optimization
-
 
     def change_all_priors_to_Wavelike(self):
         for k, v in self.parameters.items():
@@ -235,7 +254,7 @@ class LightcurveModel:
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
                 for i, w in enumerate(data.wavelength):
-                    k = f"wavelength_{j+i}"
+                    k = f"wavelength_{j + i}"
                     # mu = Deterministic(f'{k}_mu',self.every_light_curve[k])
                     pm.Normal(
                         f"{k}_data",
@@ -279,7 +298,6 @@ class LightcurveModel:
                 with mod:
                     posteriors.append(sample_posterior_predictive(trace, ndraws))
             return posteriors
-
 
     def optimize(self, **kw):
         """
@@ -345,7 +363,7 @@ class LightcurveModel:
 
         if as_df:
             # if the user wants to return the results as a pandas DataFrame:
-            return(pd.DataFrame(results).transpose())
+            return (pd.DataFrame(results).transpose())
         else:
             # otherwise return a dictionary of dictionaries
             return results
@@ -359,7 +377,6 @@ class LightcurveModel:
                                                  f"radius_ratio_{uncertainty[1]}"
                                                  ]]
         return results
-
 
     def run_simultaneous_fit(self, r, **kwargs):
         """
@@ -390,7 +407,7 @@ class LightcurveModel:
         for nm, (data, prior_predictive_trace) in enumerate(zip(datas, prior_predictive_traces)):
             for i in range(n):
                 flux_for_this_sample = np.array(
-                    [prior_predictive_trace[f'wavelength_{w+nm}_data'][i] for w in range(data.nwave)])
+                    [prior_predictive_trace[f'wavelength_{w + nm}_data'][i] for w in range(data.nwave)])
                 data.fluxlike[f'prior-predictive-{i}'] = flux_for_this_sample
             data.imshow_quantities()
 
@@ -414,7 +431,7 @@ class LightcurveModel:
         for nm, (data, posterior_predictive_trace) in enumerate(zip(datas, posterior_predictive_traces)):
             for i in range(n):
                 flux_for_this_sample = np.array(
-                    [posterior_predictive_trace[f'wavelength_{w+nm}_data'][i] for w in range(data.nwave)])
+                    [posterior_predictive_trace[f'wavelength_{w + nm}_data'][i] for w in range(data.nwave)])
                 data.fluxlike[f'posterior-predictive-{i}'] = flux_for_this_sample
             data.imshow_quantities()
 
@@ -475,7 +492,8 @@ class CombinedModel(LightcurveModel):
             # check that the models passed to this function are LightcurveModels
             if isinstance(model, LightcurveModel):
                 # make a "copy" of each model:
-                new_model = model.__class__()
+                class_inputs = model.extract_extra_class_inputs()
+                new_model = model.__class__(name=name, **class_inputs)
                 # new_model.initialize_empty_model()
                 new_model.pymc3_model = self.pymc3_model
                 # can't just do new_v.setup_parameters(**dict(v.parameters)) - runs into weird pymc3 inheritance
@@ -485,13 +503,13 @@ class CombinedModel(LightcurveModel):
                 for k, v in model.parameters.items():
                     if isinstance(v, WavelikeFixed):
                         # parameter is WavelikeFixed
-                        model_params[k] = v.__class__(v.values)
+                        model_params[f"{name}_{k}"] = v.__class__(v.values)
                     elif isinstance(v, Fixed):
                         # parameter is Fixed
-                        model_params[k] = v.__class__(v.value)
+                        model_params[f"{name}_{k}"] = v.__class__(v.value)
                     else:
                         # parameter is Fitted or WavelikeFitted
-                        model_params[k] = v.__class__(v.distribution, **v.inputs)
+                        model_params[f"{name}_{k}"] = v.__class__(v.distribution, **v.inputs)
                 # set up parameters in new models
                 new_model.setup_parameters(**model_params)
                 new_models[name] = new_model
@@ -544,14 +562,23 @@ class CombinedModel(LightcurveModel):
         for mod in self.chromatic_models.values():
             self.every_light_curve = add_dicts(self.every_light_curve, mod.every_light_curve)
 
+
 class PolynomialModel(LightcurveModel):
 
-    def __init__(self, degree, indep_var='time', **kw):
+    def __init__(self, degree, indep_var='time', name=None, **kw):
+        self.required_parameters = [
+            "p_0"
+        ]
+
         super().__init__(**kw)
         self.degree = degree
         self.independant_variable = indep_var
         self.set_defaults()
 
+        if name is not None:
+            self.required_parameters = [f"{name}_{a}" for a in self.required_parameters]
+            self.defaults = add_string_before_each_dictionary_key(self.defaults, name)
+            self.set_name(name)
 
     def __repr__(self):
         return "<experimental chromatic polynomial model 🌈>"
@@ -560,7 +587,7 @@ class PolynomialModel(LightcurveModel):
         self.name = name
 
     def set_defaults(self):
-        for d in range(self.degree+1):
+        for d in range(self.degree + 1):
             self.defaults = self.defaults | {f'p_{d}': 0.0}
 
     def get_prior(self, i, *args, **kwargs):
@@ -598,6 +625,12 @@ class PolynomialModel(LightcurveModel):
             if timelike is None:
                 datas = [self.get_data()]
 
+        # if the model has a name then add this to each parameter's name
+        if hasattr(self, 'name'):
+            name = self.name + "_"
+        else:
+            name = ""
+
         if not hasattr(self, 'every_lightcurve'):
             self.every_light_curve = {}
 
@@ -610,24 +643,24 @@ class PolynomialModel(LightcurveModel):
                     # p = self.parameters["p"].get_prior(i+j)
                     for d in range(self.degree + 1):
                         x = data.get(self.independant_variable)
-                        if len(np.shape(x))>1:
-                            x = x[i,:]
+                        if len(np.shape(x)) > 1:
+                            x = x[i, :]
                         if self.independant_variable == 'time':
                             x = x.to_value('day')
-                        p = self.parameters[f"p_{d}"].get_prior(i+j)
+                        p = self.parameters[f"{name}p_{d}"].get_prior(i + j)
                         poly.append(p * (x ** d))
 
-                    if f"wavelength_{i+j}" not in self.every_light_curve.keys():
-                        self.every_light_curve[f"wavelength_{i+j}"] = pm.math.sum(poly,
-                                                                                axis=0)
+                    if f"wavelength_{i + j}" not in self.every_light_curve.keys():
+                        self.every_light_curve[f"wavelength_{i + j}"] = pm.math.sum(poly,
+                                                                                    axis=0)
                     else:
-                        self.every_light_curve[f"wavelength_{i+j}"] += pm.math.sum(poly, axis=0)
+                        self.every_light_curve[f"wavelength_{i + j}"] += pm.math.sum(poly, axis=0)
 
     def polynomial_model(self, poly_params):
         data = self.get_data()
         poly = []
         for d in range(self.degree + 1):
-            poly.append(poly_params['p'][d] * (data.time.to_value("day") ** d))
+            poly.append(poly_params[f'p_{d}'][d] * (data.time.to_value("day") ** d))
         return (np.sum(poly, axis=0))
 
 
@@ -635,19 +668,27 @@ class TransitModel(LightcurveModel):
     def __repr__(self):
         return "<experimental chromatic transit model 🌈>"
 
-    required_parameters = [
-        "stellar_radius",
-        "stellar_mass",
-        "radius_ratio",
-        "period",
-        "epoch",
-        "baseline",
-        "impact_parameter",
-        "limb_darkening",
-    ]
+    def __init__(self, name=None, **kw):
+        self.required_parameters = [
+            "stellar_radius",
+            "stellar_mass",
+            "radius_ratio",
+            "period",
+            "epoch",
+            "baseline",
+            "impact_parameter",
+            "limb_darkening",
+        ]
 
-    def __init__(self, **kw):
         super().__init__(**kw)
+        self.set_defaults()
+
+        if name is not None:
+            self.required_parameters = [f"{name}_{a}" for a in self.required_parameters]
+            self.defaults = add_string_before_each_dictionary_key(self.defaults, name)
+            self.set_name(name)
+
+    def set_defaults(self):
         self.defaults = dict(
             stellar_radius=1.0,
             stellar_mass=1.0,
@@ -662,17 +703,23 @@ class TransitModel(LightcurveModel):
     def set_name(self, name):
         self.name = name
 
-
     def setup_orbit(self):
         """
         Create an `exoplanet` orbit model, given the stored parameters.
         [This should be run after .setup_parameters()]
         """
 
+        # if the optimization method is separate wavelengths then set up for looping
         if self.optimization == "separate":
             models = self.pymc3_model
         else:
             models = [self.pymc3_model]
+
+        # if the model has a name then add this to each parameter's name
+        if hasattr(self, 'name'):
+            name = self.name + "_"
+        else:
+            name = ""
 
         self.orbit = []
         for j, mod in enumerate(models):
@@ -680,11 +727,11 @@ class TransitModel(LightcurveModel):
 
                 # Set up a Keplerian orbit for the planets
                 orbit = xo.orbits.KeplerianOrbit(
-                    period=self.parameters["period"].get_prior(j),
-                    t0=self.parameters["epoch"].get_prior(j),
-                    b=self.parameters["impact_parameter"].get_prior(j),
-                    r_star=self.parameters["stellar_radius"].get_prior(j),
-                    m_star=self.parameters["stellar_mass"].get_prior(j),
+                    period=self.parameters[name+"period"].get_prior(j),
+                    t0=self.parameters[name+"epoch"].get_prior(j),
+                    b=self.parameters[name+"impact_parameter"].get_prior(j),
+                    r_star=self.parameters[name+"stellar_radius"].get_prior(j),
+                    m_star=self.parameters[name+"stellar_mass"].get_prior(j),
                 )
 
                 # store a separate orbit for each model if we are optimizing wavelengths separately
@@ -692,7 +739,6 @@ class TransitModel(LightcurveModel):
                     self.orbit.append(orbit)
                 else:
                     self.orbit = orbit
-
 
     def get_prior(self, i):
 
@@ -729,7 +775,13 @@ class TransitModel(LightcurveModel):
         if not hasattr(self, 'orbit'):
             self.setup_orbit()
 
-        # setup the models, data and orbits in a format for looping
+        # if the model has a name then add this to each parameter's name
+        if hasattr(self, 'name'):
+            name = self.name + "_"
+        else:
+            name = ""
+
+        # set up the models, data and orbits in a format for looping
         if self.optimization == "separate":
             models = self.pymc3_model
             datas = [self.get_data(i) for i in range(self.data.nwave)]
@@ -746,9 +798,9 @@ class TransitModel(LightcurveModel):
             with mod:
                 for i, w in enumerate(data.wavelength):
                     # create quadratic limb-darkening lightcurves from Exoplanet
-                    limb_darkening = self.parameters["limb_darkening"].get_prior(j+i)
-                    planet_radius = self.parameters["radius_ratio"].get_prior(j+i) *\
-                                    self.parameters["stellar_radius"].get_prior(j+i)
+                    limb_darkening = self.parameters[name+"limb_darkening"].get_prior(j + i)
+                    planet_radius = self.parameters[name+"radius_ratio"].get_prior(j + i) * \
+                                    self.parameters[name+"stellar_radius"].get_prior(j + i)
                     light_curves = xo.LimbDarkLightCurve(limb_darkening).get_light_curve(
                         orbit=orbit,
                         r=planet_radius,
@@ -758,22 +810,21 @@ class TransitModel(LightcurveModel):
                     # calculate the transit + baseline model
                     mu = pm.math.sum(
                         light_curves, axis=-1
-                    ) + (self.parameters["baseline"].get_prior(j+i))
+                    ) + (self.parameters[name+"baseline"].get_prior(j + i))
 
                     # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
-                    if f"wavelength_{j+i}" not in self.every_light_curve.keys():
-                        self.every_light_curve[f"wavelength_{j+i}"] = pm.math.sum(
+                    if f"wavelength_{j + i}" not in self.every_light_curve.keys():
+                        self.every_light_curve[f"wavelength_{j + i}"] = pm.math.sum(
                             light_curves, axis=-1
-                        ) + (self.parameters["baseline"].get_prior(j+i))
+                        ) + (self.parameters[name+"baseline"].get_prior(j + i))
                     else:
-                        self.every_light_curve[f"wavelength_{j+i}"] += pm.math.sum(
+                        self.every_light_curve[f"wavelength_{j + i}"] += pm.math.sum(
                             light_curves, axis=-1
-                        ) + (self.parameters["baseline"].get_prior(j+i))
+                        ) + (self.parameters[name+"baseline"].get_prior(j + i))
 
                 self.model_chromatic_transit_flux = [
                     self.every_light_curve[k] for k in tqdm(self.every_light_curve)
                 ]
-
 
     def transit_model(self, transit_params):
         data = self.get_data()
@@ -826,7 +877,8 @@ class TransitModel(LightcurveModel):
         data = self.get_data()
 
         if summary is not None:
-            params = ['period', 'epoch', 'impact_parameter', 'stellar_radius', 'stellar_mass', 'stellar_mass', 'limb_darkening','radius_ratio']
+            params = ['period', 'epoch', 'impact_parameter', 'stellar_radius', 'stellar_mass', 'stellar_mass',
+                      'limb_darkening', 'radius_ratio']
             param_dict = {}
             posterior_means = summary['mean']
 
@@ -837,11 +889,11 @@ class TransitModel(LightcurveModel):
                     param_dict[p] = self.parameters[p].value
 
             orbit = xo.orbits.KeplerianOrbit(
-            period=param_dict['period'],
-            t0=param_dict['epoch'],
-            b=param_dict["impact_parameter"],
-            r_star=param_dict["stellar_radius"],
-            m_star=param_dict["stellar_mass"],
+                period=param_dict['period'],
+                t0=param_dict['epoch'],
+                b=param_dict["impact_parameter"],
+                r_star=param_dict["stellar_radius"],
+                m_star=param_dict["stellar_mass"],
             )
             xo.LimbDarkLightCurve(param_dict["limb_darkening"]).get_light_curve(
                 orbit=self.orbit,
@@ -851,12 +903,12 @@ class TransitModel(LightcurveModel):
             )
 
             if trace is not None:
-                ndraws=50
+                ndraws = 50
                 posterior_traces = self.sample_posterior(ndraws=ndraws)
                 plt.plot(posterior_traces)
                 for i in range(ndraws):
-                    flux_for_this_sample = np.array([posterior_traces[f'wavelength_{w}_data'][i] for w in range(data.nwave)])
+                    flux_for_this_sample = np.array(
+                        [posterior_traces[f'wavelength_{w}_data'][i] for w in range(data.nwave)])
                     plt.plot(data.time, flux_for_this_sample)
 
         data.plot(ax=ax, **kw)
-
