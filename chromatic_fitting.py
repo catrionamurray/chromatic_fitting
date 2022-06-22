@@ -492,7 +492,7 @@ class CombinedModel(LightcurveModel):
             # check that the models passed to this function are LightcurveModels
             if isinstance(model, LightcurveModel):
                 # make a "copy" of each model:
-                print(name)
+                # print(name)
                 class_inputs = model.extract_extra_class_inputs()
                 # print(class_inputs)
                 new_model = model.__class__(name=name, **class_inputs)
