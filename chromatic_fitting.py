@@ -492,7 +492,9 @@ class CombinedModel(LightcurveModel):
             # check that the models passed to this function are LightcurveModels
             if isinstance(model, LightcurveModel):
                 # make a "copy" of each model:
+                print(name)
                 class_inputs = model.extract_extra_class_inputs()
+                # print(class_inputs)
                 new_model = model.__class__(name=name, **class_inputs)
                 # new_model.initialize_empty_model()
                 new_model.pymc3_model = self.pymc3_model
@@ -565,14 +567,14 @@ class CombinedModel(LightcurveModel):
 
 class PolynomialModel(LightcurveModel):
 
-    def __init__(self, degree, indep_var='time', name=None, **kw):
+    def __init__(self, degree, independant_variable='time', name=None, **kw):
         self.required_parameters = [
             "p_0"
         ]
 
         super().__init__(**kw)
         self.degree = degree
-        self.independant_variable = indep_var
+        self.independant_variable = independant_variable
         self.set_defaults()
 
         if name is not None:
