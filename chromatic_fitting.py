@@ -20,10 +20,11 @@ def add_dicts(dict_1, dict_2):
 
 
 def subtract_dicts(dict_1, dict_2):
-    dict_3 = {**dict_1, **dict_2}
+    # order matters for subtraction!
+    dict_3 = {**dict_2, **dict_1}
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = value - dict_1[key]
+            dict_3[key] = value - dict_2[key]
     return dict_3
 
 
@@ -36,10 +37,10 @@ def multiply_dicts(dict_1, dict_2):
 
 
 def divide_dicts(dict_1, dict_2):
-    dict_3 = {**dict_1, **dict_2}
+    dict_3 = {**dict_2, **dict_1}
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = value / dict_1[key]
+            dict_3[key] = value / dict_2[key]
     return dict_3
 
 
@@ -597,20 +598,14 @@ class CombinedModel(LightcurveModel):
             # if neither is a CombinedModel
             self.attach_models({f"{first.name}": first, f"{second.name}": second}, how_to_combine=how_to_combine)
 
-
     def attach_models(self, models, how_to_combine="+"):
         """
         Attach multiple LightCurveModel in dictionary to the CombinedModel
         """
-        # print(models)
         new_models = {}
-        all_params = {}
 
-        # print(models)
-        # print(how_to_combine)
-
-        # if we have already attached models with instructions on how to combine then add this operation to
-        # self.how_to_combine
+        # if we have already attached models with instructions on how to combine then add this operation
+        # to self.how_to_combine
         if hasattr(self, 'how_to_combine'):
             self.how_to_combine.append(how_to_combine)
         else:
@@ -625,7 +620,6 @@ class CombinedModel(LightcurveModel):
                     print(f"WARNING: You have passed {len(how_to_combine)} operations for {len(models.keys())} models!")
 
         for name, model in models.items():
-            # print(name,model)
             # check that the models passed to this function are LightcurveModels
             if isinstance(model, LightcurveModel):
                 # make a "copy" of each model:
@@ -657,7 +651,6 @@ class CombinedModel(LightcurveModel):
                 print("This class can only be used to combine LightcurveModels!")
 
         # set up parameters in new combined model
-        # self.setup_parameters(**all_params)
         self.chromatic_models = new_models
 
     def apply_operation_to_constituent_models(self, operation, *args, **kwargs):
@@ -707,7 +700,7 @@ class CombinedModel(LightcurveModel):
             if i == 0:
                 self.every_light_curve = add_dicts(self.every_light_curve, mod.every_light_curve)
             else:
-                print(self.name, self.how_to_combine[i-1], mod.name)
+                # print(self.name, self.how_to_combine[i-1], mod.name)
                 self.every_light_curve = combination_options[self.how_to_combine[i-1]](
                     self.every_light_curve, mod.every_light_curve
                 )
@@ -803,9 +796,9 @@ class PolynomialModel(LightcurveModel):
                     for d in range(self.degree + 1):
                         # print(d)
                         p = self.parameters[f"{name}p_{d}"].get_prior(i + j)
-                        print(f"{name}p_{d}", p)
+                        # print(f"{name}p_{d}", p)
                         poly.append(p * (x ** d))
-                    print(poly, "\n", eval_in_model(pm.math.sum(poly,axis=0)))
+                    # print(poly, "\n", eval_in_model(pm.math.sum(poly,axis=0)))
 
                     if f"wavelength_{i + j}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_{i + j}"] = pm.math.sum(poly,
