@@ -400,7 +400,7 @@ class LightcurveModel:
             with self.pymc3_model:
                 self.trace = sample(**kw)
 
-    def summarize(self, **kw):
+    def summarize(self, print_table=True, **kw):
         """
         Wrapper for arviz summary
         """
@@ -417,7 +417,8 @@ class LightcurveModel:
             with self.pymc3_model:
                 self.summary = summary(self.trace, **kw)
 
-        print(self.summary)
+        if print_table:
+            print(self.summary)
 
     def get_results(self, as_df=True, uncertainty=["hdi_3%", "hdi_97%"]):
         """
@@ -577,7 +578,7 @@ class CombinedModel(LightcurveModel):
     def combine(self, first, second, how_to_combine):
         if isinstance(first, CombinedModel) and isinstance(second, CombinedModel):
             # if both first and second are CombinedModels
-            chromatic_models = add_dicts(first.chromatic_models.copy(),second.chromatic_models.copy())
+            chromatic_models = add_dicts(first.chromatic_models.copy(), second.chromatic_models.copy())
             self.how_to_combine = first.how_to_combine + second.how_to_combine
             self.attach_models(chromatic_models, how_to_combine=how_to_combine)
         elif isinstance(first, CombinedModel):
@@ -706,6 +707,7 @@ class CombinedModel(LightcurveModel):
             if i == 0:
                 self.every_light_curve = add_dicts(self.every_light_curve, mod.every_light_curve)
             else:
+                print(self.name, self.how_to_combine[i-1], mod.name)
                 self.every_light_curve = combination_options[self.how_to_combine[i-1]](
                     self.every_light_curve, mod.every_light_curve
                 )
@@ -801,7 +803,9 @@ class PolynomialModel(LightcurveModel):
                     for d in range(self.degree + 1):
                         # print(d)
                         p = self.parameters[f"{name}p_{d}"].get_prior(i + j)
+                        print(f"{name}p_{d}", p)
                         poly.append(p * (x ** d))
+                    print(poly, "\n", eval_in_model(pm.math.sum(poly,axis=0)))
 
                     if f"wavelength_{i + j}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_{i + j}"] = pm.math.sum(poly,
@@ -1065,3 +1069,5 @@ class TransitModel(LightcurveModel):
                     plt.plot(data.time, flux_for_this_sample)
 
         data.plot(ax=ax, **kw)
+
+
