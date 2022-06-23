@@ -102,6 +102,17 @@ class Fitted(Parameter):
         except AttributeError:
             return self.generate_pymc3()
 
+    def clear_prior(self, *args, **kwargs):
+        """
+        Clear the stored PyMC3 prior.
+        """
+        try:
+            delattr(self, '_pymc3_prior')
+            print(f"Cleared {self.name} prior")
+        except AttributeError:
+            pass
+
+
     def __repr__(self):
         distribution_name = self.distribution.__name__
         inputs_as_string = ", ".join([f"{k}={repr(v)}" for k, v in self.inputs.items()])
