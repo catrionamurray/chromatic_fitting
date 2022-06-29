@@ -285,8 +285,22 @@ class LightcurveModel:
         """
         Wrapper for PyMC3_ext sample
         """
-        with self.pymc3_model:
-            return optimize(**kw)
+        if self.optimization == "separate":
+            opts = []
+            if 'start' in kw:
+                start = kw['start']
+                kw.pop('start')
+                for mod, opt in zip(self.pymc3_model, start):
+                    with mod:
+                        opts.append(optimize(start=opt, **kw))
+            else:
+                for mod in self.pymc3_model:
+                    with mod:
+                        opts.append(optimize(**kw))
+            return opts
+        else:
+            with self.pymc3_model:
+                return optimize(**kw)
 
     def sample(self, **kw):
         """
