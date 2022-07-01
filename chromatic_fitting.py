@@ -9,6 +9,8 @@ from pymc3 import sample_prior_predictive, \
     sample_posterior_predictive
 import warnings
 import collections
+from celerite2.theano import terms, GaussianProcess
+import aesara_theano_fallback.tensor as tt
 
 
 def add_dicts(dict_1, dict_2):
@@ -794,17 +796,16 @@ class PolynomialModel(LightcurveModel):
 
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
-                # x = data.time.to_value("day")
+
+                x = data.get(self.independant_variable)
+                if self.independant_variable == "time":
+                    x = x.to_value("day")
+
                 for i, w in enumerate(data.wavelength):
                     # compute polynomial of user-defined degree
                     poly = []
-
-                    # print(i, self.independant_variable)
-                    x = data.get(self.independant_variable)
                     if len(np.shape(x)) > 1:
                         x = x[i, :]
-                    if self.independant_variable == "time":
-                        x = x.to_value("day")
 
                     # p = self.parameters["p"].get_prior(i+j)
                     for d in range(self.degree + 1):
@@ -1076,5 +1077,142 @@ class TransitModel(LightcurveModel):
                     plt.plot(data.time, flux_for_this_sample)
 
         data.plot(ax=ax, **kw)
+
+
+class GP_SHO_Model(LightcurveModel):
+
+    def __init__(self, name="gp", independant_variable='time', **kw):
+        self.required_parameters = [
+            "sigma",
+            "rho",
+            "Q",
+            "log_jitter",
+            "mean"
+        ]
+
+        super().__init__(**kw)
+        self.independant_variable = independant_variable
+        self.set_defaults()
+        self.set_name(name)
+
+    def __repr__(self):
+        return "<chromatic GP (simple harmonic oscillator) model 🌈>"
+
+    def set_name(self, name):
+        self.name = name
+
+    def set_defaults(self):
+        self.defaults = dict(
+            sigma = 0.0,
+            rho = 0.0,
+            Q = 1.0/np.sqrt(2.0),
+            log_jitter = 0.0,
+            mean = 1.0
+        )
+
+    def setup_lightcurves(self):
+        """
+        Create a GP model, given the stored parameters.
+        [This should be run after .attach_data()]
+        """
+
+        if self.optimization == "separate":
+            models = self.pymc3_model
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+        else:
+            models = [self.pymc3_model]
+            datas = [self.get_data()]
+
+        # if the model has a name then add this to each parameter's name
+        if hasattr(self, "name"):
+            name = self.name + "_"
+        else:
+            name = ""
+
+        if not hasattr(self, "every_lightcurve"):
+            self.every_light_curve = {}
+
+        for j, (mod, data) in enumerate(zip(models, datas)):
+            x = data.get(self.independant_variable)
+            if self.independant_variable == "time":
+                x = x.to_value("day")
+            with mod:
+                for i, w in enumerate(data.wavelength):
+                    if len(np.shape(x)) > 1:
+                        x = x[i, :]
+                    kernel = terms.SHOTerm(sigma=self.parameters[f"{name}sigma"].get_prior(i + j),
+                                           rho=self.parameters[f"{name}rho"].get_prior(i + j),
+                                           Q=self.parameters[f"{name}Q"].get_prior(i + j))
+
+                    gp = GaussianProcess(kernel,
+                                         t=x,
+                                         diag=data.uncertainty[i, :] ** 2 + (
+                                             pm.math.exp(2 * self.parameters[f"{name}log_jitter"].get_prior(i + j))),
+                                         mean=self.parameters[f"{name}mean"].get_prior(i + j),
+                                         quiet=True)
+                    self.gp = gp
+
+                    # mean = self.parameters[f"{name}mean"].get_prior(i + j)
+                    # diag = self.parameters[f"{name}log_jitter"].get_prior(i + j)
+                        # xo.gp.terms.SHOTerm(log_S0=self.parameters[f"{name}logS0"].get_prior(i + j),
+                        #                    log_w0=self.parameters[f"{name}logw0"].get_prior(i + j),
+                        #                    Q=self.parameters[f"{name}Q"].get_prior(i + j)
+                        #                    )
+
+                    # gp = GaussianProcess(kernel,
+                    #                       t=x,
+                    #                       diag=data.uncertainty[i, :]**2 + tt.exp(2 * self.parameters[f"{name}log_jitter"].get_prior(i + j)),
+                    #                       mean=self.parameters[f"{name}mean"].get_prior(i + j),
+                    #                       quiet=True)
+
+                        # xo.gp.GP(kernel, x, data.uncertainty[i, :] ** 2)
+
+                    if f"wavelength_{i + j}" not in self.every_light_curve.keys():
+                        self.every_light_curve[f"wavelength_{i + j}"] = gp
+                    else:
+                        self.every_light_curve[f"wavelength_{i + j}"] += gp
+
+    def setup_likelihood(self):
+        """
+        Connect the light curve model to the actual data it aims to explain.
+        """
+        # data = self.get_data()
+
+        if self.optimization == "separate":
+            models = self.pymc3_model
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+        else:
+            models = [self.pymc3_model]
+            datas = [self.get_data()]
+
+        # if the model has a name then add this to each parameter's name
+        if hasattr(self, "name"):
+            name = self.name + "_"
+        else:
+            name = ""
+
+        for j, (mod, data) in enumerate(zip(models, datas)):
+            x = data.get(self.independant_variable)
+            if self.independant_variable == "time":
+                x = x.to_value("day")
+            with mod:
+                for i, w in enumerate(data.wavelength):
+                    k = f"wavelength_{j + i}"
+
+                    self.gp.marginal(f"{k}_data", observed=data.flux[i, :])
+                    # self.gp = gp
+                    # pm.Deterministic("gp_pred", gp.predict(y=data.flux[i, :]))
+                    # Add a custom "potential" (log probability function) with the GP likelihood
+                    # pm.Potential(f"{k}_data", self.every_light_curve[k].log_likelihood(data.flux[i, :]))
+                    # pm.Normal(
+                    #     f"{k}_data",
+                    #     mu=self.every_light_curve[k],
+                    #     sd=data.uncertainty[i, :],
+                    #     observed=data.flux[i, :],
+                    # )
+
+    def gp_model(self, gp_params):
+        data = self.get_data()
+
 
 
