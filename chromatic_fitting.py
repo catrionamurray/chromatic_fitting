@@ -478,6 +478,9 @@ class LightcurveModel:
     def run_simultaneous_fit(self, r, **kwargs):
         """
             Run the entire simultaneous wavelength fit.
+
+            :parameter r
+            Rainbow object
         """
         self.attach_data(r)
         self.setup_lightcurves()
@@ -486,6 +489,16 @@ class LightcurveModel:
         opt = self.optimize(start=opt)
         self.sample(start=opt)
         self.summarize(round_to=7, fmt="wide")
+
+    def get_bestfit_residual(self, residual_name=""):
+        if residual_name != "":
+            self.data.fluxlike[residual_name] = self.data.fluxlike['flux'] - self.data.fluxlike['result']
+        return self.data.fluxlike[residual_name]
+
+    def get_model_residual(self, model_to_subtract, residual_name=""):
+        if residual_name != "":
+            self.data.fluxlike[residual_name] = self.data.fluxlike['result'] - model_to_subtract
+        return self.data.fluxlike['result'] - model_to_subtract
 
     def plot_priors(self, n=3):
         """
@@ -671,14 +684,20 @@ class CombinedModel(LightcurveModel):
         """
         Apply an operation to all models within a combined model
         """
+        return_values = []
         for m in self.chromatic_models.values():
             try:
                 # print(m, operation)
                 op = getattr(m, operation)
-                op(*args, **kwargs)
+                result = op(*args, **kwargs)
+                if result is not None:
+                    return_values.append(result)
             except Exception as e:
                 # print(m, operation)
                 print(e)
+
+        if len(return_values) > 0:
+            return return_values
 
     def summarize_parameters(self):
         print("A CombinedModel itself does not have any parameters, however each of its constituent models do:\n")
@@ -719,6 +738,13 @@ class CombinedModel(LightcurveModel):
                     self.every_light_curve, mod.every_light_curve
                 )
             # self.every_light_curve = add_dicts(self.every_light_curve, mod.every_light_curve)
+
+    def get_results(self, as_df=True, uncertainty=["hdi_3%", "hdi_97%"]):
+        for m in self.chromatic_models.values():
+            m.summary = self.summary
+
+        results = self.apply_operation_to_constituent_models("get_results")
+        return pd.concat(results, axis=1)
 
 
 class PolynomialModel(LightcurveModel):
@@ -820,11 +846,18 @@ class PolynomialModel(LightcurveModel):
                     else:
                         self.every_light_curve[f"wavelength_{i + j}"] += pm.math.sum(poly, axis=0)
 
-    def polynomial_model(self, poly_params):
+    def polynomial_model(self, poly_params, i=0):
         data = self.get_data()
         poly = []
+
+        x = data.get(self.independant_variable)
+        if len(np.shape(x)) > 1:
+            x = x[i, :]
+        if self.independant_variable == "time":
+            x = x.to_value("day")
+
         for d in range(self.degree + 1):
-            poly.append(poly_params[f"p_{d}"][d] * (data.time.to_value("day") ** d))
+            poly.append(poly_params[f"{self.name}_p_{d}"] * (x ** d))
         return (np.sum(poly, axis=0))
 
 
@@ -992,20 +1025,21 @@ class TransitModel(LightcurveModel):
 
     def transit_model(self, transit_params):
         data = self.get_data()
+
         orbit = xo.orbits.KeplerianOrbit(
-            period=transit_params["period"],
-            t0=transit_params["epoch"],
-            b=transit_params["impact_parameter"],
-            r_star=transit_params["stellar_radius"],
-            m_star=transit_params["stellar_mass"],
+            period=transit_params[f"{self.name}_period"],
+            t0=transit_params[f"{self.name}_epoch"],
+            b=transit_params[f"{self.name}_impact_parameter"],
+            r_star=transit_params[f"{self.name}_stellar_radius"],
+            m_star=transit_params[f"{self.name}_stellar_mass"],
         )
-        ldlc = xo.LimbDarkLightCurve(transit_params["limb_darkening"]).get_light_curve(
+        ldlc = xo.LimbDarkLightCurve(transit_params[f"{self.name}_limb_darkening"]).get_light_curve(
             orbit=orbit,
-            r=transit_params["radius_ratio"]
-              * transit_params["stellar_radius"],
+            r=transit_params[f"{self.name}_radius_ratio"]
+              * transit_params[f"{self.name}_stellar_radius"],
             t=list(data.time.to_value("day")),
         ).eval()
-        return ldlc.transpose()[0] + transit_params["baseline"]
+        return ldlc.transpose()[0] + transit_params[f"{self.name}_baseline"]
 
     def plot_orbit(self, timedata=None):
         """
