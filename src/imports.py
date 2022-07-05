@@ -4,7 +4,7 @@ import numpy as np
 import copy
 # import exoplanet as xo
 # import starry
-from exotic_ld import limb_dark_fit
+from exotic_ld import StellarLimbDarkening #limb_dark_fit
 # import theano
 from astropy.constants import G
 from astropy import units as u
