@@ -1,9 +1,9 @@
 *.csv
 chromatic
-src/pymc
+chromatic_fitting/pymc
 *.pyc
 .ipynb_checkpoints
-src/archive
+chromatic_fitting/archive
 *.npy
 *.fits
 *.txt

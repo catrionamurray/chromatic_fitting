@@ -11,7 +11,7 @@
   <component name="PyNamespacePackagesService">
     <option name="namespacePackageFolders">
       <list>
-        <option value="$MODULE_DIR$/src" />
+        <option value="$MODULE_DIR$/chromatic_fitting" />
       </list>
     </option>
   </component>

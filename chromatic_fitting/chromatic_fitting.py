@@ -1,6 +1,6 @@
-# from src.archive.chromatic_fitting import *
-from src.imports import *
-from src.spectrum import *
+# from chromatic_fitting.archive.chromatic_fitting import *
+from chromatic_fitting.imports import *
+from chromatic_fitting.spectrum import *
 from tqdm import tqdm
 from parameters import *
 from arviz import summary
