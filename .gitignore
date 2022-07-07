@@ -2,8 +2,8 @@
 chromatic
 chromatic_fitting/pymc
 *.pyc
-.ipynb_checkpoints/
-.idea/
+.ipynb_checkpoints
+.idea
 chromatic_fitting/archive
 *.npy
 *.fits
