@@ -7,3 +7,4 @@ chromatic_fitting/archive
 *.npy
 *.fits
 *.txt
+*.pickle
