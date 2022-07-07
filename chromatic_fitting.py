@@ -5,8 +5,7 @@ from tqdm import tqdm
 from parameters import *
 from arviz import summary
 from pymc3_ext import eval_in_model, optimize, sample
-from pymc3 import sample_prior_predictive, \
-    sample_posterior_predictive
+from pymc3 import sample_prior_predictive, sample_posterior_predictive
 import warnings
 import collections
 
@@ -61,7 +60,7 @@ def add_string_before_each_dictionary_key(dict_old, string_to_add):
 
 
 def import_patricio_model():
-    """ Import spectral model
+    """Import spectral model
     Returns
     ---------
         model : PlanetarySpectrumModel
@@ -81,7 +80,9 @@ def import_patricio_model():
 
     wavelength = planet["wl"]
     transmission = planet["transmission"]
-    table = Table(dict(wavelength=planet["wl"], depth=planet["transmission"]), meta=planet_params)
+    table = Table(
+        dict(wavelength=planet["wl"], depth=planet["transmission"]), meta=planet_params
+    )
 
     # set up a new model spectrum
     model = PlanetarySpectrumModel(table=table, label="injected model")
@@ -196,7 +197,9 @@ class LightcurveModel:
         for k in self.parameters.keys():
             if self.name in k:
                 return
-        self.parameters = add_string_before_each_dictionary_key(self.parameters, self.name)
+        self.parameters = add_string_before_each_dictionary_key(
+            self.parameters, self.name
+        )
 
     def get_parameter_shape(self, param):
         inputs = param.inputs
@@ -271,8 +274,10 @@ class LightcurveModel:
                 except:
                     pass
         else:
-            print("Unrecognised optimization method, please select one of: " + str(
-                ", ".join(possible_optimization_methods)))
+            print(
+                "Unrecognised optimization method, please select one of: "
+                + str(", ".join(possible_optimization_methods))
+            )
             self.optimization = "simultaneous"
 
     def create_multiple_models(self):
@@ -387,9 +392,9 @@ class LightcurveModel:
         """
         if self.optimization == "separate":
             opts = []
-            if 'start' in kw:
-                start = kw['start']
-                kw.pop('start')
+            if "start" in kw:
+                start = kw["start"]
+                kw.pop("start")
                 for mod, opt in zip(self.pymc3_model, start):
                     with mod:
                         opts.append(optimize(start=opt, **kw))
@@ -447,20 +452,34 @@ class LightcurveModel:
         results = {}
         for i, w in enumerate(self.data.wavelength):
             transit_params_mean = self.extract_from_posteriors(self.summary, i)
-            transit_params_lower_error = self.extract_from_posteriors(self.summary, i, op=uncertainty[0])
-            transit_params_lower_error = dict((key + f"_{uncertainty[0]}", value) for (key, value) in
-                                              transit_params_lower_error.items())
-            transit_params_upper_error = self.extract_from_posteriors(self.summary, i, op=uncertainty[1])
-            transit_params_upper_error = dict((key + f"_{uncertainty[1]}", value) for (key, value) in
-                                              transit_params_upper_error.items())
-            transit_params = transit_params_mean | transit_params_lower_error | transit_params_upper_error
-            ordered_transit_params = collections.OrderedDict(sorted(transit_params.items()))
+            transit_params_lower_error = self.extract_from_posteriors(
+                self.summary, i, op=uncertainty[0]
+            )
+            transit_params_lower_error = dict(
+                (key + f"_{uncertainty[0]}", value)
+                for (key, value) in transit_params_lower_error.items()
+            )
+            transit_params_upper_error = self.extract_from_posteriors(
+                self.summary, i, op=uncertainty[1]
+            )
+            transit_params_upper_error = dict(
+                (key + f"_{uncertainty[1]}", value)
+                for (key, value) in transit_params_upper_error.items()
+            )
+            transit_params = (
+                transit_params_mean
+                | transit_params_lower_error
+                | transit_params_upper_error
+            )
+            ordered_transit_params = collections.OrderedDict(
+                sorted(transit_params.items())
+            )
             results[f"w{i}"] = ordered_transit_params
             results[f"w{i}"]["wavelength"] = w
 
         if as_df:
             # if the user wants to return the results as a pandas DataFrame:
-            return (pd.DataFrame(results).transpose())
+            return pd.DataFrame(results).transpose()
         else:
             # otherwise return a dictionary of dictionaries
             return results
@@ -469,15 +488,19 @@ class LightcurveModel:
         """
         Generate and return a transmission spectrum table
         """
-        results = self.get_results(uncertainty)[["wavelength", "radius_ratio",
-                                                 f"radius_ratio_{uncertainty[0]}",
-                                                 f"radius_ratio_{uncertainty[1]}"
-                                                 ]]
+        results = self.get_results(uncertainty)[
+            [
+                "wavelength",
+                "radius_ratio",
+                f"radius_ratio_{uncertainty[0]}",
+                f"radius_ratio_{uncertainty[1]}",
+            ]
+        ]
         return results
 
     def run_simultaneous_fit(self, r, **kwargs):
         """
-            Run the entire simultaneous wavelength fit.
+        Run the entire simultaneous wavelength fit.
         """
         self.attach_data(r)
         self.setup_lightcurves()
@@ -501,10 +524,16 @@ class LightcurveModel:
             datas = [self.get_data()]
             prior_predictive_traces = [self.sample_prior(ndraws=n)]
 
-        for nm, (data, prior_predictive_trace) in enumerate(zip(datas, prior_predictive_traces)):
+        for nm, (data, prior_predictive_trace) in enumerate(
+            zip(datas, prior_predictive_traces)
+        ):
             for i in range(n):
                 flux_for_this_sample = np.array(
-                    [prior_predictive_trace[f"wavelength_{w + nm}_data"][i] for w in range(data.nwave)])
+                    [
+                        prior_predictive_trace[f"wavelength_{w + nm}_data"][i]
+                        for w in range(data.nwave)
+                    ]
+                )
                 data.fluxlike[f"prior-predictive-{i}"] = flux_for_this_sample
             data.imshow_quantities()
 
@@ -525,10 +554,16 @@ class LightcurveModel:
             # traces = [self.trace]
             posterior_predictive_traces = [self.sample_posterior(n)]
 
-        for nm, (data, posterior_predictive_trace) in enumerate(zip(datas, posterior_predictive_traces)):
+        for nm, (data, posterior_predictive_trace) in enumerate(
+            zip(datas, posterior_predictive_traces)
+        ):
             for i in range(n):
                 flux_for_this_sample = np.array(
-                    [posterior_predictive_trace[f"wavelength_{w + nm}_data"][i] for w in range(data.nwave)])
+                    [
+                        posterior_predictive_trace[f"wavelength_{w + nm}_data"][i]
+                        for w in range(data.nwave)
+                    ]
+                )
                 data.fluxlike[f"posterior-predictive-{i}"] = flux_for_this_sample
             data.imshow_quantities()
 
@@ -537,8 +572,10 @@ class LightcurveModel:
 
         # ensure that the specified operation is in the summary table!
         if op not in summary:
-            print(f"Try a different operation or regenerate the summary table! "
-                  f"{op} is not currently in the summary table")
+            print(
+                f"Try a different operation or regenerate the summary table! "
+                f"{op} is not currently in the summary table"
+            )
             return None
 
         posterior_means = summary[op]
@@ -583,7 +620,9 @@ class CombinedModel(LightcurveModel):
                 if i >= len(self.how_to_combine):
                     string_to_print += f"{model_name}({model})"
                 else:
-                    string_to_print += f"{model_name}({model}) {self.how_to_combine[i]} "
+                    string_to_print += (
+                        f"{model_name}({model}) {self.how_to_combine[i]} "
+                    )
             return string_to_print
             # return f"({self.chromatic_models['left']} {self.how_to_combine} {self.chromatic_models['right']})"
             # return f"<experimental chromatic combined model 🌈, models: {self.chromatic_models}>"
@@ -593,7 +632,9 @@ class CombinedModel(LightcurveModel):
     def combine(self, first, second, how_to_combine):
         if isinstance(first, CombinedModel) and isinstance(second, CombinedModel):
             # if both first and second are CombinedModels
-            chromatic_models = add_dicts(first.chromatic_models.copy(), second.chromatic_models.copy())
+            chromatic_models = add_dicts(
+                first.chromatic_models.copy(), second.chromatic_models.copy()
+            )
             self.how_to_combine = first.how_to_combine + second.how_to_combine
             self.attach_models(chromatic_models, how_to_combine=how_to_combine)
         elif isinstance(first, CombinedModel):
@@ -610,7 +651,10 @@ class CombinedModel(LightcurveModel):
             self.attach_models(chromatic_models, how_to_combine=how_to_combine)
         else:
             # if neither is a CombinedModel
-            self.attach_models({f"{first.name}": first, f"{second.name}": second}, how_to_combine=how_to_combine)
+            self.attach_models(
+                {f"{first.name}": first, f"{second.name}": second},
+                how_to_combine=how_to_combine,
+            )
 
     def attach_models(self, models, how_to_combine="+"):
         """
@@ -620,18 +664,20 @@ class CombinedModel(LightcurveModel):
 
         # if we have already attached models with instructions on how to combine then add this operation
         # to self.how_to_combine
-        if hasattr(self, 'how_to_combine'):
+        if hasattr(self, "how_to_combine"):
             self.how_to_combine.append(how_to_combine)
         else:
             if type(how_to_combine) == str:
                 # if a string operation ("+","-", etc.) has been passed then repeat this operation for every model
-                self.how_to_combine = [how_to_combine] * (len(models.keys())-1)
+                self.how_to_combine = [how_to_combine] * (len(models.keys()) - 1)
             else:
                 # if we have passed a list of operations of the same length as (n_models-1) then save
-                if len(how_to_combine) == len(models.keys())-1:
+                if len(how_to_combine) == len(models.keys()) - 1:
                     self.how_to_combine = how_to_combine
                 else:
-                    print(f"WARNING: You have passed {len(how_to_combine)} operations for {len(models.keys())} models!")
+                    print(
+                        f"WARNING: You have passed {len(how_to_combine)} operations for {len(models.keys())} models!"
+                    )
 
         for name, model in models.items():
             # check that the models passed to this function are LightcurveModels
@@ -656,8 +702,12 @@ class CombinedModel(LightcurveModel):
                         # parameter is Fitted or WavelikeFitted
                         model_params[k] = v.__class__(v.distribution, **v.inputs)
                 # set up parameters in new models
-                new_model.defaults = add_string_before_each_dictionary_key(new_model.defaults, new_model.name)
-                new_model.required_parameters = [f"{new_model.name}_{a}" for a in new_model.required_parameters]
+                new_model.defaults = add_string_before_each_dictionary_key(
+                    new_model.defaults, new_model.name
+                )
+                new_model.required_parameters = [
+                    f"{new_model.name}_{a}" for a in new_model.required_parameters
+                ]
                 new_model.setup_parameters(**model_params)
                 new_models[name] = new_model
                 # all_params = all_params | model_params # what happens if same keys?
@@ -681,8 +731,10 @@ class CombinedModel(LightcurveModel):
                 print(e)
 
     def summarize_parameters(self):
-        print("A CombinedModel itself does not have any parameters, however each of its constituent models do:\n")
-        self.apply_operation_to_constituent_models('summarize_parameters')
+        print(
+            "A CombinedModel itself does not have any parameters, however each of its constituent models do:\n"
+        )
+        self.apply_operation_to_constituent_models("summarize_parameters")
 
     def attach_data(self, r):
         """
@@ -712,21 +764,20 @@ class CombinedModel(LightcurveModel):
         self.apply_operation_to_constituent_models("setup_lightcurves")
         for i, mod in enumerate(self.chromatic_models.values()):
             if i == 0:
-                self.every_light_curve = add_dicts(self.every_light_curve, mod.every_light_curve)
-            else:
-                # print(self.name, self.how_to_combine[i-1], mod.name)
-                self.every_light_curve = combination_options[self.how_to_combine[i-1]](
+                self.every_light_curve = add_dicts(
                     self.every_light_curve, mod.every_light_curve
                 )
+            else:
+                # print(self.name, self.how_to_combine[i-1], mod.name)
+                self.every_light_curve = combination_options[
+                    self.how_to_combine[i - 1]
+                ](self.every_light_curve, mod.every_light_curve)
             # self.every_light_curve = add_dicts(self.every_light_curve, mod.every_light_curve)
 
 
 class PolynomialModel(LightcurveModel):
-
     def __init__(self, degree, independant_variable="time", name="polynomial", **kw):
-        self.required_parameters = [
-            "p_0"
-        ]
+        self.required_parameters = ["p_0"]
 
         super().__init__(**kw)
         self.degree = degree
@@ -760,7 +811,7 @@ class PolynomialModel(LightcurveModel):
             # p = self.parameters[f"p_{d}"].get_prior(i)
             # fluxlike: x[i]
             # x = self.data.get(fluxlike_thing:str)[i_wave,:]
-            poly.append(p[d] * (x ** d))
+            poly.append(p[d] * (x**d))
 
         return pm.math.sum(poly, axis=0)
 
@@ -811,21 +862,24 @@ class PolynomialModel(LightcurveModel):
                         # print(d)
                         p = self.parameters[f"{name}p_{d}"].get_prior(i + j)
                         # print(f"{name}p_{d}", p)
-                        poly.append(p * (x ** d))
+                        poly.append(p * (x**d))
                     # print(poly, "\n", eval_in_model(pm.math.sum(poly,axis=0)))
 
                     if f"wavelength_{i + j}" not in self.every_light_curve.keys():
-                        self.every_light_curve[f"wavelength_{i + j}"] = pm.math.sum(poly,
-                                                                                    axis=0)
+                        self.every_light_curve[f"wavelength_{i + j}"] = pm.math.sum(
+                            poly, axis=0
+                        )
                     else:
-                        self.every_light_curve[f"wavelength_{i + j}"] += pm.math.sum(poly, axis=0)
+                        self.every_light_curve[f"wavelength_{i + j}"] += pm.math.sum(
+                            poly, axis=0
+                        )
 
     def polynomial_model(self, poly_params):
         data = self.get_data()
         poly = []
         for d in range(self.degree + 1):
             poly.append(poly_params[f"p_{d}"][d] * (data.time.to_value("day") ** d))
-        return (np.sum(poly, axis=0))
+        return np.sum(poly, axis=0)
 
 
 class TransitModel(LightcurveModel):
@@ -891,11 +945,11 @@ class TransitModel(LightcurveModel):
 
                 # Set up a Keplerian orbit for the planets
                 orbit = xo.orbits.KeplerianOrbit(
-                    period=self.parameters[name+"period"].get_prior(j),
-                    t0=self.parameters[name+"epoch"].get_prior(j),
-                    b=self.parameters[name+"impact_parameter"].get_prior(j),
-                    r_star=self.parameters[name+"stellar_radius"].get_prior(j),
-                    m_star=self.parameters[name+"stellar_mass"].get_prior(j),
+                    period=self.parameters[name + "period"].get_prior(j),
+                    t0=self.parameters[name + "epoch"].get_prior(j),
+                    b=self.parameters[name + "impact_parameter"].get_prior(j),
+                    r_star=self.parameters[name + "stellar_radius"].get_prior(j),
+                    m_star=self.parameters[name + "stellar_mass"].get_prior(j),
                 )
 
                 # store a separate orbit for each model if we are optimizing wavelengths separately
@@ -919,10 +973,12 @@ class TransitModel(LightcurveModel):
         light_curves = xo.LimbDarkLightCurve(limb_darkening).get_light_curve(
             orbit=self.orbit,
             r=self.parameters["radius_ratio"].get_prior(i)
-              * self.parameters["stellar_radius"].get_prior(),
+            * self.parameters["stellar_radius"].get_prior(),
             t=list(self.data.time.to_value("day")),
         )
-        return pm.math.sum(light_curves, axis=-1)  # + (self.parameters["baseline"].get_prior(i))
+        return pm.math.sum(
+            light_curves, axis=-1
+        )  # + (self.parameters["baseline"].get_prior(i))
 
     def setup_lightcurves(self):
         """
@@ -962,29 +1018,34 @@ class TransitModel(LightcurveModel):
             with mod:
                 for i, w in enumerate(data.wavelength):
                     # create quadratic limb-darkening lightcurves from Exoplanet
-                    limb_darkening = self.parameters[name+"limb_darkening"].get_prior(j + i)
-                    planet_radius = self.parameters[name+"radius_ratio"].get_prior(j + i) * \
-                                    self.parameters[name+"stellar_radius"].get_prior(j + i)
-                    light_curves = xo.LimbDarkLightCurve(limb_darkening).get_light_curve(
+                    limb_darkening = self.parameters[name + "limb_darkening"].get_prior(
+                        j + i
+                    )
+                    planet_radius = self.parameters[name + "radius_ratio"].get_prior(
+                        j + i
+                    ) * self.parameters[name + "stellar_radius"].get_prior(j + i)
+                    light_curves = xo.LimbDarkLightCurve(
+                        limb_darkening
+                    ).get_light_curve(
                         orbit=orbit,
                         r=planet_radius,
                         t=list(data.time.to_value("day")),
                     )
 
                     # calculate the transit + baseline model
-                    mu = pm.math.sum(
-                        light_curves, axis=-1
-                    ) + (self.parameters[name+"baseline"].get_prior(j + i))
+                    mu = pm.math.sum(light_curves, axis=-1) + (
+                        self.parameters[name + "baseline"].get_prior(j + i)
+                    )
 
                     # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
                     if f"wavelength_{j + i}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_{j + i}"] = pm.math.sum(
                             light_curves, axis=-1
-                        ) + (self.parameters[name+"baseline"].get_prior(j + i))
+                        ) + (self.parameters[name + "baseline"].get_prior(j + i))
                     else:
                         self.every_light_curve[f"wavelength_{j + i}"] += pm.math.sum(
                             light_curves, axis=-1
-                        ) + (self.parameters[name+"baseline"].get_prior(j + i))
+                        ) + (self.parameters[name + "baseline"].get_prior(j + i))
 
                 self.model_chromatic_transit_flux = [
                     self.every_light_curve[k] for k in tqdm(self.every_light_curve)
@@ -999,12 +1060,15 @@ class TransitModel(LightcurveModel):
             r_star=transit_params["stellar_radius"],
             m_star=transit_params["stellar_mass"],
         )
-        ldlc = xo.LimbDarkLightCurve(transit_params["limb_darkening"]).get_light_curve(
-            orbit=orbit,
-            r=transit_params["radius_ratio"]
-              * transit_params["stellar_radius"],
-            t=list(data.time.to_value("day")),
-        ).eval()
+        ldlc = (
+            xo.LimbDarkLightCurve(transit_params["limb_darkening"])
+            .get_light_curve(
+                orbit=orbit,
+                r=transit_params["radius_ratio"] * transit_params["stellar_radius"],
+                t=list(data.time.to_value("day")),
+            )
+            .eval()
+        )
         return ldlc.transpose()[0] + transit_params["baseline"]
 
     def plot_orbit(self, timedata=None):
@@ -1015,15 +1079,20 @@ class TransitModel(LightcurveModel):
         if not hasattr(self, "data"):
             if timedata is None:
                 warnings.warn(
-                    "No data attached to this object and no time data provided. Plotting orbit will not work.")
-                print("No data attached to this object and no time data provided. Plotting orbit will not work.")
+                    "No data attached to this object and no time data provided. Plotting orbit will not work."
+                )
+                print(
+                    "No data attached to this object and no time data provided. Plotting orbit will not work."
+                )
                 return
         else:
             timedata = self.data.time
 
         with self.pymc3_model:
-            x, y, z = [eval_in_model(bla, point=self.pymc3_model.test_point) for bla in
-                       self.orbit.get_planet_position(timedata)]  # {}
+            x, y, z = [
+                eval_in_model(bla, point=self.pymc3_model.test_point)
+                for bla in self.orbit.get_planet_position(timedata)
+            ]  # {}
             plt.figure(figsize=(10, 3))
             theta = np.linspace(0, 2 * np.pi)
             plt.fill_between(np.cos(theta), np.sin(theta), color="gray")
@@ -1041,8 +1110,16 @@ class TransitModel(LightcurveModel):
         data = self.get_data()
 
         if summary is not None:
-            params = ["period", "epoch", "impact_parameter", "stellar_radius", "stellar_mass", "stellar_mass",
-                      "limb_darkening", "radius_ratio"]
+            params = [
+                "period",
+                "epoch",
+                "impact_parameter",
+                "stellar_radius",
+                "stellar_mass",
+                "stellar_mass",
+                "limb_darkening",
+                "radius_ratio",
+            ]
             param_dict = {}
             posterior_means = summary["mean"]
 
@@ -1061,8 +1138,7 @@ class TransitModel(LightcurveModel):
             )
             xo.LimbDarkLightCurve(param_dict["limb_darkening"]).get_light_curve(
                 orbit=self.orbit,
-                r=param_dict["radius_ratio"]
-                  * param_dict["stellar_radius"],
+                r=param_dict["radius_ratio"] * param_dict["stellar_radius"],
                 t=list(data.time.to_value("day")),
             )
 
@@ -1072,9 +1148,11 @@ class TransitModel(LightcurveModel):
                 plt.plot(posterior_traces)
                 for i in range(ndraws):
                     flux_for_this_sample = np.array(
-                        [posterior_traces[f"wavelength_{w}_data"][i] for w in range(data.nwave)])
+                        [
+                            posterior_traces[f"wavelength_{w}_data"][i]
+                            for w in range(data.nwave)
+                        ]
+                    )
                     plt.plot(data.time, flux_for_this_sample)
 
         data.plot(ax=ax, **kw)
-
-
