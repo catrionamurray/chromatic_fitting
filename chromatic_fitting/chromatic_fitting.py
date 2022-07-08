@@ -1,6 +1,7 @@
 # from chromatic_fitting.archive.chromatic_fitting import *
 from chromatic_fitting.imports import *
 # from chromatic_fitting.spectrum import *
+ # from src.archive.chromatic_fitting import *
 from tqdm import tqdm
 from .parameters import *
 from arviz import summary
@@ -1164,7 +1165,6 @@ class TransitModel(LightcurveModel):
                     plt.plot(data.time, flux_for_this_sample)
 
         data.plot(ax=ax, **kw)
-<<<<<<< HEAD:chromatic_fitting.py
 
 class EclipseModel(LightcurveModel):
     def __init__(self, name="secondaryeclipse", **kw):
