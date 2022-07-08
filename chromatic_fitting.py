@@ -1,4 +1,4 @@
-# from src.archive.chromatic_fitting import *
+ # from src.archive.chromatic_fitting import *
 from src.imports import *
 from src.spectrum import *
 from tqdm import tqdm
@@ -6,7 +6,7 @@ from parameters import *
 from arviz import summary
 from pymc3_ext import eval_in_model, optimize, sample
 from pymc3 import sample_prior_predictive, \
-    sample_posterior_predictive
+    sample_posterior_predictive, Deterministic
 import warnings
 import collections
 
@@ -1077,4 +1077,309 @@ class TransitModel(LightcurveModel):
 
         data.plot(ax=ax, **kw)
 
+class EclipseModel(LightcurveModel):
+    def __init__(self, name="secondaryeclipse", **kw):
+        self.required_parameters = [
+            "stellar_radius",
+            "stellar_mass",
+            "stellar_amplitude",
+            "stellar_prot",
+            "period",
+            "t0",
+            "planet_log_amplitude",
+            "inclination",
+            "planet_mass",
+            "planet_radius",
+            "eccentricity",
+            "omega",
+            ]
 
+        super().__init__(**kw)
+        self.set_defaults()
+
+        # if name is not None:
+        # self.required_parameters = [f"{name}_{a}" for a in self.required_parameters]
+        # self.defaults = add_string_before_each_dictionary_key(self.defaults, name)
+        self.set_name(name)
+
+    def set_defaults(self):
+        self.defaults = dict(
+            stellar_radius = 0.697,
+            stellar_mass = 0.696,
+            stellar_amplitude = 1.0,
+            stellar_prot = 1.0,
+            period = 1.0,
+            t0 = 1.0,
+            planet_log_amplitude = -2.8,
+            inclination = 79.0,
+            planet_mass = 0.00206,
+            planet_radius = 0.123829,
+            eccentricity = 0.0,
+            omega = 0.0,
+        )
+
+    def set_name(self, name):
+        self.name = name
+
+    def setup_lightcurves(self):
+        """
+        Create an `starry` orbit model, given the stored parameters.
+        [This should be run after .setup_parameters()]
+        """
+
+        # if the optimization method is separate wavelengths then set up for looping
+        if self.optimization == "separate":
+            models = self.pymc3_model
+        else:
+            models = [self.pymc3_model]
+
+        # if the model has a name then add this to each parameter"s name
+        if hasattr(self, "name"):
+            name = self.name + "_"
+        else:
+            name = ""
+
+
+        # set up the models, data and orbits in a format for looping
+        if self.optimization == "separate":
+            models = self.pymc3_model
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+        else:
+            models = [self.pymc3_model]
+            datas = [self.get_data()]
+
+        if not hasattr(self, "every_lightcurve"):
+            self.every_light_curve = {}
+
+
+        for j, (mod, data) in enumerate(zip(models, datas)):
+            with mod:
+                for i, w in enumerate(data.wavelength):
+
+                    # Set up a primary start
+                    star = starry.Primary(starry.Map(ydeg=0, udeg=2, amp=self.parameters[name+"stellar_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),
+                                                    m=self.parameters[name+"stellar_mass"].get_prior(j + i),
+                                                    r= self.parameters[name+"stellar_radius"].get_prior(j + i),
+                                                    prot=self.parameters[name+"stellar_prot"].get_prior(j + i),
+                                                    )
+                    star.map[1] = 0.4
+                    star.map[2] = 0.2
+
+                    # Set up a Keplerian orbit for the planets
+                    planet = starry.kepler.Secondary(
+                                                starry.Map(ydeg=0,udeg=0, amp=10 ** self.parameters[name+"planet_log_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),  # the surface map
+                                                inc=self.parameters[name+"inclination"].get_prior(j + i),
+                                                m=self.parameters[name+"planet_mass"].get_prior(j + i),  # mass in solar masses
+                                                r=self.parameters[name+"planet_radius"].get_prior(j + i),  # radius in solar radii
+                                                porb=self.parameters[name+"period"].get_prior(j + i),  # orbital period in days
+                                                ecc=self.parameters[name+"eccentricity"].get_prior(j + i),  # eccentricity
+                                                w=self.parameters[name+"omega"].get_prior(j + i),  # longitude of pericenter in degrees
+                                                t0=self.parameters[name+"t0"].get_prior(j + i),  # time of transit in days
+                                            )
+
+                    system = starry.System(star, planet)
+                    flux_model = Deterministic(f"flux_model_{j+i}", system.flux(self.data.time))
+
+
+                    # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
+                    if f"wavelength_{j + i}" not in self.every_light_curve.keys():
+                        self.every_light_curve[f"wavelength_{j + i}"] = flux_model
+                    else:
+                        self.every_light_curve[f"wavelength_{j + i}"] += flux_model
+'''
+    def plot_lightcurves(self, summary=None, trace=None, ax=None, **kw):
+        if ax is None:
+            ax = plt.subplot()
+        plt.sca(ax)
+
+        data = self.get_data()
+
+        if summary is not None:
+            params = ["stellar_radius",
+            "stellar_mass",
+            "stellar_amplitude",
+            "stellar_prot",
+            "period",
+            "t0",
+            "planet_log_amplitude",
+            "inclination",
+            "planet_mass",
+            "planet_radius",
+            "eccentricity",
+            "omega"]
+            param_dict = {}
+            posterior_means = summary["mean"]
+
+            for p in params:
+                if self.parameters[p] in posterior_means.index:
+                    param_dict[p] = posterior_means[p]
+                else:
+                    param_dict[p] = self.parameters[p].value
+
+
+
+            models = [self.pymc3_model]
+            datas = [self.get_data()]
+
+            plot_light_curves = {}
+            for j, (mod, data) in enumerate(zip(models, datas)):
+                with mod:
+                    for i, w in enumerate(data.wavelength):
+
+
+                        star = starry.Primary(starry.Map(ydeg=0, udeg=2, amp=param_dict[name+"stellar_amplitude"], inc=90.0, obl=0.0),
+                                                        m=param_dict[name+"stellar_mass"],
+                                                        r= param_dict[name+"stellar_radius"],
+                                                        prot=param_dict[name+"stellar_prot"],
+                                                        )
+                        star.map[1] = 0.4
+                        star.map[2] = 0.2
+
+                        # Set up a Keplerian orbit for the planets
+                        planet = starry.kepler.Secondary(
+                                                    starry.Map(ydeg=0,udeg=0, amp=10 ** param_dict[name+"planet_log_amplitude"], inc=90.0, obl=0.0),  # the surface map
+                                                    inc=param_dict[name+"inclination"],
+                                                    m=param_dict[name+"planet_mass"],  # mass in solar masses
+                                                    r=param_dict[name+"planet_radius"],  # radius in solar radii
+                                                    porb=param_dict[name+"period"],  # orbital period in days
+                                                    ecc=param_dict[name+"eccentricity"],  # eccentricity
+                                                    w=param_dict[name+"omega"],  # longitude of pericenter in degrees
+                                                    t0=param_dict[name+"t0"],  # time of transit in days
+                                                )
+
+                        system = starry.System(star, planet)
+
+                        flux_model = system.flux(data.time).eval()
+
+                        if f"wavelength_{j + i}" not in self.plot_light_curves.keys():
+                            self.plot_light_curves[f"wavelength_{j + i}"] = flux_model
+                        else:
+                            self.plot_light_curves[f"wavelength_{j + i}"] += flux_model
+
+            if trace is not None:
+                ndraws = 50
+                posterior_traces = self.sample_posterior(ndraws=ndraws)
+                plt.plot(posterior_traces,ax=ax)
+                for i in range(ndraws):
+                    flux_for_this_sample = np.array(
+                        [posterior_traces[f"wavelength_{w}_data"][i] for w in range(data.nwave)])
+                    plt.plot(data.time, flux_for_this_sample,ax=ax)
+
+        data.plot(ax=ax, **kw)
+
+
+
+
+                # store a separate orbit for each model if we are optimizing wavelengths separately
+
+                if self.optimization == "separate":
+                    self.orbit.append(orbit)
+                else:
+                    self.orbit = orbit
+                    '''
+'''
+    def get_prior(self, i):
+
+        # ensure that attach data has been run before setup_lightcurves
+        if not hasattr(self, "data"):
+            print("You need to attach some data to this chromatic model!")
+            return
+
+        # ensure that setup_orbit has been run before setup_lightcurves
+        if not hasattr(self, "orbit"):
+            self.setup_orbit()
+        t = self.data.time.to_value("day")
+        light_curves = Deterministic("flux_model", self.orbit.flux(t))
+        """
+        limb_darkening = self.parameters["limb_darkening"].get_prior(i)
+        light_curves = xo.LimbDarkLightCurve(limb_darkening).get_light_curve(
+            orbit=self.orbit,
+            r=self.parameters["radius_ratio"].get_prior(i)
+              * self.parameters["stellar_radius"].get_prior(),
+            t=list(self.data.time.to_value("day")),
+        )
+        """
+        return pm.math.sum(light_curves, axis=-1)  # + (self.parameters["baseline"].get_prior(i))
+
+    def setup_lightcurves(self):
+        """
+        Create an `starry` light curve model, given the stored parameters.
+        [This should be run after .attach_data()]
+        """
+
+        # ensure that attach data has been run before setup_lightcurves
+        if not hasattr(self, "data"):
+            print("You need to attach some data to this chromatic model!")
+            return
+
+        # ensure that setup_orbit has been run before setup_lightcurves
+        if not hasattr(self, "orbit"):
+            self.setup_orbit()
+
+        # if the model has a name then add this to each parameter"s name
+        if hasattr(self, "name"):
+            name = self.name + "_"
+        else:
+            name = ""
+
+        # set up the models, data and orbits in a format for looping
+        if self.optimization == "separate":
+            models = self.pymc3_model
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+            orbits = self.orbit
+        else:
+            models = [self.pymc3_model]
+            datas = [self.get_data()]
+            orbits = [self.orbit]
+
+        if not hasattr(self, "every_lightcurve"):
+            self.every_light_curve = {}
+
+        for j, (mod, data, orbit) in enumerate(zip(models, datas, orbits)):
+            with mod:
+                for i, w in enumerate(data.wavelength):
+                    # create quadratic limb-darkening lightcurves from Exoplanet
+                    stellar_amplitude = self.parameters[name+"stellar_amplitude"].get_prior(j + i)
+                    planet_log_amplitude = self.parameters[name+"planet_log_amplitude"].get_prior(j + i)
+                    t = list(self.data.time.to_value("day"))
+                    light_curves = orbit.flux(t).eval()
+
+                    # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
+                    if f"wavelength_{j + i}" not in self.every_light_curve.keys():
+                        self.every_light_curve[f"wavelength_{j + i}"] = pm.math.sum(
+                            light_curves, axis=-1
+                        )
+                    else:
+                        self.every_light_curve[f"wavelength_{j + i}"] += pm.math.sum(
+                            light_curves, axis=-1
+                        )
+
+                self.model_chromatic_eclipse_flux = [
+                    self.every_light_curve[k] for k in tqdm(self.every_light_curve)
+                ]
+
+    def plot_orbit(self, timedata=None):
+        """
+        Plot the orbit model.
+        """
+
+        if not hasattr(self, "data"):
+            if timedata is None:
+                warnings.warn(
+                    "No data attached to this object and no time data provided. Plotting orbit will not work.")
+                print("No data attached to this object and no time data provided. Plotting orbit will not work.")
+                return
+        else:
+            timedata = self.data.time
+
+        with self.pymc3_model:
+            x, y, z = self.orbit.position(timedata) # {}
+            plt.figure(figsize=(10, 3))
+            theta = np.linspace(0, 2 * np.pi)
+            plt.fill_between(np.cos(theta), np.sin(theta), color="gray")
+            plt.scatter(x, y, c=timedata)
+            plt.axis("scaled")
+            plt.ylim(-1, 1)
+            plt.show()
+            plt.close()
+'''
