@@ -3,7 +3,9 @@ nav:
     - Home: index.md
     - API: api.md
     - Testing: test_doc.ipynb
-    - Tutorial: tutorial_for_chromatic_fitting.ipynb
+    - Tutorials:
+        - Transit Fitting: tutorial_for_transit_fitting.ipynb
+        - Polynomial Fitting: tutorial_for_polynomial_fitting.ipynb
 
 theme:
   name: "material"

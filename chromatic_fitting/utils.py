@@ -41,9 +41,9 @@ def noise_calculator(data, maxnbins=None, binstep=1):
         for j in range(nbins[i]):
             bindata[j] = np.mean(data[j * binz[i] : (j + 1) * binz[i]])
 
-    # get root_mean_square statistic
-    root_mean_square[i] = np.sqrt(np.mean(bindata**2))
-    root_mean_square_err[i] = root_mean_square[i] / np.sqrt(2.0 * nbins[i])
+        # get root_mean_square statistic
+        root_mean_square[i] = np.sqrt(np.mean(bindata**2))
+        root_mean_square_err[i] = root_mean_square[i] / np.sqrt(2.0 * nbins[i])
 
     expected_noise = (np.std(data) / np.sqrt(binz)) * np.sqrt(nbins / (nbins - 1.0))
 

@@ -797,7 +797,11 @@ class PolynomialModel(LightcurveModel):
 
     def set_defaults(self):
         for d in range(self.degree + 1):
-            self.defaults = self.defaults | {f"p_{d}": 0.0}
+            try:
+                self.defaults = self.defaults | {f"p_{d}": 0.0}
+            except TypeError:
+                # the | dictionary addition is only in Python 3.9
+                self.defaults = {**self.defaults, **{f"p_{d}": 0.0}}
 
     def get_prior(self, i, *args, **kwargs):
         data = self.get_data()

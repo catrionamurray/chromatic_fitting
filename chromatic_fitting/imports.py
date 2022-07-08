@@ -6,6 +6,7 @@ import exoplanet as xo
 # import theano
 # import pickle5 as pickle # needed for Python v3.7!
 import sys
+from chromatic import *
 
 import pymc3 as pm
 import pymc3_ext as pmx
