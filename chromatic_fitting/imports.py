@@ -1,14 +1,14 @@
 import chromatic
 import numpy as np
 
-# import exoplanet as xo
+import exoplanet as xo
 # import starry
 # import theano
 # import pickle5 as pickle # needed for Python v3.7!
 import sys
 
-# import pymc3 as pm
-# import pymc3_ext as pmx
+import pymc3 as pm
+import pymc3_ext as pmx
 
 print(f"Running on Python v{sys.version}")
 print(f"Running on numpy v{np.__version__}")

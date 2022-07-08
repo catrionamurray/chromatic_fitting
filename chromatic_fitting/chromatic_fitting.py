@@ -1,8 +1,8 @@
 # from chromatic_fitting.archive.chromatic_fitting import *
 from chromatic_fitting.imports import *
-from chromatic_fitting.spectrum import *
+# from chromatic_fitting.spectrum import *
 from tqdm import tqdm
-from parameters import *
+from .parameters import *
 from arviz import summary
 from pymc3_ext import eval_in_model, optimize, sample
 from pymc3 import sample_prior_predictive, sample_posterior_predictive
