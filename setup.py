@@ -79,9 +79,9 @@ setup(
         "astropy>=4.0",
         "pandas",
         "chromatic>=0.2.2",
-        "pymc3",
+        "pymc>=3.11.1",
         "pymc3_ext",
-        "exoplanet",
+        "exoplanet>=0.5.0",
     ],
     # what version of Python is required?
     python_requires=">=3.8",  # f-strings are introduced in 3.6!
