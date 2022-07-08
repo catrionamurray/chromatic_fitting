@@ -5,7 +5,7 @@ from tqdm import tqdm
 from .parameters import *
 from arviz import summary
 from pymc3_ext import eval_in_model, optimize, sample
-from pymc3 import sample_prior_predictive, sample_posterior_predictive
+from pymc3 import sample_prior_predictive, sample_posterior_predictive, Deterministic
 import warnings
 import collections
 
@@ -869,6 +869,8 @@ class PolynomialModel(LightcurveModel):
                         poly.append(p * (x**d))
                     # print(poly, "\n", eval_in_model(pm.math.sum(poly,axis=0)))
 
+                    Deterministic(f"poly_model_w{i + j}", pm.math.sum(poly, axis=0))
+
                     if f"wavelength_{i + j}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_{i + j}"] = pm.math.sum(
                             poly, axis=0
@@ -1040,6 +1042,8 @@ class TransitModel(LightcurveModel):
                     mu = pm.math.sum(light_curves, axis=-1) + (
                         self.parameters[name + "baseline"].get_prior(j + i)
                     )
+
+                    Deterministic(f"transit_model_w{i+j}", mu)
 
                     # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
                     if f"wavelength_{j + i}" not in self.every_light_curve.keys():
