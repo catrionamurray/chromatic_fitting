@@ -3,6 +3,7 @@ nav:
     - Home: index.md
     - API: api.md
     - Testing: test_doc.ipynb
+    - Tutorial: tutorial_for_chromatic_fitting.ipynb
 
 theme:
   name: "material"

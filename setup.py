@@ -79,6 +79,9 @@ setup(
         "astropy>=4.0",
         "pandas",
         "chromatic>=0.2.2",
+        "pymc3",
+        "pymc3_ext",
+        "exoplanet",
     ],
     # what version of Python is required?
     python_requires=">=3.8",  # f-strings are introduced in 3.6!
@@ -98,6 +101,7 @@ setup(
             #         "twine",
             #         "pre-commit",
         ],
+        "gp": ["celerite2"]
         #     "cartoons": ["rainbow-connection>=0.0.7"],
     },
     # (I think just leave this set to False)
