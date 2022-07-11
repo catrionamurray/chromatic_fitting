@@ -925,25 +925,25 @@ class TransitModel(LightcurveModel):
                 else:
                     self.orbit = orbit
 
-    def get_prior(self, i):
-
-        # ensure that attach data has been run before setup_lightcurves
-        if not hasattr(self, "data"):
-            print("You need to attach some data to this chromatic model!")
-            return
-
-        # ensure that setup_orbit has been run before setup_lightcurves
-        if not hasattr(self, "orbit"):
-            self.setup_orbit()
-
-        limb_darkening = self.parameters["limb_darkening"].get_prior(i)
-        light_curves = xo.LimbDarkLightCurve(limb_darkening).get_light_curve(
-            orbit=self.orbit,
-            r=self.parameters["radius_ratio"].get_prior(i)
-              * self.parameters["stellar_radius"].get_prior(),
-            t=list(self.data.time.to_value("day")),
-        )
-        return pm.math.sum(light_curves, axis=-1)  # + (self.parameters["baseline"].get_prior(i))
+    # def get_prior(self, i):
+    #
+    #     # ensure that attach data has been run before setup_lightcurves
+    #     if not hasattr(self, "data"):
+    #         print("You need to attach some data to this chromatic model!")
+    #         return
+    #
+    #     # ensure that setup_orbit has been run before setup_lightcurves
+    #     if not hasattr(self, "orbit"):
+    #         self.setup_orbit()
+    #
+    #     limb_darkening = self.parameters["limb_darkening"].get_prior(i)
+    #     light_curves = xo.LimbDarkLightCurve(limb_darkening).get_light_curve(
+    #         orbit=self.orbit,
+    #         r=self.parameters["radius_ratio"].get_prior(i)
+    #           * self.parameters["stellar_radius"].get_prior(),
+    #         t=list(self.data.time.to_value("day")),
+    #     )
+    #     return pm.math.sum(light_curves, axis=-1)  # + (self.parameters["baseline"].get_prior(i))
 
     def setup_lightcurves(self):
         """
@@ -997,7 +997,7 @@ class TransitModel(LightcurveModel):
                         light_curves, axis=-1
                     ) + (self.parameters[name + "baseline"].get_prior(j + i))
 
-                    Deterministic(f"transit_model_w{j + i}", mu)
+                    Deterministic(f"{name}_model_w{j + i}", mu)
 
                     # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
                     if f"wavelength_{j + i}" not in self.every_light_curve.keys():
@@ -1014,7 +1014,7 @@ class TransitModel(LightcurveModel):
                 ]
 
     def transit_model(self, transit_params, **kwargs):
-        # if the model has a name then add this to each parameter"s name
+        # if the model has a name then add this to each parameter's name
         if hasattr(self, "name"):
             name = self.name + "_"
         else:
@@ -1180,6 +1180,7 @@ class GPModel(LightcurveModel):
 
     def gp_model(self, y):
         return self.gp.predict(y=y)
+
 
 class SHOModel(GPModel):
 
