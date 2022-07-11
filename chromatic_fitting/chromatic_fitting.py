@@ -534,7 +534,15 @@ class LightcurveModel:
                         for w in range(data.nwave)
                     ]
                 )
+                model_for_this_sample = np.array(
+                    [
+                        prior_predictive_trace[f"{name}model_w{w + nm}"][i]
+                        for w in range(data.nwave)
+                    ]
+                )
+                # f"{name}model_w{i + j}"
                 data.fluxlike[f"prior-predictive-{i}"] = flux_for_this_sample
+                data.fluxlike[f"prior-model-{i}"] = model_for_this_sample
             data.imshow_quantities()
 
     def plot_posteriors(self, n=3):
@@ -964,27 +972,27 @@ class TransitModel(LightcurveModel):
                 else:
                     self.orbit = orbit
 
-    def get_prior(self, i):
-
-        # ensure that attach data has been run before setup_lightcurves
-        if not hasattr(self, "data"):
-            print("You need to attach some data to this chromatic model!")
-            return
-
-        # ensure that setup_orbit has been run before setup_lightcurves
-        if not hasattr(self, "orbit"):
-            self.setup_orbit()
-
-        limb_darkening = self.parameters["limb_darkening"].get_prior(i)
-        light_curves = xo.LimbDarkLightCurve(limb_darkening).get_light_curve(
-            orbit=self.orbit,
-            r=self.parameters["radius_ratio"].get_prior(i)
-            * self.parameters["stellar_radius"].get_prior(),
-            t=list(self.data.time.to_value("day")),
-        )
-        return pm.math.sum(
-            light_curves, axis=-1
-        )  # + (self.parameters["baseline"].get_prior(i))
+    # def get_prior(self, i):
+    #
+    #     # ensure that attach data has been run before setup_lightcurves
+    #     if not hasattr(self, "data"):
+    #         print("You need to attach some data to this chromatic model!")
+    #         return
+    #
+    #     # ensure that setup_orbit has been run before setup_lightcurves
+    #     if not hasattr(self, "orbit"):
+    #         self.setup_orbit()
+    #
+    #     limb_darkening = self.parameters["limb_darkening"].get_prior(i)
+    #     light_curves = xo.LimbDarkLightCurve(limb_darkening).get_light_curve(
+    #         orbit=self.orbit,
+    #         r=self.parameters["radius_ratio"].get_prior(i)
+    #         * self.parameters["stellar_radius"].get_prior(),
+    #         t=list(self.data.time.to_value("day")),
+    #     )
+    #     return pm.math.sum(
+    #         light_curves, axis=-1
+    #     )  # + (self.parameters["baseline"].get_prior(i))
 
     def setup_lightcurves(self):
         """
