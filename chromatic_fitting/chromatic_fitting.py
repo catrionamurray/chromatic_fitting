@@ -869,7 +869,7 @@ class PolynomialModel(LightcurveModel):
                         poly.append(p * (x**d))
                     # print(poly, "\n", eval_in_model(pm.math.sum(poly,axis=0)))
 
-                    Deterministic(f"poly_model_w{i + j}", pm.math.sum(poly, axis=0))
+                    Deterministic(f"{name}model_w{i + j}", pm.math.sum(poly, axis=0))
 
                     if f"wavelength_{i + j}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_{i + j}"] = pm.math.sum(
@@ -1043,7 +1043,7 @@ class TransitModel(LightcurveModel):
                         self.parameters[name + "baseline"].get_prior(j + i)
                     )
 
-                    Deterministic(f"transit_model_w{i+j}", mu)
+                    Deterministic(f"{name}model_w{i + j}", mu)
 
                     # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
                     if f"wavelength_{j + i}" not in self.every_light_curve.keys():

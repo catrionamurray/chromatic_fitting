@@ -1,11 +1,12 @@
 site_name: chromatic_fitting
 nav:
-    - Home: index.md
-    - API: api.md
-    - Testing: test_doc.ipynb
+    - Welcome: Welcome.ipynb
+#     - API: api.md
+    - Installation: how_to_install.ipynb
     - Tutorials:
         - Transit Fitting: tutorial_for_transit_fitting.ipynb
         - Polynomial Fitting: tutorial_for_polynomial_fitting.ipynb
+        - Combining Models: tutorial_for_combining_models.ipynb
 
 theme:
   name: "material"
