@@ -1,5 +1,6 @@
 # from chromatic_fitting.archive.chromatic_fitting import *
 from chromatic_fitting.imports import *
+
 # from chromatic_fitting.spectrum import *
 from tqdm import tqdm
 from .parameters import *
@@ -14,7 +15,7 @@ def add_dicts(dict_1, dict_2):
     dict_3 = {**dict_1, **dict_2}
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = value + dict_1[key]
+            dict_3[key] = np.array(value) + np.array(dict_1[key])
     return dict_3
 
 
@@ -23,7 +24,7 @@ def subtract_dicts(dict_1, dict_2):
     dict_3 = {**dict_2, **dict_1}
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = value - dict_2[key]
+            dict_3[key] = np.array(value) - np.array(dict_2[key])
     return dict_3
 
 
@@ -31,7 +32,7 @@ def multiply_dicts(dict_1, dict_2):
     dict_3 = {**dict_1, **dict_2}
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = value * dict_1[key]
+            dict_3[key] = np.array(value) * np.array(dict_1[key])
     return dict_3
 
 
@@ -39,7 +40,7 @@ def divide_dicts(dict_1, dict_2):
     dict_3 = {**dict_2, **dict_1}
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = value / dict_2[key]
+            dict_3[key] = np.array(value) / np.array(dict_2[key])
     return dict_3
 
 
@@ -366,7 +367,7 @@ class LightcurveModel:
                     priors.append(sample_prior_predictive(ndraws))
             return priors
 
-    def sample_posterior(self, ndraws=3):
+    def sample_posterior(self, ndraws=3, var_names=None):
         """
         Draw samples from the posterior distribution.
         :parameter n
@@ -378,12 +379,16 @@ class LightcurveModel:
 
         if self.optimization != "separate":
             with self.pymc3_model:
-                return sample_posterior_predictive(self.trace, ndraws)
+                return sample_posterior_predictive(
+                    self.trace, ndraws, var_names=var_names
+                )
         else:
             posteriors = []
             for mod, trace in zip(self.pymc3_model, self.trace):
                 with mod:
-                    posteriors.append(sample_posterior_predictive(trace, ndraws))
+                    posteriors.append(
+                        sample_posterior_predictive(trace, ndraws, var_names=var_names)
+                    )
             return posteriors
 
     def optimize(self, **kw):
@@ -439,6 +444,10 @@ class LightcurveModel:
 
         if print_table:
             print(self.summary)
+
+        if isinstance(self, CombinedModel):
+            for m in self.chromatic_models.values():
+                m.summary = self.summary
 
     def get_results(self, as_df=True, uncertainty=["hdi_3%", "hdi_97%"]):
         """
@@ -534,15 +543,15 @@ class LightcurveModel:
                         for w in range(data.nwave)
                     ]
                 )
-                model_for_this_sample = np.array(
-                    [
-                        prior_predictive_trace[f"{name}model_w{w + nm}"][i]
-                        for w in range(data.nwave)
-                    ]
-                )
+                # model_for_this_sample = np.array(
+                #     [
+                #         prior_predictive_trace[f"{self.name}_model_w{w + nm}"][i]
+                #         for w in range(data.nwave)
+                #     ]
+                # )
                 # f"{name}model_w{i + j}"
                 data.fluxlike[f"prior-predictive-{i}"] = flux_for_this_sample
-                data.fluxlike[f"prior-model-{i}"] = model_for_this_sample
+                # data.fluxlike[f"prior-model-{i}"] = model_for_this_sample
             data.imshow_quantities()
 
     def plot_posteriors(self, n=3):
@@ -553,27 +562,99 @@ class LightcurveModel:
         :parameter n
         Number of posteriors to plot (default=3)
         """
+        # if we have the separate wavelength optimization method chosen then repeat for every wavelength/model
         if self.optimization == "separate":
             datas = [self.get_data(i) for i in range(self.data.nwave)]
-            # traces = self.trace
             posterior_predictive_traces = self.sample_posterior(n)
         else:
             datas = [self.get_data()]
-            # traces = [self.trace]
             posterior_predictive_traces = [self.sample_posterior(n)]
 
+        posterior_model = {}
         for nm, (data, posterior_predictive_trace) in enumerate(
             zip(datas, posterior_predictive_traces)
         ):
+
+            for w in range(data.nwave):
+                # generate a posterior model for every wavelength:
+                posterior_model[f"{self.name}_model_w{w}"] = self.sample_posterior(
+                    n, var_names=[f"{self.name}_model_w{w}"]
+                )[f"{self.name}_model_w{w}"]
+
             for i in range(n):
+                # for every posterior sample extract the posterior model and distribution draw for every wavelength:
                 flux_for_this_sample = np.array(
                     [
                         posterior_predictive_trace[f"wavelength_{w + nm}_data"][i]
                         for w in range(data.nwave)
                     ]
                 )
+                model_for_this_sample = np.array(
+                    [
+                        posterior_model[f"{self.name}_model_w{w}"][i]
+                        for w in range(data.nwave)
+                    ]
+                )
+
+                # add posterior model and draw from posterior distribution to the Rainbow quantities:
+                data.fluxlike[f"posterior-model-{i}"] = model_for_this_sample
                 data.fluxlike[f"posterior-predictive-{i}"] = flux_for_this_sample
+            # plot the rainbow quantities:
             data.imshow_quantities()
+
+    def get_model(self, as_dict=True, as_array=False):
+        if self.optimization == "separate":
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+        else:
+            datas = [self.get_data()]
+
+        model = {}
+        for nm, (data) in enumerate(datas):
+            for w in range(data.nwave):
+                if f"w{w}" not in model.keys():
+                    model[f"w{w}"] = []
+                for t in range(data.ntime):
+                    model[f"w{w}"].append(
+                        self.summary["mean"][f"{self.name}_model_w{w}[{t}]"]
+                    )
+
+        if as_array:
+            return np.array(list(model.values()))
+        elif as_dict:
+            return model
+
+    def plot_lightcurves(self, detrend=False, t_unit="day", ax=None, **kw):
+        if not hasattr(self, "summary"):
+            print(
+                "The summarize step has not been run yet. To include the 'best-fit' model please run "
+                "{self}.summarize() before calling this step!"
+            )
+            add_model = False
+        else:
+            if isinstance(self, CombinedModel):
+                model = self.get_model()
+            else:
+                model = {"total": self.get_model()}
+            add_model = True
+
+        if ax is None:
+            ax = plt.subplot()
+        plt.sca(ax)
+
+        self.data.plot(ax=ax, **kw)
+        spacing = ax._most_recent_chromatic_plot_spacing
+
+        if add_model:
+            for i in range(self.data.nwave):
+                ax.plot(
+                    self.data.time.to_value(t_unit),
+                    model["total"][f"w{i}"] - (i * spacing),
+                    color="k",
+                )
+        plt.show()
+        plt.close()
+
+        # if add_model and detrend:
 
     def extract_from_posteriors(self, summary, i, op="mean"):
         # there"s definitely a sleeker way to do this
@@ -617,7 +698,7 @@ class LightcurveModel:
 
 
 class CombinedModel(LightcurveModel):
-    def __init__(self, name="combined_model", **kw):
+    def __init__(self, name="combined", **kw):
         super().__init__(name, **kw)
         self.name = name
 
@@ -782,6 +863,63 @@ class CombinedModel(LightcurveModel):
                 ](self.every_light_curve, mod.every_light_curve)
             # self.every_light_curve = add_dicts(self.every_light_curve, mod.every_light_curve)
 
+        with self.pymc3_model:
+            for k in self.every_light_curve.keys():
+                w = k.split("_")[-1]
+                Deterministic(f"{self.name}_model_w{w}", self.every_light_curve[k])
+
+    def get_model(self):
+        """
+        Extract each of the 'best-fit' models from the arviz summary table.
+        """
+        # self.apply_operation_to_constituent_models("get_model")
+        all_models, total_model = {}, {}
+        for i, (name, m) in enumerate(self.chromatic_models.items()):
+            model = m.get_model()
+            all_models[name] = model
+            total_model = combination_options[self.how_to_combine[i - 1]](
+                total_model, model
+            )
+        all_models["total"] = total_model
+
+        return all_models
+
+    def imshow_with_models(self, **kw):
+        transit_model, systematics_model, total_model = {}, {}, {}
+        i_transit, i_sys = 0, 0
+        for i, mod in enumerate(self.chromatic_models.values()):
+            if isinstance(mod, TransitModel):
+                if i_transit == 0:
+                    transit_model = mod.get_model()
+                else:
+                    # I'm not sure this works if the combination option is multiply or divide
+                    transit_model = combination_options[self.how_to_combine[i - 1]](
+                        transit_model, mod.get_model()
+                    )
+                i_transit += 1
+            else:
+                if i_sys == 0:
+                    systematics_model = mod.get_model()
+                else:
+                    systematics_model = combination_options[self.how_to_combine[i - 1]](
+                        systematics_model, mod.get_model()
+                    )
+                i_sys += 1
+
+            if i == 0:
+                total_model = mod.get_model()
+            else:
+                total_model = combination_options[self.how_to_combine[i - 1]](
+                    total_model, mod.get_model()
+                )
+
+        r_with_model = self.data.attach_model(
+            model=np.array(list(total_model.values())),
+            transit_model=np.array(list(transit_model.values())),
+            systematics_model=np.array(list(systematics_model.values())),
+        )
+        r_with_model.imshow_with_models(**kw)
+
 
 class PolynomialModel(LightcurveModel):
     def __init__(self, degree, independant_variable="time", name="polynomial", **kw):
@@ -894,6 +1032,11 @@ class PolynomialModel(LightcurveModel):
         for d in range(self.degree + 1):
             poly.append(poly_params[f"p_{d}"][d] * (data.time.to_value("day") ** d))
         return np.sum(poly, axis=0)
+
+    def imshow_with_models(self, **kw):
+        model = self.get_model(as_array=True)
+        r_with_model = self.data.attach_model(model=model, systematics_model=model)
+        r_with_model.imshow_with_models(**kw)
 
 
 class TransitModel(LightcurveModel):
@@ -1118,57 +1261,62 @@ class TransitModel(LightcurveModel):
             plt.show()
             plt.close()
 
-    def plot_lightcurves(self, summary=None, trace=None, ax=None, **kw):
-        if ax is None:
-            ax = plt.subplot()
-        plt.sca(ax)
+    def imshow_with_models(self, **kw):
+        model = self.get_model(as_array=True)
+        r_with_model = self.data.attach_model(model=model, transit_model=model)
+        r_with_model.imshow_with_models(**kw)
 
-        data = self.get_data()
-
-        if summary is not None:
-            params = [
-                "period",
-                "epoch",
-                "impact_parameter",
-                "stellar_radius",
-                "stellar_mass",
-                "stellar_mass",
-                "limb_darkening",
-                "radius_ratio",
-            ]
-            param_dict = {}
-            posterior_means = summary["mean"]
-
-            for p in params:
-                if self.parameters[p] in posterior_means.index:
-                    param_dict[p] = posterior_means[p]
-                else:
-                    param_dict[p] = self.parameters[p].value
-
-            orbit = xo.orbits.KeplerianOrbit(
-                period=param_dict["period"],
-                t0=param_dict["epoch"],
-                b=param_dict["impact_parameter"],
-                r_star=param_dict["stellar_radius"],
-                m_star=param_dict["stellar_mass"],
-            )
-            xo.LimbDarkLightCurve(param_dict["limb_darkening"]).get_light_curve(
-                orbit=self.orbit,
-                r=param_dict["radius_ratio"] * param_dict["stellar_radius"],
-                t=list(data.time.to_value("day")),
-            )
-
-            if trace is not None:
-                ndraws = 50
-                posterior_traces = self.sample_posterior(ndraws=ndraws)
-                plt.plot(posterior_traces)
-                for i in range(ndraws):
-                    flux_for_this_sample = np.array(
-                        [
-                            posterior_traces[f"wavelength_{w}_data"][i]
-                            for w in range(data.nwave)
-                        ]
-                    )
-                    plt.plot(data.time, flux_for_this_sample)
-
-        data.plot(ax=ax, **kw)
+    # def plot_lightcurves(self, summary=None, trace=None, ax=None, **kw):
+    #     if ax is None:
+    #         ax = plt.subplot()
+    #     plt.sca(ax)
+    #
+    #     data = self.get_data()
+    #
+    #     if summary is not None:
+    #         params = [
+    #             "period",
+    #             "epoch",
+    #             "impact_parameter",
+    #             "stellar_radius",
+    #             "stellar_mass",
+    #             "stellar_mass",
+    #             "limb_darkening",
+    #             "radius_ratio",
+    #         ]
+    #         param_dict = {}
+    #         posterior_means = summary["mean"]
+    #
+    #         for p in params:
+    #             if self.parameters[p] in posterior_means.index:
+    #                 param_dict[p] = posterior_means[p]
+    #             else:
+    #                 param_dict[p] = self.parameters[p].value
+    #
+    #         orbit = xo.orbits.KeplerianOrbit(
+    #             period=param_dict["period"],
+    #             t0=param_dict["epoch"],
+    #             b=param_dict["impact_parameter"],
+    #             r_star=param_dict["stellar_radius"],
+    #             m_star=param_dict["stellar_mass"],
+    #         )
+    #         xo.LimbDarkLightCurve(param_dict["limb_darkening"]).get_light_curve(
+    #             orbit=self.orbit,
+    #             r=param_dict["radius_ratio"] * param_dict["stellar_radius"],
+    #             t=list(data.time.to_value("day")),
+    #         )
+    #
+    #         if trace is not None:
+    #             ndraws = 50
+    #             posterior_traces = self.sample_posterior(ndraws=ndraws)
+    #             plt.plot(posterior_traces)
+    #             for i in range(ndraws):
+    #                 flux_for_this_sample = np.array(
+    #                     [
+    #                         posterior_traces[f"wavelength_{w}_data"][i]
+    #                         for w in range(data.nwave)
+    #                     ]
+    #                 )
+    #                 plt.plot(data.time, flux_for_this_sample)
+    #
+    #     data.plot(ax=ax, **kw)
