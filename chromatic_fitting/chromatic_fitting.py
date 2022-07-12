@@ -884,7 +884,7 @@ class CombinedModel(LightcurveModel):
 
         return all_models
 
-    def imshow_with_models(self, **kw):
+    def add_model_to_rainbow(self):
         transit_model, systematics_model, total_model = {}, {}, {}
         i_transit, i_sys = 0, 0
         for i, mod in enumerate(self.chromatic_models.values()):
@@ -918,7 +918,17 @@ class CombinedModel(LightcurveModel):
             transit_model=np.array(list(transit_model.values())),
             systematics_model=np.array(list(systematics_model.values())),
         )
-        r_with_model.imshow_with_models(**kw)
+        self.data_with_model = r_with_model
+
+    def imshow_with_models(self, **kw):
+        if not hasattr(self, "data_with_model"):
+            self.add_model_to_rainbow()
+        self.data_with_model.imshow_with_models(**kw)
+
+    def animate_with_models(self, **kw):
+        if not hasattr(self, "data_with_model"):
+            self.add_model_to_rainbow()
+        self.data_with_model.animate_with_models(**kw)
 
 
 class PolynomialModel(LightcurveModel):
