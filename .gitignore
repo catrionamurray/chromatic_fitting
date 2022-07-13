@@ -1,6 +1,7 @@
 *.csv
 chromatic
 chromatic_fitting/pymc
+JWST_data
 *.pyc
 .ipynb_checkpoints
 .idea

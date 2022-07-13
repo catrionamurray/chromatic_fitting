@@ -53,43 +53,6 @@ combination_options = {
 }
 
 
-def add_string_before_each_dictionary_key(dict_old, string_to_add):
-    dict_new = {}
-    for k, v in dict_old.items():
-        dict_new[f"{string_to_add}_{k}"] = v
-    return dict_new
-
-
-def import_patricio_model():
-    """Import spectral model
-    Returns
-    ---------
-        model : PlanetarySpectrumModel
-            Planetary spectrum model
-        planet_params : dict
-            Planetary parameters
-        wavelength : np.array
-            Wavelengths
-        transmission : np.array
-            Transmission values
-    """
-    x = pickle.load(open("../../data_challenge_spectra_v01.pickle", "rb"))
-    # lets load a model
-    planet = x["WASP39b_NIRSpec"]
-    planet_params = x["WASP39b_parameters"]
-    # print(planet_params)
-
-    wavelength = planet["wl"]
-    transmission = planet["transmission"]
-    table = Table(
-        dict(wavelength=planet["wl"], depth=planet["transmission"]), meta=planet_params
-    )
-
-    # set up a new model spectrum
-    model = PlanetarySpectrumModel(table=table, label="injected model")
-    return model, planet_params, wavelength, transmission
-
-
 class LightcurveModel:
     required_parameters = []
 
@@ -602,7 +565,10 @@ class LightcurveModel:
             # plot the rainbow quantities:
             data.imshow_quantities()
 
-    def get_model(self, as_dict=True, as_array=False):
+    def extract_deterministic_model(self):
+        """
+        Extract the deterministic model from the summary statistics
+        """
         if self.optimization == "separate":
             datas = [self.get_data(i) for i in range(self.data.nwave)]
         else:
@@ -617,7 +583,13 @@ class LightcurveModel:
                     model[f"w{w}"].append(
                         self.summary["mean"][f"{self.name}_model_w{w}[{t}]"]
                     )
+        return model
 
+    def get_model(self, as_dict=True, as_array=False):
+        """
+        Return the 'best-fit' model from the summary table as a dictionary or as an array
+        """
+        model = self.extract_deterministic_model()
         if as_array:
             return np.array(list(model.values()))
         elif as_dict:
@@ -695,6 +667,45 @@ class LightcurveModel:
                     fv[k] = v.value
 
         return fv
+
+    def imshow_with_models(self, **kw):
+        """
+        Plot the lightcurves with the best-fit models (if they exist).
+        [Wrapper for chromatic]
+        """
+        if not hasattr(self, "data_with_model"):
+            print(
+                "No model attached to data. Running `add_model_to_rainbow` now. You can access this data later"
+                "using [self].data_with_model"
+            )
+            self.add_model_to_rainbow()
+        self.data_with_model.imshow_with_models(**kw)
+
+    def animate_with_models(self, **kw):
+        """
+        Animate the lightcurves with the best-fit models (if they exist).
+        [Wrapper for chromatic]
+        """
+        if not hasattr(self, "data_with_model"):
+            print(
+                "No model attached to data. Running `add_model_to_rainbow` now. You can access this data later"
+                "using [self].data_with_model"
+            )
+            self.add_model_to_rainbow()
+        self.data_with_model.animate_with_models(**kw)
+
+    def plot_with_model_and_residuals(self, **kw):
+        """
+        Plot the lightcurves with the best-fit models (if they exist) and residuals.
+        [Wrapper for chromatic]
+        """
+        if not hasattr(self, "data_with_model"):
+            print(
+                "No model attached to data. Running `add_model_to_rainbow` now. You can access this data later"
+                "using [self].data_with_model"
+            )
+            self.add_model_to_rainbow()
+        self.data_with_model.plot_with_model_and_residuals(**kw)
 
 
 class CombinedModel(LightcurveModel):
@@ -849,42 +860,67 @@ class CombinedModel(LightcurveModel):
         """
         Set-up lightcurves in combined model : for each consituent model set-up the lightcurves according to their type
         """
+
         self.every_light_curve = {}
+        # for each constituent model set-up the lightcurves according to their model type:
         self.apply_operation_to_constituent_models("setup_lightcurves")
+
         for i, mod in enumerate(self.chromatic_models.values()):
+            # for each lightcurve in the combined model, add/subtract/multiply/divide the lightcurve into the combined
+            # model
             if i == 0:
                 self.every_light_curve = add_dicts(
                     self.every_light_curve, mod.every_light_curve
                 )
             else:
-                # print(self.name, self.how_to_combine[i-1], mod.name)
                 self.every_light_curve = combination_options[
                     self.how_to_combine[i - 1]
                 ](self.every_light_curve, mod.every_light_curve)
-            # self.every_light_curve = add_dicts(self.every_light_curve, mod.every_light_curve)
 
+        # add a Deterministic parameter for easy extraction of the model later:
         with self.pymc3_model:
             for k in self.every_light_curve.keys():
                 w = k.split("_")[-1]
                 Deterministic(f"{self.name}_model_w{w}", self.every_light_curve[k])
 
+    def get_results(self, **kw):
+        """
+        Extract the 'best-fit' parameter mean + error values from the summary table for each constituent model
+        """
+        results = []
+        for mod in self.chromatic_models.values():
+            results.append(mod.get_results(**kw))
+        # combine the results from all models:
+        df = pd.concat(results, axis=1)
+        # remove duplicated columns (wavelength):
+        df = df.loc[:, ~df.columns.duplicated()].copy()
+        return df
+
     def get_model(self):
         """
         Extract each of the 'best-fit' models from the arviz summary table.
         """
-        # self.apply_operation_to_constituent_models("get_model")
+        # can't use 'self.apply_operation_to_constituent_models("get_model")' because it returns the model
         all_models, total_model = {}, {}
+        # for each constituent model get its 'best-fit' model:
         for i, (name, m) in enumerate(self.chromatic_models.items()):
+            # get 'best-fit' model from constituent model:
             model = m.get_model()
             all_models[name] = model
-            total_model = combination_options[self.how_to_combine[i - 1]](
-                total_model, model
-            )
-        all_models["total"] = total_model
+            # add this model to the total model:
+            # total_model = combination_options[self.how_to_combine[i - 1]](
+            #     total_model, model
+            # )
+        # save the total model (for plotting/detrending):
+        all_models["total"] = self.extract_deterministic_model()  # total_model
 
         return all_models
 
     def add_model_to_rainbow(self):
+        """
+        Add the 'best-fit' model to the `rainbow` object.
+        """
+
         transit_model, systematics_model, total_model = {}, {}, {}
         i_transit, i_sys = 0, 0
         for i, mod in enumerate(self.chromatic_models.values()):
@@ -892,7 +928,7 @@ class CombinedModel(LightcurveModel):
                 if i_transit == 0:
                     transit_model = mod.get_model()
                 else:
-                    # I'm not sure this works if the combination option is multiply or divide
+                    # I'm not sure that this works if the combination option is multiply or divide
                     transit_model = combination_options[self.how_to_combine[i - 1]](
                         transit_model, mod.get_model()
                     )
@@ -913,26 +949,32 @@ class CombinedModel(LightcurveModel):
                     total_model, mod.get_model()
                 )
 
+        # add the models to the rainbow object:
         r_with_model = self.data.attach_model(
             model=np.array(list(total_model.values())),
             transit_model=np.array(list(transit_model.values())),
             systematics_model=np.array(list(systematics_model.values())),
         )
+
+        # save the rainbow_with_model for plotting:
         self.data_with_model = r_with_model
-
-    def imshow_with_models(self, **kw):
-        if not hasattr(self, "data_with_model"):
-            self.add_model_to_rainbow()
-        self.data_with_model.imshow_with_models(**kw)
-
-    def animate_with_models(self, **kw):
-        if not hasattr(self, "data_with_model"):
-            self.add_model_to_rainbow()
-        self.data_with_model.animate_with_models(**kw)
 
 
 class PolynomialModel(LightcurveModel):
+    """
+    A polynomial model for the lightcurve.
+    """
+
     def __init__(self, degree, independant_variable="time", name="polynomial", **kw):
+        """
+        Initialize the polynomial model.
+
+        :parameter degree (integer): the degree of the polynomial
+        :parameter independant_variable (str): the independant variable of the polynomial (default = time)
+        :parameter name (str): the name of the model (default = "polynomial")
+        :parameter kw: keyword arguments for initialising the chromatic model
+        """
+        # only require the constant term:
         self.required_parameters = ["p_0"]
 
         super().__init__(**kw)
@@ -946,12 +988,21 @@ class PolynomialModel(LightcurveModel):
         self.set_name(name)
 
     def __repr__(self):
+        """
+        Print the polynomial model.
+        """
         return "<chromatic polynomial model 🌈>"
 
     def set_name(self, name):
+        """
+        Set the name of the model.
+        """
         self.name = name
 
     def set_defaults(self):
+        """
+        Set the default parameters for the model.
+        """
         for d in range(self.degree + 1):
             try:
                 self.defaults = self.defaults | {f"p_{d}": 0.0}
@@ -959,40 +1010,34 @@ class PolynomialModel(LightcurveModel):
                 # the | dictionary addition is only in Python 3.9
                 self.defaults = {**self.defaults, **{f"p_{d}": 0.0}}
 
-    def get_prior(self, i, *args, **kwargs):
-        data = self.get_data()
-        # self.degree = self.parameters["p"].inputs["shape"] - 1
-        x = data.time.to_value("day")
-        poly = []
+    # def get_prior(self, i, *args, **kwargs):
+    #     data = self.get_data()
+    #     # self.degree = self.parameters["p"].inputs["shape"] - 1
+    #     x = data.time.to_value("day")
+    #     poly = []
+    #
+    #     p = self.parameters["p"].get_prior(i)
+    #
+    #     for d in range(self.degree + 1):
+    #         # p = self.parameters[f"p_{d}"].get_prior(i)
+    #         # fluxlike: x[i]
+    #         # x = self.data.get(fluxlike_thing:str)[i_wave,:]
+    #         poly.append(p[d] * (x**d))
+    #
+    #     return pm.math.sum(poly, axis=0)
 
-        p = self.parameters["p"].get_prior(i)
-
-        for d in range(self.degree + 1):
-            # p = self.parameters[f"p_{d}"].get_prior(i)
-            # fluxlike: x[i]
-            # x = self.data.get(fluxlike_thing:str)[i_wave,:]
-            poly.append(p[d] * (x**d))
-
-        return pm.math.sum(poly, axis=0)
-
-    def setup_lightcurves(self, timelike=None):
+    def setup_lightcurves(self):
         """
         Create a polynomial model, given the stored parameters.
         [This should be run after .attach_data()]
         """
-        # find the number of polynomial degrees to fit based on the user input
-        # if "shape" not in self.parameters["p_0"].inputs.keys():
-        #     self.get_parameter_shape(self.parameters["p"])
-        # self.degree = self.parameters["p"].inputs["shape"] - 1
 
         if self.optimization == "separate":
             models = self.pymc3_model
-            if timelike is None:
-                datas = [self.get_data(i) for i in range(self.data.nwave)]
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
         else:
             models = [self.pymc3_model]
-            if timelike is None:
-                datas = [self.get_data()]
+            datas = [self.get_data()]
 
         # if the model has a name then add this to each parameter's name
         if hasattr(self, "name"):
@@ -1005,28 +1050,26 @@ class PolynomialModel(LightcurveModel):
 
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
-                # x = data.time.to_value("day")
                 for i, w in enumerate(data.wavelength):
-                    # compute polynomial of user-defined degree
                     poly = []
 
-                    # print(i, self.independant_variable)
+                    # get the independent variable from the Rainbow object:
                     x = data.get(self.independant_variable)
                     if len(np.shape(x)) > 1:
                         x = x[i, :]
+                    # if the independant variable is time, convert to days:
                     if self.independant_variable == "time":
                         x = x.to_value("day")
 
-                    # p = self.parameters["p"].get_prior(i+j)
+                    # compute the polynomial:
                     for d in range(self.degree + 1):
-                        # print(d)
                         p = self.parameters[f"{name}p_{d}"].get_prior(i + j)
-                        # print(f"{name}p_{d}", p)
                         poly.append(p * (x**d))
-                    # print(poly, "\n", eval_in_model(pm.math.sum(poly,axis=0)))
 
+                    # add a Deterministic parameter to the model for easy extraction later:
                     Deterministic(f"{name}model_w{i + j}", pm.math.sum(poly, axis=0))
 
+                    # add the polynomial to the overall lightcurve:
                     if f"wavelength_{i + j}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_{i + j}"] = pm.math.sum(
                             poly, axis=0
@@ -1037,23 +1080,58 @@ class PolynomialModel(LightcurveModel):
                         )
 
     def polynomial_model(self, poly_params):
+        """
+        Create a polynomial model, given the passed parameters.
+        :parameter poly_params (dict): the parameters of the polynomial
+        """
         data = self.get_data()
         poly = []
+
+        # get the independent variable from the Rainbow object:
+        x = data.get(self.independant_variable)
+        # if len(np.shape(x)) > 1:
+        #     x = x[i, :]
+        # if the independant variable is time, convert to days:
+        if self.independant_variable == "time":
+            x = x.to_value("day")
+
         for d in range(self.degree + 1):
-            poly.append(poly_params[f"p_{d}"][d] * (data.time.to_value("day") ** d))
+            poly.append(poly_params[f"p_{d}"][d] * (x**d))
         return np.sum(poly, axis=0)
 
-    def imshow_with_models(self, **kw):
+    def add_model_to_rainbow(self):
+        """
+        Add the polynomial model to the Rainbow object.
+        """
         model = self.get_model(as_array=True)
         r_with_model = self.data.attach_model(model=model, systematics_model=model)
-        r_with_model.imshow_with_models(**kw)
+        self.data_with_model = r_with_model
+
+    # def imshow_with_models(self, **kw):
+    #     """
+    #     Imshow the Rainbow with the model.
+    #     """
+    #     model = self.get_model(as_array=True)
+    #     r_with_model = self.data.attach_model(model=model, systematics_model=model)
+    #     r_with_model.imshow_with_models(**kw)
 
 
 class TransitModel(LightcurveModel):
+    """
+    A transit model for the lightcurve.
+    """
+
     def __repr__(self):
+        """
+        Print the transit model.
+        """
         return "<chromatic transit model 🌈>"
 
     def __init__(self, name="transit", **kw):
+        """
+        Initialise the transit model.
+        """
+
         self.required_parameters = [
             "stellar_radius",
             "stellar_mass",
@@ -1067,13 +1145,12 @@ class TransitModel(LightcurveModel):
 
         super().__init__(**kw)
         self.set_defaults()
-
-        # if name is not None:
-        # self.required_parameters = [f"{name}_{a}" for a in self.required_parameters]
-        # self.defaults = add_string_before_each_dictionary_key(self.defaults, name)
         self.set_name(name)
 
     def set_defaults(self):
+        """
+        Set the default parameters for the model.
+        """
         self.defaults = dict(
             stellar_radius=1.0,
             stellar_mass=1.0,
@@ -1086,6 +1163,10 @@ class TransitModel(LightcurveModel):
         )
 
     def set_name(self, name):
+        """
+        Set the name of the model.
+        :paramter name (str): the name of the model
+        """
         self.name = name
 
     def setup_orbit(self):
@@ -1204,9 +1285,10 @@ class TransitModel(LightcurveModel):
                         self.parameters[name + "baseline"].get_prior(j + i)
                     )
 
+                    # add a Deterministic parameter to the model for easy extraction later
                     Deterministic(f"{name}model_w{i + j}", mu)
 
-                    # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
+                    # add the transit to the light curve
                     if f"wavelength_{j + i}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_{j + i}"] = pm.math.sum(
                             light_curves, axis=-1
@@ -1221,6 +1303,10 @@ class TransitModel(LightcurveModel):
                 ]
 
     def transit_model(self, transit_params):
+        """
+        Create a transit model given the passed parameters.
+        :parameter transit_params (dict): A dictionary of parameters to be used in the transit model.
+        """
         data = self.get_data()
         orbit = xo.orbits.KeplerianOrbit(
             period=transit_params["period"],
@@ -1243,8 +1329,11 @@ class TransitModel(LightcurveModel):
     def plot_orbit(self, timedata=None):
         """
         Plot the orbit model.
+        :parameter timedata (array): An array of times to plot the orbit at (assuming that .attach_data() hasn't been
+        run yet).
         """
 
+        # If the data hasn't been attached yet, then use the timedata passed to the function
         if not hasattr(self, "data"):
             if timedata is None:
                 warnings.warn(
@@ -1257,6 +1346,7 @@ class TransitModel(LightcurveModel):
         else:
             timedata = self.data.time
 
+        # plot the orbit
         with self.pymc3_model:
             x, y, z = [
                 eval_in_model(bla, point=self.pymc3_model.test_point)
@@ -1271,10 +1361,21 @@ class TransitModel(LightcurveModel):
             plt.show()
             plt.close()
 
-    def imshow_with_models(self, **kw):
+    def add_model_to_rainbow(self):
+        """
+        Add the transit model to the Rainbow object.
+        """
         model = self.get_model(as_array=True)
         r_with_model = self.data.attach_model(model=model, transit_model=model)
-        r_with_model.imshow_with_models(**kw)
+        self.data_with_model = r_with_model
+
+    # def imshow_with_models(self, **kw):
+    #     """
+    #     Imshow the data and the transit model.
+    #     """
+    #     model = self.get_model(as_array=True)
+    #     r_with_model = self.data.attach_model(model=model, transit_model=model)
+    #     r_with_model.imshow_with_models(**kw)
 
     # def plot_lightcurves(self, summary=None, trace=None, ax=None, **kw):
     #     if ax is None:

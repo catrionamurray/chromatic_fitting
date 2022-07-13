@@ -231,3 +231,40 @@ def remove_nans(arr_with_nans, *otherarrs):
         nanfree_arrs.append(arr[~np.isnan(arr_with_nans)])
     arr_without_nans = arr_with_nans[~np.isnan(arr_with_nans)]
     return arr_without_nans, nanfree_arrs
+
+
+def add_string_before_each_dictionary_key(dict_old, string_to_add):
+    dict_new = {}
+    for k, v in dict_old.items():
+        dict_new[f"{string_to_add}_{k}"] = v
+    return dict_new
+
+
+def import_patricio_model():
+    """Import spectral model
+    Returns
+    ---------
+        model : PlanetarySpectrumModel
+            Planetary spectrum model
+        planet_params : dict
+            Planetary parameters
+        wavelength : np.array
+            Wavelengths
+        transmission : np.array
+            Transmission values
+    """
+    x = pickle.load(open("../../data_challenge_spectra_v01.pickle", "rb"))
+    # lets load a model
+    planet = x["WASP39b_NIRSpec"]
+    planet_params = x["WASP39b_parameters"]
+    # print(planet_params)
+
+    wavelength = planet["wl"]
+    transmission = planet["transmission"]
+    table = Table(
+        dict(wavelength=planet["wl"], depth=planet["transmission"]), meta=planet_params
+    )
+
+    # set up a new model spectrum
+    model = PlanetarySpectrumModel(table=table, label="injected model")
+    return model, planet_params, wavelength, transmission
