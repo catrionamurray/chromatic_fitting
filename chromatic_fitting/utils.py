@@ -240,6 +240,40 @@ def add_string_before_each_dictionary_key(dict_old, string_to_add):
     return dict_new
 
 
+def remove_data_outliers(r, data_mask):
+    """
+    Remove outliers from the data.
+    [Ideally to be replaced with some chromatic.flag_outliers() function]
+    """
+    # from astropy.stats import sigma_clip
+
+    data_outliers_removed = r._create_copy()
+
+    # for each wavelength, sigma clip in time:
+    for w in range(data_outliers_removed.nwave):
+        data_outliers_removed.flux[w, :] = np.ma.masked_where(
+            data_mask[w] == True, data_outliers_removed.flux[w, :]
+        ).filled(np.nan)
+
+    return data_outliers_removed
+
+
+def get_data_outlier_mask(r, **kw):
+    """
+    Remove outliers from the data.
+    [Ideally to be replaced with some chromatic.flag_outliers() function]
+    """
+    from astropy.stats import sigma_clip
+
+    data_outliers_mask = []
+
+    # for each wavelength, sigma clip in time:
+    for w in range(r.nwave):
+        data_outliers_mask.append(np.ma.getmask(sigma_clip(r.flux[w, :], **kw)))
+
+    return data_outliers_mask
+
+
 def import_patricio_model():
     """Import spectral model
     Returns
