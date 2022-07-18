@@ -2,11 +2,7 @@ import chromatic
 import numpy as np
 
 import exoplanet as xo
-<<<<<<< HEAD
 import starry
-=======
-# import starry
->>>>>>> main
 # import theano
 # import pickle5 as pickle # needed for Python v3.7!
 import sys
