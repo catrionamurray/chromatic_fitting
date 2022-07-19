@@ -340,9 +340,6 @@ class LightcurveModel:
                         # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
                         if mask_outliers:
                             flux = self.data_without_outliers.flux[i + j, :]
-                            # flux = np.ma.masked_where(
-                            #     data_mask[i + j] == True, data.flux[i, :]
-                            # ).filled(np.nan)
                         else:
                             flux = data.flux[i, :]
 
@@ -720,7 +717,7 @@ class LightcurveModel:
         spacing = ax._most_recent_chromatic_plot_spacing
 
         if add_model:
-            for i in range(self.data.nwave):
+            for i in range(data.nwave):
                 ax.plot(
                     data.time.to_value(t_unit),
                     model["total"][f"w{i}"] - (i * spacing),
@@ -958,9 +955,12 @@ class CombinedModel(LightcurveModel):
 
     def choose_optimization_method(self, optimization_method="simultaneous"):
         LightcurveModel.choose_optimization_method(self, optimization_method)
-        self.apply_operation_to_constituent_models(
-            "choose_optimization_method", optimization_method
-        )
+        # self.apply_operation_to_constituent_models(
+        #     "choose_optimization_method", optimization_method
+        # )
+        for m in self.chromatic_models.values():
+            m.optimization = optimization_method
+
         if optimization_method == "separate":
             self.apply_operation_to_constituent_models("change_all_priors_to_Wavelike")
 
@@ -1125,6 +1125,7 @@ class PolynomialModel(LightcurveModel):
         self.degree = degree
         self.independant_variable = independant_variable
         self.set_defaults()
+        self.metadata = {}
 
         # if name is not None:
         # self.required_parameters = [f"{name}_{a}" for a in self.required_parameters]
@@ -1204,6 +1205,17 @@ class PolynomialModel(LightcurveModel):
                     # if the independant variable is time, convert to days:
                     if self.independant_variable == "time":
                         x = x.to_value("day")
+                    else:
+                        try:
+                            x = x.to_value()
+                        except AttributeError:
+                            pass
+
+                    # normalise the x values and store the mean/std values in metadata
+                    self.metadata["mean_" + self.independant_variable] = np.mean(x)
+                    self.metadata["std_" + self.independant_variable] = np.std(x)
+                    x = (x - np.mean(x)) / np.std(x)
+                    self.independant_variable_normalised = x
 
                     # compute the polynomial:
                     for d in range(self.degree + 1):
@@ -1240,7 +1252,7 @@ class PolynomialModel(LightcurveModel):
             x = x.to_value("day")
 
         for d in range(self.degree + 1):
-            poly.append(poly_params[f"p_{d}"][d] * (x**d))
+            poly.append(poly_params[f"{self.name}_p_{d}"][d] * (x**d))
         return np.sum(poly, axis=0)
 
     def add_model_to_rainbow(self):
@@ -1403,8 +1415,6 @@ class TransitModel(LightcurveModel):
         else:
             name = ""
             print("No name set for the model.")
-
-        # print(name)
 
         # set up the models, data and orbits in a format for looping
         if self.optimization == "separate":
