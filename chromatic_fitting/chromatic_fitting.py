@@ -1281,10 +1281,10 @@ class EclipseModel(LightcurveModel):
                                                 ecc=self.parameters[name+"eccentricity"].get_prior(j + i),  # eccentricity
                                                 w=self.parameters[name+"omega"].get_prior(j + i),  # longitude of pericenter in degrees
                                                 t0=self.parameters[name+"t0"].get_prior(j + i),  # time of transit in days
-                                            )
+                                            length_unit=u.R_jup,mass_unit=u.M_jup,)
 
                     system = starry.System(star, planet)
-                    flux_model = Deterministic(name+f"{j+i}", system.flux(self.data.time))
+                    flux_model = Deterministic(name+f"{j+i}", system.flux(data.time))
 
 
                     # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
@@ -1329,6 +1329,7 @@ class EclipseModel(LightcurveModel):
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
                 for k, w in enumerate(data.wavelength):
+
                     star = starry.Primary(starry.Map(ydeg=0, udeg=2, amp=params[name+"stellar_amplitude"+f"_w{k}"], inc=90.0, obl=0.0),
                                                     m=params[name+"stellar_mass"+f"_w{k}"],
                                                     r= params[name+"stellar_radius"+f"_w{k}"],
@@ -1347,7 +1348,7 @@ class EclipseModel(LightcurveModel):
                                                 ecc=params[name+"eccentricity"+f"_w{k}"],  # eccentricity
                                                 w=params[name+"omega"+f"_w{k}"],  # longitude of pericenter in degrees
                                                 t0=params[name+"t0"+f"_w{k}"],  # time of transit in days
-                                            )
+                                            length_unit=u.R_jup,mass_unit=u.M_jup,)
 
                     system = starry.System(star, planet)
                     flux_model.append(system.flux(data.time).eval())
