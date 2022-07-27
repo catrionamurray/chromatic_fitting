@@ -334,7 +334,15 @@ class LightcurveModel:
         if mask_outliers:
             # if the user has specified a mask, then use that
             if data_mask is None:
+                # sigma-clip in time
                 data_mask = get_data_outlier_mask(data, **kw)
+                # sigma-clip in wavelength
+                data_mask[
+                    get_data_outlier_mask(
+                        data, clip_axis="wavelength", **kw
+                    )  # sigma=4.5)
+                    == True
+                ] = True
                 # data_mask_wave =  get_data_outlier_mask(data, clip_axis='wavelength', sigma=4.5)
             self.outlier_mask = data_mask
             self.outlier_flag = True
