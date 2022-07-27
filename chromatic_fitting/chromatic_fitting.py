@@ -7,7 +7,12 @@ from tqdm import tqdm
 from .parameters import *
 from arviz import summary
 from pymc3_ext import eval_in_model, optimize, sample
-from pymc3 import sample_prior_predictive, sample_posterior_predictive, Deterministic
+from pymc3 import (
+    sample_prior_predictive,
+    sample_posterior_predictive,
+    Deterministic,
+    Normal,
+)
 import warnings
 import collections
 
@@ -307,7 +312,9 @@ class LightcurveModel:
         # else:
         return self.data
 
-    def setup_likelihood(self, mask_outliers=False, data_mask=None, **kw):
+    def setup_likelihood(
+        self, mask_outliers=False, data_mask=None, inflate_uncertainties=False, **kw
+    ):
         """
         Connect the light curve model to the actual data it aims to explain.
         """
@@ -328,14 +335,27 @@ class LightcurveModel:
             # if the user has specified a mask, then use that
             if data_mask is None:
                 data_mask = get_data_outlier_mask(data, **kw)
+                # data_mask_wave =  get_data_outlier_mask(data, clip_axis='wavelength', sigma=4.5)
             self.outlier_mask = data_mask
             self.outlier_flag = True
             self.data_without_outliers = remove_data_outliers(data, data_mask)
+
+        if inflate_uncertainties:
+            self.parameters["nsigma"] = WavelikeFitted(Normal, mu=1, sd=0.1)
+            self.parameters["nsigma"].set_name("nsigma")
 
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
                 for i, w in enumerate(data.wavelength):
                     k = f"wavelength_{j + i}"
+
+                    if inflate_uncertainties:
+                        uncertainties = data.uncertainty[i, :] * eval_in_model(
+                            self.parameters["nsigma"].get_prior(j + i)
+                        )
+                    else:
+                        uncertainties = data.uncertainty[i, :]
+
                     try:
                         # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
                         if mask_outliers:
@@ -346,7 +366,7 @@ class LightcurveModel:
                         pm.Normal(
                             f"{k}_data",
                             mu=self.every_light_curve[k],
-                            sd=data.uncertainty[i, :],
+                            sd=uncertainties,
                             observed=flux,
                         )
                     except Exception as e:
@@ -393,7 +413,7 @@ class LightcurveModel:
                     )
             return posteriors
 
-    def optimize(self, **kw):
+    def optimize(self, plot=True, plotkw={}, **kw):
         """
         Wrapper for PyMC3_ext sample
         """
@@ -409,10 +429,71 @@ class LightcurveModel:
                 for mod in self.pymc3_model:
                     with mod:
                         opts.append(optimize(**kw))
+            if plot:
+                self.plot_optimization(opts, **plotkw)
             return opts
         else:
             with self.pymc3_model:
-                return optimize(**kw)
+                opt = optimize(**kw)
+            if plot:
+                self.plot_optimization(opt, **plotkw)
+            return opt
+
+    def plot_optimization(self, opt, offset=0.03, figsize=(6, 18)):
+        if self.optimization == "separate":
+            opts = opt
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+        else:
+            opts = [opt]
+            datas = [self.get_data()]
+
+        plt.figure(figsize=figsize)
+        for j, (opt_sep, data) in enumerate(zip(opts, datas)):
+            for w in range(data.nwave):
+                try:
+                    if w == 0:
+                        plt.plot(
+                            data.time,
+                            ((w + j) * offset) + opt_sep[f"{self.name}_model_w{w + j}"],
+                            "k",
+                            label=self.name,
+                        )
+                    else:
+                        plt.plot(
+                            data.time,
+                            ((w + j) * offset) + opt_sep[f"{self.name}_model_w{w + j}"],
+                            "k",
+                        )
+
+                    if isinstance(self, CombinedModel):
+                        if w == 0:
+                            for mod in self.chromatic_models.values():
+                                plt.plot(
+                                    data.time,
+                                    ((w + j) * offset)
+                                    + opt_sep[f"{mod.name}_model_w{w + j}"],
+                                    label=mod.name,
+                                )
+                        else:
+                            for mod in self.chromatic_models.values():
+                                plt.plot(
+                                    data.time,
+                                    ((w + j) * offset)
+                                    + opt_sep[f"{mod.name}_model_w{w + j}"],
+                                )
+                except:
+                    pass
+                plt.plot(data.time, ((w + j) * offset) + data.flux[w, :], "k.")
+                plt.errorbar(
+                    data.time,
+                    ((w + j) * offset) + data.flux[w, :],
+                    data.uncertainty[w, :],
+                    color="k",
+                    linestyle="None",
+                    capsize=2,
+                )
+        plt.legend()
+        plt.show()
 
     def sample(self, **kw):
         """
@@ -814,6 +895,8 @@ class CombinedModel(LightcurveModel):
     def __init__(self, name="combined", **kw):
         super().__init__(name, **kw)
         self.name = name
+        self.metadata = {}
+        self.parameters = {}
 
     def __repr__(self):
         if hasattr(self, "chromatic_models"):
@@ -1323,6 +1406,8 @@ class TransitModel(LightcurveModel):
             epoch=0.0,
             baseline=1.0,
             impact_parameter=0.5,
+            eccentricity=0.0,
+            omega=np.pi / 2.0,
             limb_darkening=[0.2, 0.2],
         )
 
@@ -1362,6 +1447,8 @@ class TransitModel(LightcurveModel):
                     period=self.parameters[name + "period"].get_prior(j),
                     t0=self.parameters[name + "epoch"].get_prior(j),
                     b=self.parameters[name + "impact_parameter"].get_prior(j),
+                    # ecc=self.parameters[name + "eccentricity"].get_prior(j),
+                    # omega=self.parameters[name + "omega"].get_prior(j),
                     r_star=self.parameters[name + "stellar_radius"].get_prior(j),
                     m_star=self.parameters[name + "stellar_mass"].get_prior(j),
                 )
@@ -1479,6 +1566,8 @@ class TransitModel(LightcurveModel):
             period=transit_params["period"],
             t0=transit_params["epoch"],
             b=transit_params["impact_parameter"],
+            # ecc=transit_params["eccentricity"],
+            # omega=transit_params["omega"],
             r_star=transit_params["stellar_radius"],
             m_star=transit_params["stellar_mass"],
         )
