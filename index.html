@@ -62,7 +62,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#welcome-to-mkdocs" class="md-skip">
+        <a href="#chromatic_fitting" class="md-skip">
           Skip to content
         </a>
       
@@ -95,7 +95,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Welcome to MkDocs
+              Home
             
           </span>
         </div>
@@ -203,11 +203,21 @@
 
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="Welcome/" class="md-nav__link">
-        chromatic_fitting
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="." class="md-nav__link md-nav__link--active">
+        Home
       </a>
+      
     </li>
   
 
@@ -323,28 +333,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#commands" class="md-nav__link">
-    Commands
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#project-layout" class="md-nav__link">
-    Project layout
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -361,21 +349,10 @@
 
 
 
-<h1 id="welcome-to-mkdocs">Welcome to MkDocs</h1>
-<p>For full documentation visit <a href="https://www.mkdocs.org">mkdocs.org</a>.</p>
-<h2 id="commands">Commands</h2>
-<ul>
-<li><code>mkdocs new [dir-name]</code> - Create a new project.</li>
-<li><code>mkdocs serve</code> - Start the live-reloading docs server.</li>
-<li><code>mkdocs build</code> - Build the documentation site.</li>
-<li><code>mkdocs -h</code> - Print help message and exit.</li>
-</ul>
-<h2 id="project-layout">Project layout</h2>
-<pre><code>mkdocs.yml    # The configuration file.
-docs/
-    index.md  # The documentation homepage.
-    ...       # Other markdown pages, images and other files.
-</code></pre>
+<h1 id="chromatic_fitting"><code>chromatic_fitting</code></h1>
+<p>The <code>chromatic_fitting</code> package is a friendly, open-source python package that is built on the <a href="https://zkbt.github.io/chromatic/"><code>chromatic</code></a> tool. <code>chromatic</code> transforms spectroscopic light curves into <code>Rainbow</code> 🌈 objects which allows for easy visualization and comparison.</p>
+<p>This package uses <a href="https://docs.pymc.io/en/v3/index.html"><code>pymc3</code></a> and <a href="https://docs.exoplanet.codes/en/latest/"><code>exoplanet</code></a> to perform transit fits (as well as fits for other models) to spectroscopic light curve data. It can combine transit models with polynomial models (in time, x, y etc.) or Gaussian Process models to account for the systematics in the light curves and to fit all parameters simultaeously. There is also the option to perform fits for a 'white light curve', fit wavelengths independently or to fit all wavelengths simultaneously. This tool will also produce a transmission spectrum from the chosen fits.</p>
+<p>The goal of <code>chromatic_fitting</code> is to aid the fast, easy comparison of different data reduction techniques by standardizing the light curve-fitting stage. Its flexibility also allows the comparison of different types of fits and models to understand the impact on the corresponding transmission spectra. </p>
 
               
             </article>
@@ -386,6 +363,27 @@ docs/
       </main>
       
         <footer class="md-footer">
+  
+    
+    <nav class="md-footer__inner md-grid" aria-label="Footer" >
+      
+      
+        
+        <a href="how_to_install/" class="md-footer__link md-footer__link--next" aria-label="Next: Installation Guide" rel="next">
+          <div class="md-footer__title">
+            <div class="md-ellipsis">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              Installation Guide
+            </div>
+          </div>
+          <div class="md-footer__button md-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4Z"/></svg>
+          </div>
+        </a>
+      
+    </nav>
   
   <div class="md-footer-meta md-typeset">
     <div class="md-footer-meta__inner md-grid">
