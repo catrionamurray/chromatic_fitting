@@ -1,6 +1,6 @@
 site_name: chromatic_fitting
 nav:
-    - Welcome: Welcome.ipynb
+    - Home: index.md
 #     - API: api.md
     - Installation: how_to_install.ipynb
     - Tutorials:
