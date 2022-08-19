@@ -6,6 +6,7 @@ JWST_data
 .ipynb_checkpoints
 .idea
 chromatic_fitting/archive
+chromatic_fitting/tests
 *.npy
 *.fits
 *.txt

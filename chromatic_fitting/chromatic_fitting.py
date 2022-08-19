@@ -12,6 +12,7 @@ from pymc3 import (
     sample_posterior_predictive,
     Deterministic,
     Normal,
+    TruncatedNormal,
 )
 import warnings
 import collections
@@ -356,7 +357,9 @@ class LightcurveModel:
             self.data_without_outliers = remove_data_outliers(data, data_mask)
 
         if inflate_uncertainties:
-            self.parameters["nsigma"] = WavelikeFitted(Normal, mu=1, sd=0.1)
+            self.parameters["nsigma"] = WavelikeFitted(
+                TruncatedNormal, mu=1, sd=0.1, lower=1
+            )
             self.parameters["nsigma"].set_name("nsigma")
 
         for j, (mod, data) in enumerate(zip(models, datas)):

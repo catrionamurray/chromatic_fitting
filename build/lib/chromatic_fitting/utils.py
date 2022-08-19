@@ -1,5 +1,29 @@
 from .imports import *
 
+import numpy as np
+
+
+def wavecal(x):
+    """
+    Wavelength calibration from Flight Program 1076
+    for F322W2 filter - Everett Schlawin's code!
+
+    Inputs
+    ------
+    x: float or numpy array
+        Zero-based index of the X pixel
+
+    Returns
+    -------
+    wave: numpy array
+        Wavelength in microns
+    """
+    x0 = 1571.0
+    coeff = np.array([3.92693691e00, 9.81165339e-01, 1.66653554e-03, -2.87412352e-03])
+    xprime = (x - x0) / 1000.0
+    poly = np.polynomial.Polynomial(coeff)
+    return poly(xprime)
+
 
 def noise_calculator(data, maxnbins=None, binstep=1):
     """
