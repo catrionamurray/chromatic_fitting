@@ -1196,6 +1196,8 @@ class EclipseModel(LightcurveModel):
             "omega",
             "limbdark1",
             "limbdark2",
+            "offset",
+            "Y10",
             ]
 
         super().__init__(**kw)
@@ -1222,6 +1224,8 @@ class EclipseModel(LightcurveModel):
             omega = 0.0,
             limbdark1 = 0.4,
             limbdark2 = 0.2,
+            offset = 0.0,
+            Y10 = 0.0
         )
 
     def set_name(self, name):
@@ -1273,7 +1277,7 @@ class EclipseModel(LightcurveModel):
 
                     # Set up a Keplerian orbit for the planets
                     planet = starry.kepler.Secondary(
-                                                starry.Map(ydeg=0,udeg=0, amp=10 ** self.parameters[name+"planet_log_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),  # the surface map
+                                                starry.Map(ydeg=1,udeg=0, amp=10 ** self.parameters[name+"planet_log_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),  # the surface map
                                                 inc=self.parameters[name+"inclination"].get_prior(j + i),
                                                 m=self.parameters[name+"planet_mass"].get_prior(j + i),  # mass in solar masses
                                                 r=self.parameters[name+"planet_radius"].get_prior(j + i),  # radius in solar radii
@@ -1283,11 +1287,13 @@ class EclipseModel(LightcurveModel):
                                                 t0=self.parameters[name+"t0"].get_prior(j + i),  # time of transit in days
                                             length_unit=u.R_jup,mass_unit=u.M_jup,)
 
+                    planet.map[1, 0] = self.parameters[name+"Y10"].get_prior(j + i)
+                    planet.theta0 = 180.0 + self.parameters[name+"offset"].get_prior(j + i)
+
                     system = starry.System(star, planet)
                     flux_model = Deterministic(name+f"{j+i}", system.flux(data.time))
-
-
-                    # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
+                    
+		    # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
                     if f"wavelength_data_{j + i}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_data_{j + i}"] = flux_model
                     else:
@@ -1340,7 +1346,7 @@ class EclipseModel(LightcurveModel):
 
                     # Set up a Keplerian orbit for the planets
                     planet = starry.kepler.Secondary(
-                                                starry.Map(ydeg=0,udeg=0, amp=10 ** params[name+"planet_log_amplitude"+f"_w{k}"], inc=90.0, obl=0.0),  # the surface map
+                                                starry.Map(ydeg=1,udeg=0, amp=10 ** params[name+"planet_log_amplitude"+f"_w{k}"], inc=90.0, obl=0.0),  # the surface map
                                                 inc=params[name+"inclination"+f"_w{k}"],
                                                 m=params[name+"planet_mass"+f"_w{k}"],  # mass in solar masses
                                                 r=params[name+"planet_radius"+f"_w{k}"],  # radius in solar radii
@@ -1349,6 +1355,9 @@ class EclipseModel(LightcurveModel):
                                                 w=params[name+"omega"+f"_w{k}"],  # longitude of pericenter in degrees
                                                 t0=params[name+"t0"+f"_w{k}"],  # time of transit in days
                                             length_unit=u.R_jup,mass_unit=u.M_jup,)
+
+                    planet.map[1, 0] = params[name+"Y10"+f"_w{k}"]
+                    planet.theta0 = 180.0 + params[name+"offset"+f"_w{k}"]
 
                     system = starry.System(star, planet)
                     flux_model.append(system.flux(data.time).eval())
