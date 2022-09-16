@@ -6,7 +6,7 @@ from tqdm import tqdm
 from .parameters import *
 from arviz import summary
 from pymc3_ext import eval_in_model, optimize, sample
-from pymc3 import sample_prior_predictive, sample_posterior_predictive, Deterministic
+from pymc3 import sample_prior_predictive, sample_posterior_predictive, Deterministic, save_trace
 import warnings
 import collections
 
@@ -351,6 +351,7 @@ class LightcurveModel:
                         observed=data.flux[i, :],
                     )
 
+
     def sample_prior(self, ndraws=3):
         """
         Draw samples from the prior distribution.
@@ -387,7 +388,7 @@ class LightcurveModel:
                     posteriors.append(sample_posterior_predictive(trace, ndraws, **kw))
             return posteriors
 
-    def optimize(self, **kw):
+    def optimize(self, plot=False, plotkw={}, **kw):
         """
         Wrapper for PyMC3_ext sample
         """
@@ -403,10 +404,15 @@ class LightcurveModel:
                 for mod in self.pymc3_model:
                     with mod:
                         opts.append(optimize(**kw))
+            if plot:
+                self.plot_optimization(opts, **plotkw)
             return opts
         else:
             with self.pymc3_model:
-                return optimize(**kw)
+                opt = optimize(**kw)
+            if plot:
+                self.plot_optimization(opt, **plotkw)
+            return opt
 
     def sample(self, **kw):
         """
@@ -414,9 +420,35 @@ class LightcurveModel:
         """
         if self.optimization == "separate":
             self.trace = []
-            for mod in self.pymc3_model:
-                with mod:
-                    self.trace.append(sample(**kw))
+            starts = []
+            if "start" in kw:
+                starts = kw["start"]
+                kw.pop("start")
+
+            for i, mod in enumerate(self.pymc3_model):
+                if np.logical_and(i>=0,i<500):
+                    with mod:
+                        if len(starts) > 0:
+                            start = starts[i]
+                        else:
+                            start = mod.test_point
+    
+                        try:
+                            trace_it = sample(start=start, **kw)
+                            save_trace(trace_it, "/Users/pawa3371/Work/secondaryfitting_chromatic/nomap/trace_fwhm/eclipse_simulated_full_"+str(i)+".trace",overwrite=True)
+                            #self.trace.append(sample(start=start, **kw))
+                        except Exception as e:
+                            print(f"Sampling failed for one of the models: {e}")
+                            self.trace.append(None)
+                else:
+                    continue
+            # for mod in self.pymc3_model:
+            #     with mod:
+            #         try:
+            #             self.trace.append(sample(**kw))
+            #         except Exception as e:
+            #             print(f"Sampling failed for one of the models!: {e}")
+            #             self.trace.append(None)
         else:
             with self.pymc3_model:
                 self.trace = sample(**kw)
