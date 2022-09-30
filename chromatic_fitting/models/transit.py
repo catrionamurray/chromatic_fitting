@@ -198,6 +198,12 @@ class TransitModel(LightcurveModel):
 
         for j, (mod, data, orbit) in enumerate(zip(models, datas, orbits)):
             with mod:
+                # store Deterministic parameter {a/R*} for use later
+                Deterministic(
+                    f"{name}a_R*",
+                    orbit.a / self.parameters[name + "stellar_radius"].get_prior(0),
+                )
+
                 for i, w in enumerate(data.wavelength):
                     # for each wavelength create a quadratic limb-darkening lightcurve model from Exoplanet
                     limb_darkening = self.parameters[name + "limb_darkening"].get_prior(
@@ -215,13 +221,6 @@ class TransitModel(LightcurveModel):
                         orbit=orbit,
                         r=planet_radius,
                         t=list(data.time.to_value("day")),
-                    )
-
-                    # store Deterministic parameter {a/R*} for use later
-                    Deterministic(
-                        f"{name}a_R*_{i + j}",
-                        orbit.a
-                        / self.parameters[name + "stellar_radius"].get_prior(j + i),
                     )
 
                     # calculate the transit + flux (out-of-transit) baseline model
@@ -294,7 +293,8 @@ class TransitModel(LightcurveModel):
             )
             .eval()
         )
-        return ldlc.transpose()[0] + transit_params[f"{name}_baseline"]
+
+        return ldlc.transpose()[0] + transit_params[f"{name}baseline"]
 
     def plot_orbit(self, timedata: object = None):
         """
@@ -363,11 +363,12 @@ class TransitModel(LightcurveModel):
         if self.optimization == "separate":
             datas = [self.get_data(i) for i in range(self.data.nwave)]
         else:
-            datas = [self.get_data()]
+            data = self.get_data()
+            datas = [data[i, :] for i in range(data.nwave)]
 
         # if we decided to store the LC model extract this now, otherwise generate the model:
         if self.store_models:
-            return LightcurveModel.get_model(as_dict=as_dict, as_array=as_array)
+            return LightcurveModel.get_model(self, as_dict=as_dict, as_array=as_array)
         else:
             model = {}
             # generate the transit model from the best fit parameters for each wavelength

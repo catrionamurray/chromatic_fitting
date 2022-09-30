@@ -245,11 +245,13 @@ class PolynomialModel(LightcurveModel):
         if self.optimization == "separate":
             datas = [self.get_data(i) for i in range(self.data.nwave)]
         else:
-            datas = [self.get_data()]
+            data = self.get_data()
+            datas = [data[i, :] for i in range(data.nwave)]
+            # datas = [self.get_data()]
 
         # if we decided to store the LC model extract this now, otherwise generate the model:
         if self.store_models:
-            return LightcurveModel.get_model(as_dict=as_dict, as_array=as_array)
+            return LightcurveModel.get_model(self, as_dict=as_dict, as_array=as_array)
         else:
             # generate the polynomial model from the best fit parameters for each wavelength
             model = {}

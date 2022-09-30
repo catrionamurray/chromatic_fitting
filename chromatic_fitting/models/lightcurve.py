@@ -11,6 +11,7 @@ from arviz import summary
 from ..parameters import *
 from ..utils import *
 from chromatic import *
+import collections
 
 
 class LightcurveModel:
@@ -720,32 +721,41 @@ class LightcurveModel:
             for w in range(data.nwave):
                 if f"wavelength_{w + nm}_data" in posterior_predictive_trace.keys():
                     # generate a posterior model for every wavelength:
-                    posterior_model[
+                    if (
                         f"{self.name}_model_w{w + nm}"
-                    ] = self.sample_posterior(
-                        n, var_names=[f"{self.name}_model_w{w + nm}"]
-                    )[
-                        f"{self.name}_model_w{w + nm}"
-                    ]
+                        in posterior_predictive_trace.keys()
+                    ):
+                        posterior_model[
+                            f"{self.name}_model_w{w + nm}"
+                        ] = self.sample_posterior(
+                            n, var_names=[f"{self.name}_model_w{w + nm}"]
+                        )[
+                            f"{self.name}_model_w{w + nm}"
+                        ]
 
-            for i in range(n):
-                # for every posterior sample extract the posterior model and distribution draw for every wavelength:
-                flux_for_this_sample = np.array(
-                    [
-                        posterior_predictive_trace[f"wavelength_{w + nm}_data"][i]
-                        for w in range(data.nwave)
-                    ]
-                )
-                model_for_this_sample = np.array(
-                    [
-                        posterior_model[f"{self.name}_model_w{w + nm}"][i]
-                        for w in range(data.nwave)
-                    ]
-                )
+            for w in range(data.nwave):
+                for i in range(n):
+                    # for every posterior sample extract the posterior model and distribution draw for every wavelength:
+                    flux_for_this_sample = np.array(
+                        [
+                            posterior_predictive_trace[f"wavelength_{w + nm}_data"][i]
+                            for w in range(data.nwave)
+                        ]
+                    )
 
-                # add posterior model and draw from posterior distribution to the Rainbow quantities:
-                data.fluxlike[f"posterior-model-{i}"] = model_for_this_sample
-                data.fluxlike[f"posterior-predictive-{i}"] = flux_for_this_sample
+                    if f"{self.name}_model_w{w + nm}" in posterior_model.keys():
+                        model_for_this_sample = np.array(
+                            [
+                                posterior_model[f"{self.name}_model_w{w + nm}"][i]
+                                for w in range(data.nwave)
+                            ]
+                        )
+
+                        # add posterior model and draw from posterior distribution to the Rainbow quantities:
+                        data.fluxlike[f"posterior-model-{i}"] = model_for_this_sample
+                        data.fluxlike[
+                            f"posterior-predictive-{i}"
+                        ] = flux_for_this_sample
             # plot the rainbow quantities:
             data.imshow_quantities()
 
