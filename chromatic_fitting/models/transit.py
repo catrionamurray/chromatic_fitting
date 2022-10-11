@@ -75,6 +75,13 @@ class TransitModel(LightcurveModel):
         super().__init__(**kw)
         self.set_defaults()
         self.set_name(name)
+        self.model = self.transit_model
+
+    def __repr__(self):
+        """
+        Print the transit model.
+        """
+        return f"<chromatic transit model '{self.name}' 🌈>"
 
     def set_defaults(self):
         """
@@ -93,22 +100,6 @@ class TransitModel(LightcurveModel):
             limb_darkening=[0.2, 0.2],
         )
 
-    def __repr__(self):
-        """
-        Print the transit model.
-        """
-        return f"<chromatic transit model '{self.name}' 🌈>"
-
-    def set_name(self, name: str):
-        """
-        Set the name of the model.
-
-        Parameters
-        ----------
-        name: the name of the model
-        """
-        self.name = name
-
     def setup_orbit(self):
         """
         Create an `exoplanet` orbit model, given the stored parameters.
@@ -118,9 +109,9 @@ class TransitModel(LightcurveModel):
 
         # if the optimization method is separate wavelengths then set up for looping
         if self.optimization == "separate":
-            models = self.pymc3_model
+            models = self._pymc3_model
         else:
-            models = [self.pymc3_model]
+            models = [self._pymc3_model]
 
         # if the model has a name then add this to each parameter"s name
         if hasattr(self, "name"):
@@ -179,11 +170,11 @@ class TransitModel(LightcurveModel):
 
         # set up the models, data and orbits in a format for looping
         if self.optimization == "separate":
-            models = self.pymc3_model
+            models = self._pymc3_model
             datas = [self.get_data(i) for i in range(self.data.nwave)]
             orbits = self.orbit
         else:
-            models = [self.pymc3_model]
+            models = [self._pymc3_model]
             datas = [self.get_data()]
             orbits = [self.orbit]
 
@@ -196,15 +187,21 @@ class TransitModel(LightcurveModel):
         if store_models == True:
             self.store_models = store_models
 
+        stored_a_r = False
+
         for j, (mod, data, orbit) in enumerate(zip(models, datas, orbits)):
             with mod:
-                # store Deterministic parameter {a/R*} for use later
-                Deterministic(
-                    f"{name}a_R*",
-                    orbit.a / self.parameters[name + "stellar_radius"].get_prior(0),
-                )
-
                 for i, w in enumerate(data.wavelength):
+
+                    if not stored_a_r:
+                        # store Deterministic parameter {a/R*} for use later
+                        Deterministic(
+                            f"{name}a_R*",
+                            orbit.a
+                            / self.parameters[name + "stellar_radius"].get_prior(j + i),
+                        )
+                        stored_a_r = True
+
                     # for each wavelength create a quadratic limb-darkening lightcurve model from Exoplanet
                     limb_darkening = self.parameters[name + "limb_darkening"].get_prior(
                         j + i
@@ -247,7 +244,9 @@ class TransitModel(LightcurveModel):
                     self.every_light_curve[k] for k in tqdm(self.every_light_curve)
                 ]
 
-    def transit_model(self, transit_params: dict, i: int = 0) -> np.array:
+    def transit_model(
+        self, transit_params: dict, i: int = 0, time: list = None
+    ) -> np.array:
         """
         Create a transit model given the passed parameters.
 
@@ -255,6 +254,7 @@ class TransitModel(LightcurveModel):
         ----------
         transit_params: A dictionary of parameters to be used in the transit model.
         i: wavelength index
+        time: If we don't want to use the default time then the user can pass a time array on which to calculate the model
 
         Returns
         -------
@@ -271,7 +271,9 @@ class TransitModel(LightcurveModel):
             name = self.name + "_"
         else:
             name = ""
-        # name = self.name
+
+        if time is None:
+            time = list(self.data.time.to_value("day"))
 
         orbit = xo.orbits.KeplerianOrbit(
             period=transit_params[f"{name}period"],
@@ -289,7 +291,7 @@ class TransitModel(LightcurveModel):
                 orbit=orbit,
                 r=transit_params[f"{name}radius_ratio"]
                 * transit_params[f"{name}stellar_radius"],
-                t=list(data.time.to_value("day")),
+                t=time,
             )
             .eval()
         )
@@ -322,10 +324,10 @@ class TransitModel(LightcurveModel):
 
         # if the optimization method is separate wavelengths then set up for looping
         if self.optimization == "separate":
-            models = self.pymc3_model
+            models = self._pymc3_model
             orbits = self.orbit
         else:
-            models = [self.pymc3_model]
+            models = [self._pymc3_model]
             orbits = [self.orbit]
 
         # plot the orbit
@@ -345,43 +347,87 @@ class TransitModel(LightcurveModel):
                 plt.show()
                 plt.close()
 
-    def get_model(self, as_dict: bool = True, as_array: bool = False):
+    def make_transmission_spectrum_table(
+        self, uncertainty=["hdi_3%", "hdi_97%"], svname=None
+    ):
         """
-        Return the 'best-fit' model from the summary table as a dictionary or as an array
-
-        Parameters
-        ----------
-        as_dict: boolean whether to return the model as a dictionary (with keys indexing the wavelength)
-        as_array: boolean whether to return the model as an array
-
-        Returns
-        -------
-        object: transit model for each wavelength (either a dict or array)
+        Generate and return a transmission spectrum table
         """
-
-        # if the optimization method is "separate" then loop over each wavelength's data
-        if self.optimization == "separate":
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
+        results = self.get_results(uncertainty=uncertainty)[
+            [
+                "wavelength",
+                f"{self.name}_radius_ratio",
+                f"{self.name}_radius_ratio_{uncertainty[0]}",
+                f"{self.name}_radius_ratio_{uncertainty[1]}",
+            ]
+        ]
+        trans_table = results[["wavelength", f"{self.name}_radius_ratio"]]
+        if "hdi" in uncertainty[0]:
+            trans_table[f"{self.name}_radius_ratio_neg_error"] = (
+                results[f"{self.name}_radius_ratio"]
+                - results[f"{self.name}_radius_ratio_{uncertainty[0]}"]
+            )
+            trans_table[f"{self.name}_radius_ratio_pos_error"] = (
+                results[f"{self.name}_radius_ratio_{uncertainty[1]}"]
+                - results[f"{self.name}_radius_ratio"]
+            )
         else:
-            data = self.get_data()
-            datas = [data[i, :] for i in range(data.nwave)]
+            trans_table[f"{self.name}_radius_ratio_neg_error"] = results[
+                f"{self.name}_radius_ratio_{uncertainty[0]}"
+            ]
+            trans_table[f"{self.name}_radius_ratio_pos_error"] = results[
+                f"{self.name}_radius_ratio_{uncertainty[1]}"
+            ]
 
-        # if we decided to store the LC model extract this now, otherwise generate the model:
-        if self.store_models:
-            return LightcurveModel.get_model(self, as_dict=as_dict, as_array=as_array)
+        if svname is not None:
+            assert isinstance(svname, object)
+            trans_table.to_csv(svname)
         else:
-            model = {}
-            # generate the transit model from the best fit parameters for each wavelength
-            for i, data in enumerate(datas):
-                transit_params = self.extract_from_posteriors(self.summary, i)
-                model_i = self.transit_model(transit_params, i)
-                model[f"w{i}"] = model_i
-            if as_array:
-                # return a 2D array (one row for each wavelength)
-                return np.array(list(model.values()))
-            elif as_dict:
-                # return a dict (one key for each wavelength)
-                return model
+            return trans_table
+
+    def plot_transmission_spectrum(
+        self, table=None, uncertainty=["hdi_3%", "hdi_97%"], **kw
+    ):
+        if table is not None:
+            transmission_spectrum = table
+            try:
+                # ensure the correct columns exist in the transmission spectrum table
+                assert transmission_spectrum[f"{self.name}_radius_ratio"]
+                assert transmission_spectrum[f"{self.name}_radius_ratio_neg_error"]
+                assert transmission_spectrum[f"{self.name}_radius_ratio_pos_error"]
+                assert transmission_spectrum["wavelength"]
+            except:
+                print(
+                    f"The given table doesn't have the correct columns 'wavelength', '{self.name}_radius_ratio', "
+                    f"{self.name}_radius_ratio_pos_error' and '{self.name}_radius_ratio_neg_error'"
+                )
+        else:
+            kw["uncertainty"] = uncertainty
+            transmission_spectrum = self.make_transmission_spectrum_table(**kw)
+            transmission_spectrum["wavelength"] = [
+                t.to_value("micron") for t in transmission_spectrum["wavelength"].values
+            ]
+
+        plt.figure(figsize=(10, 4))
+        plt.title("Transmission Spectrum")
+        plt.plot(
+            transmission_spectrum["wavelength"],
+            transmission_spectrum[f"{self.name}_radius_ratio"],
+            "kx",
+        )
+        plt.errorbar(
+            transmission_spectrum["wavelength"],
+            transmission_spectrum[f"{self.name}_radius_ratio"],
+            yerr=[
+                transmission_spectrum[f"{self.name}_radius_ratio_neg_error"],
+                transmission_spectrum[f"{self.name}_radius_ratio_pos_error"],
+            ],
+            color="k",
+            capsize=2,
+            linestyle="None",
+        )
+        plt.xlabel("Wavelength (microns)")
+        plt.ylabel("Radius Ratio")
 
     def add_model_to_rainbow(self):
         """

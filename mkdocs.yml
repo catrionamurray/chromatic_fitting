@@ -3,8 +3,11 @@ nav:
     - Home: index.md
 #     - API: api.md
     - Installation: how_to_install.ipynb
+    - Parameters: parameters.ipynb
     - Tutorials:
+        - Linear Fitting: tutorial_for_linear_fitting.ipynb
         - Transit Fitting: tutorial_for_transit_fitting.ipynb
+        - White Light Transit Fitting: tutorial_for_whitelightcurve_fitting.ipynb
         - Polynomial Fitting: tutorial_for_polynomial_fitting.ipynb
         - Combining Models: tutorial_for_combining_models.ipynb
 

@@ -40,6 +40,8 @@ class LightcurveModel:
         # by default do not flag outliers
         self.outlier_flag = False
 
+        self.initialize_empty_model()
+
     def __add__(self, other):
         """
         What should we return for `a + b` for two models `a` and `b`?
@@ -78,6 +80,16 @@ class LightcurveModel:
         cm.initialize_empty_model()
         cm.combine(self, other, "/")
         return cm
+
+    def set_name(self, name: str):
+        """
+        Set the name of the model.
+
+        Parameters
+        ----------
+        name: name of the model
+        """
+        self.name = name
 
     def setup_parameters(self, **kw):
         """
@@ -189,7 +201,7 @@ class LightcurveModel:
         """
         Restart with an empty model.
         """
-        self.pymc3_model = pm.Model()
+        self._pymc3_model = pm.Model()
 
     def attach_data(self, rainbow):
         """
@@ -232,11 +244,11 @@ class LightcurveModel:
         """
         Create a list of models to process wavelengths separately
         """
-        self.pymc3_model = [pm.Model() for n in range(self.data.nwave)]
+        self._pymc3_model = [pm.Model() for n in range(self.data.nwave)]
         # if the LightCurve model is a CombinedModel then update the constituent models too
         if isinstance(self, CombinedModel):
-            for mod in self.chromatic_models.values():
-                mod.pymc3_model = self.pymc3_model
+            for mod in self._chromatic_models.values():
+                mod._pymc3_model = self._pymc3_model
                 mod.optimization = self.optimization
 
     def change_all_priors_to_Wavelike(self):
@@ -298,11 +310,11 @@ class LightcurveModel:
         self.bad_wavelengths = []
 
         if self.optimization == "separate":
-            models = self.pymc3_model
+            models = self._pymc3_model
             datas = [self.get_data(i) for i in range(self.data.nwave)]
             data = self.data
         else:
-            models = [self.pymc3_model]
+            models = [self._pymc3_model]
             data = self.get_data()
             datas = [data]
 
@@ -367,11 +379,11 @@ class LightcurveModel:
         Number of priors to sample
         """
         try:
-            with self.pymc3_model:
+            with self._pymc3_model:
                 return sample_prior_predictive(ndraws)
         except:
             priors = []
-            for mod in self.pymc3_model:
+            for mod in self._pymc3_model:
                 with mod:
                     priors.append(sample_prior_predictive(ndraws))
             return priors
@@ -387,13 +399,13 @@ class LightcurveModel:
             self.sample()
 
         if self.optimization != "separate":
-            with self.pymc3_model:
+            with self._pymc3_model:
                 return sample_posterior_predictive(
                     self.trace, ndraws, var_names=var_names
                 )
         else:
             posteriors = []
-            for mod, trace in zip(self.pymc3_model, self.trace):
+            for mod, trace in zip(self._pymc3_model, self.trace):
                 with mod:
                     posteriors.append(
                         sample_posterior_predictive(trace, ndraws, var_names=var_names)
@@ -409,18 +421,18 @@ class LightcurveModel:
             if "start" in kw:
                 start = kw["start"]
                 kw.pop("start")
-                for mod, opt in zip(self.pymc3_model, start):
+                for mod, opt in zip(self._pymc3_model, start):
                     with mod:
                         opts.append(optimize(start=opt, **kw))
             else:
-                for mod in self.pymc3_model:
+                for mod in self._pymc3_model:
                     with mod:
                         opts.append(optimize(**kw))
             if plot:
                 self.plot_optimization(opts, **plotkw)
             return opts
         else:
-            with self.pymc3_model:
+            with self._pymc3_model:
                 opt = optimize(**kw)
             if plot:
                 self.plot_optimization(opt, **plotkw)
@@ -454,7 +466,7 @@ class LightcurveModel:
 
                     if isinstance(self, CombinedModel):
                         if w == 0:
-                            for mod in self.chromatic_models.values():
+                            for mod in self._chromatic_models.values():
                                 plt.plot(
                                     data.time,
                                     ((w + j) * offset)
@@ -462,7 +474,7 @@ class LightcurveModel:
                                     label=mod.name,
                                 )
                         else:
-                            for mod in self.chromatic_models.values():
+                            for mod in self._chromatic_models.values():
                                 plt.plot(
                                     data.time,
                                     ((w + j) * offset)
@@ -491,7 +503,7 @@ class LightcurveModel:
             starts = kw["start"]
             kw.pop("start")
 
-        with self.pymc3_model[i] as mod:
+        with self._pymc3_model[i] as mod:
             if len(starts) > 0:
                 start = starts[i]
             else:
@@ -514,7 +526,7 @@ class LightcurveModel:
                 starts = kw["start"]
                 kw.pop("start")
 
-            for i, mod in enumerate(self.pymc3_model):
+            for i, mod in enumerate(self._pymc3_model):
                 with mod:
                     if len(starts) > 0:
                         start = starts[i]
@@ -534,7 +546,7 @@ class LightcurveModel:
 
             if summarize_step_by_step:
                 if isinstance(self, CombinedModel):
-                    for m in self.chromatic_models.values():
+                    for m in self._chromatic_models.values():
                         m.summary = self.summary
 
             # for mod in self.pymc3_model:
@@ -545,7 +557,7 @@ class LightcurveModel:
             #             print(f"Sampling failed for one of the models!: {e}")
             #             self.trace.append(None)
         else:
-            with self.pymc3_model:
+            with self._pymc3_model:
                 self.trace = sample(**kw)
 
     def summarize(self, print_table=True, **kw):
@@ -564,18 +576,18 @@ class LightcurveModel:
 
         if self.optimization == "separate":
             self.summary = []
-            for mod, trace in zip(self.pymc3_model, self.trace):
+            for mod, trace in zip(self._pymc3_model, self.trace):
                 with mod:
                     self.summary.append(summary(trace, **kw))
         else:
-            with self.pymc3_model:
+            with self._pymc3_model:
                 self.summary = summary(self.trace, **kw)
 
         if print_table:
             print(self.summary)
 
         if isinstance(self, CombinedModel):
-            for m in self.chromatic_models.values():
+            for m in self._chromatic_models.values():
                 m.summary = self.summary
 
     def get_results(self, as_df=True, uncertainty=["hdi_3%", "hdi_97%"]):
@@ -622,25 +634,6 @@ class LightcurveModel:
             # otherwise return a dictionary of dictionaries
             return results
 
-    def make_transmission_spectrum_table(
-        self, uncertainty=["hdi_3%", "hdi_97%"], svname=None
-    ):
-        """
-        Generate and return a transmission spectrum table
-        """
-        results = self.get_results(uncertainty=uncertainty)[
-            [
-                "wavelength",
-                f"{self.name}_radius_ratio",
-                f"{self.name}_radius_ratio_{uncertainty[0]}",
-                f"{self.name}_radius_ratio_{uncertainty[1]}",
-            ]
-        ]
-        if svname is not None:
-            results.to_csv(svname)
-        else:
-            return results
-
     def run_simultaneous_fit(self, r, **kwargs):
         """
         Run the entire simultaneous wavelength fit.
@@ -648,7 +641,7 @@ class LightcurveModel:
         self.attach_data(r)
         self.setup_lightcurves()
         self.setup_likelihood()
-        opt = self.optimize(start=self.pymc3_model.test_point)
+        opt = self.optimize(start=self._pymc3_model.test_point)
         opt = self.optimize(start=opt)
         self.sample(start=opt)
         self.summarize(round_to=7, fmt="wide")
@@ -784,7 +777,7 @@ class LightcurveModel:
                     )
         return model
 
-    def get_model(self, as_dict=True, as_array=False):
+    def get_stored_model(self, as_dict=True, as_array=False):
         """
         Return the 'best-fit' model from the summary table as a dictionary or as an array
         """
@@ -885,6 +878,112 @@ class LightcurveModel:
 
         return fv
 
+    def get_model(
+        self,
+        params_dict: dict = None,
+        as_dict: bool = True,
+        as_array: bool = False,
+        store: bool = True,
+    ):
+        """
+        Return the 'best-fit' model from the summary table as a dictionary or as an array
+
+        Parameters
+        ----------
+        params_dict: [optional] dictionary of parameters with which to generate model
+        as_dict: boolean whether to return the model as a dictionary (with keys indexing the wavelength)
+        as_array: boolean whether to return the model as an array
+        store: boolean whether to save the model
+
+        Returns
+        -------
+        object: model for each wavelength (either a dict or array)
+        """
+
+        # if the optimization method is "separate" then loop over each wavelength's data
+        if self.optimization == "separate":
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+        else:
+            data = self.get_data()
+            datas = [data[i, :] for i in range(data.nwave)]
+
+        if self.store_models:
+            # if we decided to store the LC model extract this now
+            if store:
+                self._fit_models = self.get_stored_model(
+                    as_dict=as_dict, as_array=as_array
+                )
+            return self.get_stored_model(as_dict=as_dict, as_array=as_array)
+        else:
+            # if we decided not to store the LC model then generate the model
+            model = {}
+            # generate the transit model from the best fit parameters for each wavelength
+            for i, data in enumerate(datas):
+                if params_dict is None:
+                    if hasattr(self, "summary"):
+                        params = self.extract_from_posteriors(self.summary, i)
+                    else:
+                        warnings.warn(
+                            "You haven't sampled/summarized the model yet!\nEither run .summarize() or pass "
+                            "a dictionary of parameters to generate the model."
+                        )
+                        return
+                else:
+                    # if the user has given the same parameters for each wavelength
+                    if f"w{i}" not in params_dict.keys():
+                        params = params_dict
+                    else:
+                        params = params_dict[f"w{i}"]
+
+                model_i = self.model(params, i)
+                # if is instance(self, TransitModel):
+                #     model_i = self.transit_model(params, i)
+                # elif isinstance(self, PolynomialModel):
+                #     model_i = self.polynomial_model(params, i)
+                # else:
+                #     warnings.warn(
+                #         f"{self} doesn't have a defined model in lightcurve.py"
+                #     )
+                model[f"w{i}"] = model_i
+
+            if store:
+                self._fit_models = model
+            if as_array:
+                # return a 2D array (one row for each wavelength)
+                return np.array(list(model.values()))
+            elif as_dict:
+                # return a dict (one key for each wavelength)
+                return model
+
+    def add_model_to_rainbow(self):
+        """
+        Add the model to the Rainbow object.
+        """
+        # if we decided to flag outliers then flag these in the final model
+        if self.outlier_flag:
+            data = self.data_without_outliers
+        else:
+            data = self.data
+
+        # if optimization method is "white_light" then extract the white light curve
+        if self.optimization == "white_light":
+            data = self.white_light
+
+        # extract model as an array
+        model = self.get_model(as_array=True)
+
+        # attach the model to the Rainbow (creating a Rainbow_with_model object)
+        if isinstance(self, PolynomialModel):
+            r_with_model = data.attach_model(model=model, systematics_model=model)
+        elif isinstance(self, TransitModel):
+            r_with_model = data.attach_model(model=model, planet_model=model)
+        else:
+            warnings.warn(
+                f"This {self} model isn't a type that chromatic_fitting knows how to attach to a Rainbow!"
+            )
+        # save the Rainbow_with_model for later
+        self.data_with_model = r_with_model
+
     def imshow_with_models(self, **kw):
         """
         Plot the lightcurves with the best-fit models (if they exist).
@@ -906,7 +1005,7 @@ class LightcurveModel:
         if not hasattr(self, "data_with_model"):
             print(
                 "No model attached to data. Running `add_model_to_rainbow` now. You can access this data later"
-                "using [self].data_with_model"
+                " using [self].data_with_model"
             )
             self.add_model_to_rainbow()
         self.data_with_model.animate_with_models(**kw)
@@ -919,10 +1018,90 @@ class LightcurveModel:
         if not hasattr(self, "data_with_model"):
             print(
                 "No model attached to data. Running `add_model_to_rainbow` now. You can access this data later"
-                "using [self].data_with_model"
+                " using [self].data_with_model"
             )
             self.add_model_to_rainbow()
         self.data_with_model.plot_with_model_and_residuals(**kw)
+
+    def plot_model(self, normalize=True, plot_data=True, **kw):
+        model = self.get_model()
+
+        def plot_one_model(model, normalize, name_label=None, **kw):
+            if "wavelength" in kw:
+                wave_num = []
+                model_one_wavelength = {}
+                if type(kw["wavelength"]) == int:
+                    i = kw["wavelength"]
+                    wave_num.append(i)
+                    model_one_wavelength[f"w{i}"] = model[f"w{i}"]
+                else:
+                    for i in kw["wavelength"]:
+                        wave_num.append(i)
+                        model_one_wavelength[f"w{i}"] = model[f"w{i}"]
+                model = model_one_wavelength
+
+            else:
+                wave_num = range(self.data.nwave)
+
+            if "ax" in kw:
+                ax = kw["ax"]
+            else:
+                if "wavelength" not in kw:
+                    fi, ax = plt.subplots(
+                        nrows=len(wave_num),
+                        figsize=(8, 16),
+                        constrained_layout=True,
+                    )
+                else:
+                    # make sure ax is set up
+                    fi, ax = plt.subplots(
+                        nrows=len(wave_num),
+                        figsize=(8, 6),
+                        constrained_layout=True,
+                    )
+                if len(wave_num) == 1:
+                    ax = [ax]
+                kw["ax"] = ax
+
+            if name_label is None:
+                name_label = self.name
+
+            for wave_n, ax_i, mod in zip(wave_num, ax, model.values()):
+                if normalize:
+                    if np.nanmedian(mod) < 0.1:
+                        ax_i.plot(self.data.time, mod + 1, label=f"{name_label}")
+                    else:
+                        ax_i.plot(self.data.time, mod, label=f"{name_label}")
+                else:
+                    ax_i.plot(self.data.time, mod, label=f"{name_label}")
+
+                if plot_data:
+                    ax_i.plot(self.data.time, self.data.flux[wave_n, :], "k.")
+                    ax_i.errorbar(
+                        self.data.time,
+                        self.data.flux[wave_n, :],
+                        self.data.uncertainty[wave_n, :],
+                        color="k",
+                        linestyle="None",
+                        capsize=2,
+                    )
+                ax_i.set_title(f"Wavelength {wave_n}")
+                ax_i.set_ylabel("Relative Flux")
+                ax_i.set_xlabel("Time [d]")
+                ax_i.legend()
+
+            return kw
+
+        if isinstance(self, CombinedModel):
+            for chrom_mod in self._chromatic_models.keys():
+                kw = plot_one_model(
+                    model[chrom_mod], normalize=normalize, name_label=chrom_mod, **kw
+                )
+            plot_one_model(
+                model["total"], normalize=normalize, name_label="total", **kw
+            )
+        else:
+            plot_one_model(model, normalize=normalize, **kw)
 
 
 from .combined import *

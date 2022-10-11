@@ -69,22 +69,13 @@ class PolynomialModel(LightcurveModel):
         self.set_defaults()
         self.metadata = {}
         self.set_name(name)
+        self.model = self.polynomial_model
 
     def __repr__(self):
         """
         Print the polynomial model.
         """
         return f"<chromatic polynomial model '{self.name}' 🌈>"
-
-    def set_name(self, name: str):
-        """
-        Set the name of the model.
-
-        Parameters
-        ----------
-        name: name of the model
-        """
-        self.name = name
 
     def set_defaults(self):
         """
@@ -98,7 +89,7 @@ class PolynomialModel(LightcurveModel):
                 # for Python < 3.9 add dictionaries using a different method
                 self.defaults = {**self.defaults, **{f"p_{d}": 0.0}}
 
-    def setup_lightcurves(self, store_models: bool = False):
+    def setup_lightcurves(self, store_models: bool = False, normalize: bool = False):
         """
         Create a polynomial model, given the stored parameters.
         [This should be run after .attach_data()]
@@ -111,10 +102,10 @@ class PolynomialModel(LightcurveModel):
 
         # if the optimization method is "separate" then loop over each wavelength's model/data
         if self.optimization == "separate":
-            models = self.pymc3_model
+            models = self._pymc3_model
             datas = [self.get_data(i) for i in range(self.data.nwave)]
         else:
-            models = [self.pymc3_model]
+            models = [self._pymc3_model]
             datas = [self.get_data()]
 
         # if the model has a name then add this to each parameter's name (needed to prevent overwriting parameter names
@@ -152,13 +143,16 @@ class PolynomialModel(LightcurveModel):
                         except AttributeError:
                             pass
 
-                    # normalise the x values and store the mean/std values in metadata
-                    self.metadata["mean_" + self.independant_variable] = np.mean(x)
-                    self.metadata["std_" + self.independant_variable] = np.std(x)
-                    x = (x - np.mean(x)) / np.std(x)
+                    if normalize:
+                        # normalise the x values and store the mean/std values in metadata
+                        self.metadata["mean_" + self.independant_variable] = np.mean(x)
+                        self.metadata["std_" + self.independant_variable] = np.std(x)
+                        x = (x - np.mean(x)) / np.std(x)
 
-                    # store the normalised independant variable for later
-                    self.independant_variable_normalised = x
+                        # store the normalised independant variable for later
+                        self.independant_variable_normalised = x
+
+                    self.normalize = normalize
 
                     # compute the polynomial by looping over the coeffs for each degree:
                     for d in range(self.degree + 1):
@@ -212,8 +206,9 @@ class PolynomialModel(LightcurveModel):
             # if the independant variable is time, convert to days:
             if self.independant_variable == "time":
                 x = x.to_value("day")
-            # normalize:
-            x = (x - np.mean(x)) / np.std(x)
+            if self.normalize:
+                # normalize:
+                x = (x - np.mean(x)) / np.std(x)
 
         if len(np.shape(x)) > 1:
             x = x[i, :]
@@ -226,45 +221,6 @@ class PolynomialModel(LightcurveModel):
             for d in range(self.degree + 1):
                 poly.append(poly_params[f"{self.name}_p_{d}_w0"] * (x**d))
             return np.sum(poly, axis=0)
-
-    def get_model(self, as_dict: bool = True, as_array: bool = False) -> object:
-        """
-        Return the 'best-fit' model from the summary table as either a dictionary or as an array
-
-        Parameters
-        ----------
-        as_dict: boolean whether to return the model as a dictionary (with keys indexing the wavelength)
-        as_array: boolean whether to return the model as an array
-
-        Returns
-        -------
-        object: polynomial model for each wavelength (either a dict or array)
-        """
-
-        # if the optimization method is "separate" then loop over each wavelength's data
-        if self.optimization == "separate":
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            data = self.get_data()
-            datas = [data[i, :] for i in range(data.nwave)]
-            # datas = [self.get_data()]
-
-        # if we decided to store the LC model extract this now, otherwise generate the model:
-        if self.store_models:
-            return LightcurveModel.get_model(self, as_dict=as_dict, as_array=as_array)
-        else:
-            # generate the polynomial model from the best fit parameters for each wavelength
-            model = {}
-            for i, data in enumerate(datas):
-                poly_params = self.extract_from_posteriors(self.summary, i)
-                model_i = self.polynomial_model(poly_params, i)
-                model[f"w{i}"] = model_i
-            if as_array:
-                # return a 2D array (one row for each wavelength)
-                return np.array(list(model.values()))
-            elif as_dict:
-                # return a dict (one key for each wavelength)
-                return model
 
     def add_model_to_rainbow(self):
         """

@@ -1,3 +1,5 @@
+import matplotlib.axes
+
 from ..imports import *
 
 # from .lightcurve import *
@@ -162,9 +164,9 @@ class CombinedModel(LightcurveModel):
         """
         Print the combined model (and its constituents).
         """
-        if hasattr(self, "chromatic_models"):
+        if hasattr(self, "_chromatic_models"):
             string_to_print = f"<chromatic combined model '{self.name}' 🌈, models: "
-            for i, (model_name, model) in enumerate(self.chromatic_models.items()):
+            for i, (model_name, model) in enumerate(self._chromatic_models.items()):
                 if i >= len(self.how_to_combine):
                     string_to_print += f"{model}"
                 else:
@@ -188,19 +190,19 @@ class CombinedModel(LightcurveModel):
         if isinstance(first, CombinedModel) and isinstance(second, CombinedModel):
             # if both first and second are CombinedModels
             chromatic_models = add_dicts(
-                first.chromatic_models.copy(), second.chromatic_models.copy()
+                first._chromatic_models.copy(), second._chromatic_models.copy()
             )
             self.how_to_combine = first.how_to_combine + second.how_to_combine
             self.attach_models(chromatic_models, how_to_combine=how_to_combine)
         elif isinstance(first, CombinedModel):
             # if the first is a CombinedModel but second is not
-            chromatic_models = first.chromatic_models.copy()
+            chromatic_models = first._chromatic_models.copy()
             chromatic_models[f"{second.name}"] = second
             self.how_to_combine = first.how_to_combine
             self.attach_models(chromatic_models, how_to_combine=how_to_combine)
         elif isinstance(second, CombinedModel):
             # if the second is a CombinedModel but first is not
-            chromatic_models = second.chromatic_models.copy()
+            chromatic_models = second._chromatic_models.copy()
             chromatic_models[f"{first.name}"] = first
             self.how_to_combine = second.how_to_combine
             self.attach_models(chromatic_models, how_to_combine=how_to_combine)
@@ -250,7 +252,7 @@ class CombinedModel(LightcurveModel):
                 new_model = model.__class__(**class_inputs)
                 # link the pymc3 model for this constituent model to the overall ChromaticModel (avoids weird
                 # inheritance issues):
-                new_model.pymc3_model = self.pymc3_model
+                new_model._pymc3_model = self._pymc3_model
                 model_params = {}
 
                 # for every parameter in the separate models redefine them in the separate models within CombinedModel
@@ -281,7 +283,7 @@ class CombinedModel(LightcurveModel):
                 )
 
         # set up parameters in new combined model
-        self.chromatic_models = new_models
+        self._chromatic_models = new_models
 
     def apply_operation_to_constituent_models(
         self, operation: str, *args: object, **kwargs: object
@@ -301,7 +303,7 @@ class CombinedModel(LightcurveModel):
         """
         results = []
         # for each constituent model apply the chosen operation
-        for m in self.chromatic_models.values():
+        for m in self._chromatic_models.values():
             try:
                 op = getattr(m, operation)
                 result = op(*args, **kwargs)
@@ -347,7 +349,7 @@ class CombinedModel(LightcurveModel):
         (default='simultaneous')
         """
         LightcurveModel.choose_optimization_method(self, optimization_method)
-        for m in self.chromatic_models.values():
+        for m in self._chromatic_models.values():
             m.optimization = optimization_method
 
         if optimization_method == "separate":
@@ -377,13 +379,13 @@ class CombinedModel(LightcurveModel):
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
         self.store_models = store_models
-        for cm in self.chromatic_models.values():
+        for cm in self._chromatic_models.values():
             cm.store_models = store_models
 
         # for each constituent model set-up the lightcurves according to their model type:
         self.apply_operation_to_constituent_models("setup_lightcurves")
 
-        for i, mod in enumerate(self.chromatic_models.values()):
+        for i, mod in enumerate(self._chromatic_models.values()):
             # for each lightcurve in the combined model, add/subtract/multiply/divide their lightcurve into the combined
             # model
             if i == 0:
@@ -396,10 +398,10 @@ class CombinedModel(LightcurveModel):
                 ](self.every_light_curve, mod.every_light_curve)
 
         if self.optimization == "separate":
-            models = self.pymc3_model
+            models = self._pymc3_model
             datas = [self.get_data(i) for i in range(self.data.nwave)]
         else:
-            models = [self.pymc3_model]
+            models = [self._pymc3_model]
             datas = [self.get_data()]
 
         # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
@@ -418,7 +420,7 @@ class CombinedModel(LightcurveModel):
         Extract the 'best-fit' parameter mean + error values from the summary table for each constituent model
         """
         results = []
-        for mod in self.chromatic_models.values():
+        for mod in self._chromatic_models.values():
             results.append(mod.get_results(**kw))
         # combine the results from all models:
         df = pd.concat(results, axis=1)
@@ -426,30 +428,61 @@ class CombinedModel(LightcurveModel):
         df = df.loc[:, ~df.columns.duplicated()].copy()
         return df
 
-    def get_model(self):
+    def get_model(self, store: bool = True, **kw: object):
         """
         Extract each of the 'best-fit' models (for each chromatic_fitting model) from the arviz summary tables.
         """
         all_models, total_model = {}, {}
         # for each constituent model get its 'best-fit' model:
-        models = self.apply_operation_to_constituent_models("get_model")
+        models = self.apply_operation_to_constituent_models("get_model", **kw)
 
-        for i, (name, m) in enumerate(self.chromatic_models.items()):
-            #     # get 'best-fit' model from constituent model:
-            #     model = m.get_model()
-            all_models[name] = models[i]
-            # add this model to the total model:
-            if not self.store_models:
-                total_model = combination_options[self.how_to_combine[i - 1]](
-                    total_model, models[i]
-                )
+        as_array = False
+        if "as_array" in kw:
+            if kw["as_array"]:
+                as_array = True
 
-        if self.store_models:
-            all_models["total"] = self.extract_deterministic_model()
+        kw["store"] = store
+
+        if models is not None:
+            for i, (name, m) in enumerate(self._chromatic_models.items()):
+                models_dict = {}
+                # get 'best-fit' model from constituent model:
+                all_models[name] = models[i]
+
+                if as_array:
+                    for w in range(len(models[i])):
+                        models_dict[f"w{w}"] = models[i][w]
+                else:
+                    models_dict = models[i]
+
+                # add this model to the total model:
+                if not self.store_models:
+                    total_model = combination_options[self.how_to_combine[i - 1]](
+                        total_model, models_dict
+                    )
+
+            if self.store_models:
+                all_models["total"] = self.extract_deterministic_model()
+            else:
+                all_models["total"] = total_model
+
+            if store:
+                self._fit_models = all_models
+
+            # return all_models
+            if "as_array" in kw:
+                if kw["as_array"]:
+                    return np.array(
+                        list([list(mod.values()) for mod in all_models.values()])
+                    )
+            else:
+                return all_models
+
         else:
-            all_models["total"] = total_model
-
-        return all_models
+            warnings.warn(
+                "There are no current saved models. You can, however, generate models by passing a dictionary with "
+                "all the necessary parameters"
+            )
 
     def add_model_to_rainbow(self):
         """
@@ -458,7 +491,7 @@ class CombinedModel(LightcurveModel):
 
         transit_model, systematics_model, total_model = {}, {}, {}
         i_transit, i_sys = 0, 0
-        for i, mod in enumerate(self.chromatic_models.values()):
+        for i, mod in enumerate(self._chromatic_models.values()):
             # if there's a transit model in the CombinedModel then separate this out to add to Rainbow
             if isinstance(mod, TransitModel):
                 if i_transit == 0:
@@ -520,4 +553,64 @@ class CombinedModel(LightcurveModel):
         results = self.apply_operation_to_constituent_models(
             "make_transmission_spectrum_table", **kw
         )
+        if len(results) == 1:
+            results = results[0]
         return results
+
+    def plot_transmission_spectrum(self, **kw: object) -> object:
+        """
+        Return a transmission spectrum plot using the best fit parameters
+
+        Parameters
+        ----------
+        kw: keywords to pass to 'plot_transmission_spectrum' methods
+
+        Returns
+        -------
+        object
+        """
+        self.apply_operation_to_constituent_models("plot_transmission_spectrum", **kw)
+
+    # def plot_all_models(
+    #     self,
+    #     wavelength=None,
+    #     ax: matplotlib.axes.Axes = None,
+    #     show_data=True,
+    #     **kw: object,
+    # ):
+    #     if ax is None:
+    #         ax = []
+    #         if wavelength is None:
+    #             for i in range(self.data.nwave):
+    #                 # make sure ax is set up
+    #                 fi = plt.figure(
+    #                     figsize=(8, 4),
+    #                     # plt.matplotlib.rcParams["figure.figsize"][::-1],
+    #                     constrained_layout=True,
+    #                 )
+    #                 ax.append(plt.subplot())
+    #             # plt.sca(ax)
+    #         else:
+    #             kw["wavelength"] = wavelength
+    #             # make sure ax is set up
+    #             fi = plt.figure(
+    #                 figsize=(8, 4),
+    #                 # plt.matplotlib.rcParams["figure.figsize"][::-1],
+    #                 constrained_layout=True,
+    #             )
+    #             ax.append(plt.subplot())
+    #
+    #     kw["ax"] = ax
+    #     self.apply_operation_to_constituent_models("plot_model", **kw)
+    #
+    #     if hasattr(self, "_fit_models"):
+    #         all_models = self._fit_models
+    #     else:
+    #         all_models = self.get_model()
+    #     if wavelength is None:
+    #         for i in range(self.data.nwave):
+    #             ax[i].plot(self.data.time, all_models["total"][f"w{i}"], label="total")
+    #     else:
+    #         ax[0].plot(
+    #             self.data.time, all_models["total"][f"w{wavelength}"], label="total"
+    #         )
