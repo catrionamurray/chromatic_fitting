@@ -109,7 +109,7 @@ class Fitted(Parameter):
         Clear the stored PyMC3 prior.
         """
         try:
-            delattr(self, "_pymc3_prior")
+            delattr(self, "_pymc3_priors")
             print(f"Cleared {self.name} prior")
         except AttributeError:
             pass
@@ -175,6 +175,10 @@ class WavelikeFitted(Fitted):
             return self._pymc3_priors[self.label(i)]
         except KeyError:
             return self.generate_pymc3(i)
+
+    def clear_prior(self, *args, **kwargs):
+        Fitted.clear_prior(self, *args, **kwargs)
+        self._pymc3_priors = {}
 
     def __repr__(self):
         distribution_name = self.distribution.__name__

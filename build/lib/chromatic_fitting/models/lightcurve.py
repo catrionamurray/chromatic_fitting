@@ -1,3 +1,5 @@
+import warnings
+
 from ..imports import *
 from pymc3 import (
     sample_prior_predictive,
@@ -12,6 +14,33 @@ from ..parameters import *
 from ..utils import *
 from chromatic import *
 import collections
+
+#  - Q=sqrt(N)*depth/error (Winn 2010/ Carter 2008)
+#  - chi-sq
+
+# chi_sq = []
+# nparams = 15
+# for i in range(cmod.data.nwave-1):
+#     chi_sq.append(np.sum((cmod.data_with_model.residuals[i,:]/cmod.data.uncertainty[i,:])**2)/(cmod.data.ntime-numparams-1))
+#     if chi_sq[-1] > 2:
+#         print(cmod.data.wavelength[i], chi_sq[-1])
+# chi_sq
+
+# nparams = 0
+# for k, v in self._chromatic_models.items():
+#     for pname, p in v.parameters.items():
+#         if isinstance(p, Fixed) or isinstance(p, WavelikeFixed):
+#             pass
+#         elif isinstance(p, WavelikeFitted):
+#             nparams += cmod.data.nwave
+#
+#             if "limb_darkening" in pname:
+#                 nparams += 1
+#         else:
+#
+#             if "limb_darkening" in pname:
+#                 nparams += 1
+#             nparams += 1
 
 
 class LightcurveModel:
@@ -177,6 +206,14 @@ class LightcurveModel:
         for k, v in self.parameters.items():
             print(f"{k} =\n  {v}\n")
 
+    def reinitialize(self):
+        self.__init__(name=self.name)
+        self.reinitialize_parameters()
+
+        for x in ["orbit", "every_light_curve"]:
+            if hasattr(self, x):
+                delattr(self, x)
+
     def reinitialize_parameters(self, exclude=[]):
         """
         Remove the pymc3 prior model from every parameter not in exclude
@@ -255,15 +292,19 @@ class LightcurveModel:
         for k, v in self.parameters.items():
             if isinstance(v, Fitted) and not isinstance(v, WavelikeFitted):
                 self.parameters[k] = WavelikeFitted(v.distribution, **v.inputs)
+                self.parameters[k].set_name(k)
             if isinstance(v, Fixed) and not isinstance(v, WavelikeFixed):
                 self.parameters[k] = WavelikeFixed([v.value] * self.data.nwave)
+                self.parameters[k].set_name(k)
 
     def change_all_priors_to_notWavelike(self):
         for k, v in self.parameters.items():
             if isinstance(v, WavelikeFitted):
                 self.parameters[k] = Fitted(v.distribution, **v.inputs)
+                self.parameters[k].set_name(k)
             if isinstance(v, WavelikeFixed):
                 self.parameters[k] = Fixed(v.values[0])
+                self.parameters[k].set_name(k)
 
     def separate_wavelengths(self, i):
         # if self.outlier_flag:
@@ -601,30 +642,29 @@ class LightcurveModel:
 
         results = {}
         for i, w in enumerate(self.data.wavelength):
-            transit_params_mean = self.extract_from_posteriors(self.summary, i)
-            transit_params_lower_error = self.extract_from_posteriors(
+            params_mean = self.extract_from_posteriors(self.summary, i)
+            params_lower_error = self.extract_from_posteriors(
                 self.summary, i, op=uncertainty[0]
             )
-            transit_params_lower_error = dict(
+
+            if params_lower_error is None:
+                warnings.warn(f"{uncertainty[0]} is not in Summary table!")
+                return
+
+            params_lower_error = dict(
                 (key + f"_{uncertainty[0]}", value)
-                for (key, value) in transit_params_lower_error.items()
+                for (key, value) in params_lower_error.items()
             )
-            transit_params_upper_error = self.extract_from_posteriors(
+            params_upper_error = self.extract_from_posteriors(
                 self.summary, i, op=uncertainty[1]
             )
-            transit_params_upper_error = dict(
+            params_upper_error = dict(
                 (key + f"_{uncertainty[1]}", value)
-                for (key, value) in transit_params_upper_error.items()
+                for (key, value) in params_upper_error.items()
             )
-            transit_params = (
-                transit_params_mean
-                | transit_params_lower_error
-                | transit_params_upper_error
-            )
-            ordered_transit_params = collections.OrderedDict(
-                sorted(transit_params.items())
-            )
-            results[f"w{i}"] = ordered_transit_params
+            params = params_mean | params_lower_error | params_upper_error
+            ordered_params = collections.OrderedDict(sorted(params.items()))
+            results[f"w{i}"] = ordered_params
             results[f"w{i}"]["wavelength"] = w
 
         if as_df:
@@ -792,7 +832,7 @@ class LightcurveModel:
         if not hasattr(self, "summary"):
             print(
                 "The summarize step has not been run yet. To include the 'best-fit' model please run "
-                "{self}.summarize() before calling this step!"
+                "{self}.sample() and {self}.summarize() before calling this step!"
             )
             add_model = False
         else:
