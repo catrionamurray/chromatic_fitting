@@ -7,7 +7,8 @@ nav:
     - Tutorials:
         - Linear Fitting: tutorial_for_linear_fitting.ipynb
         - Transit Fitting: tutorial_for_transit_fitting.ipynb
-        - White Light Transit Fitting: tutorial_for_whitelightcurve_fitting.ipynb
+        - Simultaneous vs Separate vs White_Light: Simultaneous_vs_Separate_vs_White_Light.ipynb
+#        - White Light Transit Fitting: tutorial_for_whitelightcurve_fitting.ipynb
         - Polynomial Fitting: tutorial_for_polynomial_fitting.ipynb
         - Combining Models: tutorial_for_combining_models.ipynb
 
