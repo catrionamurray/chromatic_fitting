@@ -366,6 +366,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../tutorial_for_whitelightcurve_fitting/" class="md-nav__link">
+        White-Light Transit Fitting
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../tutorial_for_polynomial_fitting/" class="md-nav__link">
         Polynomial Fitting
       </a>
@@ -1524,7 +1538,7 @@ Licensed under the Apache License, Version 2.0.
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[34]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
@@ -1542,10 +1556,12 @@ Licensed under the Apache License, Version 2.0.
             <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span> <span class="nn">chromatic_fitting</span> <span class="kn">import</span> <span class="o">*</span>
 <span class="kn">from</span> <span class="nn">pymc3</span> <span class="kn">import</span> <span class="n">Uniform</span><span class="p">,</span> <span class="n">Normal</span>
 <span class="kn">import</span> <span class="nn">pymc3</span> <span class="k">as</span> <span class="nn">pm</span>
+<span class="kn">from</span> <span class="nn">pymc3</span> <span class="kn">import</span> <span class="n">sample_prior_predictive</span>
 </pre></div>
 <div id="cell-1" class="clipboard-copy-txt">from chromatic_fitting import *
 from pymc3 import Uniform, Normal
-import pymc3 as pm</div>
+import pymc3 as pm
+from pymc3 import sample_prior_predictive</div>
     
         </div>
     </div>
@@ -1577,13 +1593,13 @@ import pymc3 as pm</div>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[54]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
@@ -1610,29 +1626,6 @@ print(a)</div>
 </div>
 </div>
 
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-
-
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>&lt;🧮 Fixed | 3.0 🧮&gt;
-</pre>
-</div>
-</div>
-
-</div>
-
-</div>
-
 </div>
 </div>
 <div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
@@ -1646,13 +1639,13 @@ print(a)</div>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[55]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
@@ -1675,31 +1668,6 @@ print(a)</div>
     </div>
 
 </div>
-</div>
-
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[55]:</div>
-
-
-
-
-<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>3.0</pre>
-</div>
-
-</div>
-
-</div>
-
 </div>
 
 </div>
@@ -1726,13 +1694,13 @@ print(a)</div>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[18]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
@@ -1759,29 +1727,6 @@ print(b)</div>
 </div>
 </div>
 
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-
-
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>&lt;🧮 WavelikeFixed | one value for each wavelength (4 elements)🧮&gt;
-</pre>
-</div>
-</div>
-
-</div>
-
-</div>
-
 </div>
 </div>
 <div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
@@ -1795,13 +1740,13 @@ print(b)</div>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[22]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
@@ -1824,31 +1769,6 @@ print(b)</div>
     </div>
 
 </div>
-</div>
-
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[22]:</div>
-
-
-
-
-<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>3.6</pre>
-</div>
-
-</div>
-
-</div>
-
 </div>
 
 </div>
@@ -1875,13 +1795,13 @@ print(b)</div>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[58]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
@@ -1908,29 +1828,6 @@ print(c)</div>
 </div>
 </div>
 
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-
-
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>&lt;🧮 Fitted Normal(mu=1.0, sigma=0.1, name=&#39;c&#39;) 🧮&gt;
-</pre>
-</div>
-</div>
-
-</div>
-
-</div>
-
 </div>
 </div>
 <div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
@@ -1944,13 +1841,13 @@ print(c)</div>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[63]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
@@ -1975,31 +1872,6 @@ print(c)</div>
 </div>
 </div>
 
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[63]:</div>
-
-
-
-
-<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>(pymc3.distributions.continuous.Normal, {&#39;mu&#39;: 1.0, &#39;sigma&#39;: 0.1, &#39;name&#39;: &#39;c&#39;})</pre>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
 </div>
 </div>
 <div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
@@ -2019,7 +1891,7 @@ print(c)</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[64]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
@@ -2059,13 +1931,13 @@ print(c)</div>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[62]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
@@ -2090,33 +1962,96 @@ print(c)</div>
 </div>
 </div>
 
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>A final check we can do to understand this parameter is to sample from the prior we've given the model:</p>
 
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-10">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="k">with</span> <span class="n">mod</span><span class="p">:</span>
+    <span class="c1"># take 5000 samples from the prior distributions:</span>
+    <span class="n">sample</span> <span class="o">=</span> <span class="n">sample_prior_predictive</span><span class="p">(</span><span class="mi">5000</span><span class="p">)</span>
+</pre></div>
+<div id="cell-10" class="clipboard-copy-txt">with mod:
+    # take 5000 samples from the prior distributions:
+    sample = sample_prior_predictive(5000)</div>
     
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[62]:</div>
+        </div>
+    </div>
 
-
-
-
-<div class="jp-RenderedLatex jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/latex">
-$$
-                \begin{array}{rcl}
-                \text{c} &amp;\sim &amp; \text{Normal}
-                \end{array}
-                $$
+</div>
 </div>
 
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>And if everything has worked then this should look like a Gaussian centred at 1 with ~sigma of 0.1!</p>
 
 </div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-11">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="s1">&#39;c&#39;</span><span class="p">],</span> <span class="n">bins</span><span class="o">=</span><span class="mi">20</span><span class="p">);</span>
+</pre></div>
+<div id="cell-11" class="clipboard-copy-txt">plt.hist(sample['c'], bins=20);</div>
+    
+        </div>
+    </div>
 
+</div>
 </div>
 
 </div>
@@ -2143,18 +2078,18 @@ $$
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[70]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
         <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-10">
+            <clipboard-copy for="cell-12">
             <div>
                 <span class="notice" hidden>Copied!</span>
                 <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
@@ -2167,36 +2102,13 @@ $$
             <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">d</span> <span class="o">=</span> <span class="n">WavelikeFitted</span><span class="p">(</span><span class="n">Uniform</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">upper</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;d&quot;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
 </pre></div>
-<div id="cell-10" class="clipboard-copy-txt">d = WavelikeFitted(Uniform, lower=1.0, upper=5.0, name="d")
+<div id="cell-12" class="clipboard-copy-txt">d = WavelikeFitted(Uniform, lower=1.0, upper=5.0, name="d")
 print(d)</div>
     
         </div>
     </div>
 
 </div>
-</div>
-
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-
-
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain">
-<pre>&lt;🧮 WavelikeFitted Uniform(lower=1.0, upper=5.0, name=&#39;d&#39;) for each wavelength 🧮&gt;
-</pre>
-</div>
-</div>
-
-</div>
-
 </div>
 
 </div>
@@ -2212,18 +2124,18 @@ print(d)</div>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[71]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
         <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-11">
+            <clipboard-copy for="cell-13">
             <div>
                 <span class="notice" hidden>Copied!</span>
                 <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
@@ -2235,38 +2147,12 @@ print(d)</div>
         </div>
             <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">d</span><span class="o">.</span><span class="n">distribution</span><span class="p">,</span> <span class="n">d</span><span class="o">.</span><span class="n">inputs</span>
 </pre></div>
-<div id="cell-11" class="clipboard-copy-txt">d.distribution, d.inputs</div>
+<div id="cell-13" class="clipboard-copy-txt">d.distribution, d.inputs</div>
     
         </div>
     </div>
 
 </div>
-</div>
-
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[71]:</div>
-
-
-
-
-<div class="jp-RenderedText jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/plain">
-<pre>(pymc3.distributions.continuous.Uniform,
- {&#39;lower&#39;: 1.0, &#39;upper&#39;: 5.0, &#39;name&#39;: &#39;d&#39;})</pre>
-</div>
-
-</div>
-
-</div>
-
 </div>
 
 </div>
@@ -2288,12 +2174,12 @@ print(d)</div>
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[72]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
         <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-12">
+            <clipboard-copy for="cell-14">
             <div>
                 <span class="notice" hidden>Copied!</span>
                 <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
@@ -2307,7 +2193,7 @@ print(d)</div>
     <span class="n">d</span><span class="o">.</span><span class="n">get_prior</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
     <span class="n">d</span><span class="o">.</span><span class="n">get_prior</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
 </pre></div>
-<div id="cell-12" class="clipboard-copy-txt">with pm.Model() as m:
+<div id="cell-14" class="clipboard-copy-txt">with pm.Model() as m:
     d.get_prior(i=2)
     d.get_prior(i=4)</div>
     
@@ -2330,18 +2216,18 @@ print(d)</div>
 </div>
 </div>
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
 <div class="jp-Cell-inputWrapper">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[73]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
         <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-13">
+            <clipboard-copy for="cell-15">
             <div>
                 <span class="notice" hidden>Copied!</span>
                 <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
@@ -2353,7 +2239,129 @@ print(d)</div>
         </div>
             <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span>
 </pre></div>
-<div id="cell-13" class="clipboard-copy-txt">m</div>
+<div id="cell-15" class="clipboard-copy-txt">m</div>
+    
+        </div>
+    </div>
+
+</div>
+</div>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-16">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="k">with</span> <span class="n">m</span><span class="p">:</span>
+    <span class="n">sample</span> <span class="o">=</span> <span class="n">sample_prior_predictive</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+</pre></div>
+<div id="cell-16" class="clipboard-copy-txt">with m:
+    sample = sample_prior_predictive(1000)</div>
+    
+        </div>
+    </div>
+
+</div>
+</div>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-17">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="s1">&#39;d_w4&#39;</span><span class="p">]);</span>
+</pre></div>
+<div id="cell-17" class="clipboard-copy-txt">plt.hist(sample['d_w4']);</div>
+    
+        </div>
+    </div>
+
+</div>
+</div>
+
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>Looks pretty uniform between 1-5!</p>
+
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>Now if we look at the model we should see the parameters <code>d_w2</code> and <code>d_w4</code> because we've specified i=2 and i=4:</p>
+
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[106]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-18">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span>
+</pre></div>
+<div id="cell-18" class="clipboard-copy-txt">m</div>
     
         </div>
     </div>
@@ -2371,7 +2379,7 @@ print(d)</div>
 <div class="jp-OutputArea-child">
 
     
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[73]:</div>
+    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[106]:</div>
 
 
 
@@ -2390,6 +2398,114 @@ $$
 
 </div>
 
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[107]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-19">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="k">with</span> <span class="n">m</span><span class="p">:</span>
+    <span class="n">sample</span> <span class="o">=</span> <span class="n">sample_prior_predictive</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+</pre></div>
+<div id="cell-19" class="clipboard-copy-txt">with m:
+    sample = sample_prior_predictive(1000)</div>
+    
+        </div>
+    </div>
+
+</div>
+</div>
+
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[109]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+        
+        
+        <div class="CodeMirror cm-s-jupyter">
+        <div class="zeroclipboard-container">
+            <clipboard-copy for="cell-20">
+            <div>
+                <span class="notice" hidden>Copied!</span>
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
+                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
+                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
+                </svg>
+                </div>
+            </clipboard-copy>
+        </div>
+            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">sample</span><span class="p">[</span><span class="s1">&#39;d_w4&#39;</span><span class="p">]);</span>
+</pre></div>
+<div id="cell-20" class="clipboard-copy-txt">plt.hist(sample['d_w4']);</div>
+    
+        </div>
+    </div>
+
+</div>
+</div>
+
+<div class="jp-Cell-outputWrapper">
+<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
+</div>
+
+
+<div class="jp-OutputArea jp-Cell-outputArea">
+
+<div class="jp-OutputArea-child">
+
+    
+    <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
+
+
+
+
+<div class="jp-RenderedImage jp-OutputArea-output ">
+<img src="data:image/png;base64,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
+"
+class="
+jp-needs-light-background
+"
+>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput " data-mime-type="text/markdown">
+<p>Looks pretty uniform between 1-5!</p>
+
+</div>
+</div>
 </div>
 </div>
 </div>

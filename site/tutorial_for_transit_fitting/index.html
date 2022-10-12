@@ -389,6 +389,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../tutorial_for_whitelightcurve_fitting/" class="md-nav__link">
+        White-Light Transit Fitting
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../tutorial_for_polynomial_fitting/" class="md-nav__link">
         Polynomial Fitting
       </a>
@@ -3681,7 +3695,7 @@ jp-needs-light-background
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[22]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[57]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
         
         
         <div class="CodeMirror cm-s-jupyter">
@@ -3697,11 +3711,13 @@ jp-needs-light-background
             </clipboard-copy>
         </div>
             <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">t</span><span class="o">.</span><span class="n">plot_transmission_spectrum</span><span class="p">(</span><span class="n">uncertainty</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;hdi_16%&#39;</span><span class="p">,</span><span class="s1">&#39;hdi_84%&#39;</span><span class="p">])</span>
-<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">wavelength</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.15</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">nwave</span><span class="p">),</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;True Rp/R*&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">wavelength</span><span class="p">,</span> <span class="n">rbin5</span><span class="o">.</span><span class="n">metadata</span><span class="p">[</span><span class="s1">&#39;transit_parameters&#39;</span><span class="p">][</span><span class="s1">&#39;rp_unbinned&#39;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;True Rp/R*&quot;</span><span class="p">)</span>
+
 <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">();</span>
 </pre></div>
 <div id="cell-22" class="clipboard-copy-txt">t.plot_transmission_spectrum(uncertainty=['hdi_16%','hdi_84%'])
-plt.plot(r.wavelength, np.linspace(0.2, 0.15, r.nwave), label="True Rp/R*")
+plt.plot(r.wavelength, rbin5.metadata['transit_parameters']['rp_unbinned'], label="True Rp/R*")
+
 plt.legend();</div>
     
         </div>
@@ -3758,426 +3774,6 @@ jp-needs-light-background
 </div>
 
 </div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell   ">
-<div class="jp-Cell-inputWrapper">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[23]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
-        
-        
-        <div class="CodeMirror cm-s-jupyter">
-        <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-23">
-            <div>
-                <span class="notice" hidden>Copied!</span>
-                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
-                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
-                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
-                </svg>
-                </div>
-            </clipboard-copy>
-        </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">t</span><span class="o">.</span><span class="n">summary</span>
-</pre></div>
-<div id="cell-23" class="clipboard-copy-txt">t.summary</div>
-    
-        </div>
-    </div>
-
-</div>
-</div>
-
-<div class="jp-Cell-outputWrapper">
-<div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
-</div>
-
-
-<div class="jp-OutputArea jp-Cell-outputArea">
-
-<div class="jp-OutputArea-child">
-
-    
-    <div class="jp-OutputPrompt jp-OutputArea-prompt">Out[23]:</div>
-
-
-
-<div class="jp-RenderedHTMLCommon jp-RenderedHTML jp-OutputArea-output jp-OutputArea-executeResult" data-mime-type="text/html">
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>mean</th>
-      <th>sd</th>
-      <th>hdi_16%</th>
-      <th>hdi_84%</th>
-      <th>mcse_mean</th>
-      <th>mcse_sd</th>
-      <th>ess_bulk</th>
-      <th>ess_tail</th>
-      <th>r_hat</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>transit_radius_ratio_w0</th>
-      <td>0.196850</td>
-      <td>0.001054</td>
-      <td>0.195735</td>
-      <td>0.197820</td>
-      <td>1.130000e-05</td>
-      <td>8.000000e-06</td>
-      <td>8964.806137</td>
-      <td>5963.959924</td>
-      <td>1.000038</td>
-    </tr>
-    <tr>
-      <th>transit_baseline_w0</th>
-      <td>1.000135</td>
-      <td>0.000177</td>
-      <td>0.999955</td>
-      <td>1.000308</td>
-      <td>1.400000e-06</td>
-      <td>1.000000e-06</td>
-      <td>15602.497523</td>
-      <td>10103.415532</td>
-      <td>1.000604</td>
-    </tr>
-    <tr>
-      <th>transit_radius_ratio_w1</th>
-      <td>0.185004</td>
-      <td>0.001068</td>
-      <td>0.183938</td>
-      <td>0.186037</td>
-      <td>1.030000e-05</td>
-      <td>7.300000e-06</td>
-      <td>10817.294878</td>
-      <td>6507.848928</td>
-      <td>1.000541</td>
-    </tr>
-    <tr>
-      <th>transit_baseline_w1</th>
-      <td>0.999951</td>
-      <td>0.000176</td>
-      <td>0.999782</td>
-      <td>1.000131</td>
-      <td>1.500000e-06</td>
-      <td>1.000000e-06</td>
-      <td>14688.887443</td>
-      <td>8830.209029</td>
-      <td>1.000364</td>
-    </tr>
-    <tr>
-      <th>transit_radius_ratio_w2</th>
-      <td>0.175489</td>
-      <td>0.001032</td>
-      <td>0.174520</td>
-      <td>0.176575</td>
-      <td>1.030000e-05</td>
-      <td>7.300000e-06</td>
-      <td>9979.889853</td>
-      <td>7769.737289</td>
-      <td>1.000677</td>
-    </tr>
-    <tr>
-      <th>transit_baseline_w2</th>
-      <td>0.999971</td>
-      <td>0.000176</td>
-      <td>0.999798</td>
-      <td>1.000150</td>
-      <td>1.300000e-06</td>
-      <td>1.000000e-06</td>
-      <td>17114.559639</td>
-      <td>11270.736585</td>
-      <td>1.001561</td>
-    </tr>
-    <tr>
-      <th>transit_radius_ratio_w3</th>
-      <td>0.167636</td>
-      <td>0.001032</td>
-      <td>0.166691</td>
-      <td>0.168739</td>
-      <td>9.400000e-06</td>
-      <td>6.600000e-06</td>
-      <td>11976.130095</td>
-      <td>8664.438824</td>
-      <td>1.000265</td>
-    </tr>
-    <tr>
-      <th>transit_baseline_w3</th>
-      <td>1.000046</td>
-      <td>0.000169</td>
-      <td>0.999875</td>
-      <td>1.000210</td>
-      <td>1.300000e-06</td>
-      <td>9.000000e-07</td>
-      <td>16035.331257</td>
-      <td>9692.552933</td>
-      <td>1.000007</td>
-    </tr>
-    <tr>
-      <th>transit_radius_ratio_w4</th>
-      <td>0.157092</td>
-      <td>0.001048</td>
-      <td>0.156066</td>
-      <td>0.158183</td>
-      <td>9.900000e-06</td>
-      <td>7.000000e-06</td>
-      <td>11204.001252</td>
-      <td>8520.385442</td>
-      <td>1.000551</td>
-    </tr>
-    <tr>
-      <th>transit_baseline_w4</th>
-      <td>1.000005</td>
-      <td>0.000170</td>
-      <td>0.999833</td>
-      <td>1.000176</td>
-      <td>1.400000e-06</td>
-      <td>1.000000e-06</td>
-      <td>14605.592146</td>
-      <td>10234.023422</td>
-      <td>1.000196</td>
-    </tr>
-    <tr>
-      <th>transit_epoch</th>
-      <td>0.000010</td>
-      <td>0.000073</td>
-      <td>-0.000063</td>
-      <td>0.000081</td>
-      <td>5.000000e-07</td>
-      <td>6.000000e-07</td>
-      <td>19301.645809</td>
-      <td>10860.905012</td>
-      <td>1.000366</td>
-    </tr>
-    <tr>
-      <th>transit_impact_parameter</th>
-      <td>0.072298</td>
-      <td>0.048729</td>
-      <td>0.000032</td>
-      <td>0.092909</td>
-      <td>6.890000e-04</td>
-      <td>5.826000e-04</td>
-      <td>4621.771437</td>
-      <td>3419.281968</td>
-      <td>1.000693</td>
-    </tr>
-    <tr>
-      <th>transit_stellar_radius</th>
-      <td>1.179374</td>
-      <td>0.012408</td>
-      <td>1.170083</td>
-      <td>1.197520</td>
-      <td>1.807000e-04</td>
-      <td>1.278000e-04</td>
-      <td>4030.901344</td>
-      <td>3579.652342</td>
-      <td>1.001794</td>
-    </tr>
-    <tr>
-      <th>transit_stellar_mass</th>
-      <td>0.844964</td>
-      <td>0.026998</td>
-      <td>0.805358</td>
-      <td>0.865231</td>
-      <td>3.962000e-04</td>
-      <td>2.802000e-04</td>
-      <td>3502.906550</td>
-      <td>1762.094829</td>
-      <td>1.001168</td>
-    </tr>
-    <tr>
-      <th>transit_a_R*</th>
-      <td>3.373038</td>
-      <td>0.016508</td>
-      <td>3.360682</td>
-      <td>3.391459</td>
-      <td>2.309000e-04</td>
-      <td>1.633000e-04</td>
-      <td>6187.964172</td>
-      <td>3772.370721</td>
-      <td>1.000964</td>
-    </tr>
-    <tr>
-      <th>transit_limb_darkening_w0[0]</th>
-      <td>0.282839</td>
-      <td>0.087861</td>
-      <td>0.200358</td>
-      <td>0.377082</td>
-      <td>9.613000e-04</td>
-      <td>7.369000e-04</td>
-      <td>8031.357267</td>
-      <td>4694.432452</td>
-      <td>1.000342</td>
-    </tr>
-    <tr>
-      <th>transit_limb_darkening_w0[1]</th>
-      <td>0.144619</td>
-      <td>0.158613</td>
-      <td>-0.017603</td>
-      <td>0.301598</td>
-      <td>1.784500e-03</td>
-      <td>1.261900e-03</td>
-      <td>7314.561667</td>
-      <td>3786.230563</td>
-      <td>1.000531</td>
-    </tr>
-    <tr>
-      <th>transit_limb_darkening_w1[0]</th>
-      <td>0.302008</td>
-      <td>0.095797</td>
-      <td>0.206296</td>
-      <td>0.396989</td>
-      <td>1.014000e-03</td>
-      <td>7.171000e-04</td>
-      <td>8742.894845</td>
-      <td>5336.131956</td>
-      <td>1.000500</td>
-    </tr>
-    <tr>
-      <th>transit_limb_darkening_w1[1]</th>
-      <td>0.206545</td>
-      <td>0.171916</td>
-      <td>0.026470</td>
-      <td>0.369993</td>
-      <td>1.842500e-03</td>
-      <td>1.460100e-03</td>
-      <td>8375.544704</td>
-      <td>4727.750183</td>
-      <td>1.000340</td>
-    </tr>
-    <tr>
-      <th>transit_limb_darkening_w2[0]</th>
-      <td>0.419366</td>
-      <td>0.085170</td>
-      <td>0.350372</td>
-      <td>0.517058</td>
-      <td>9.557000e-04</td>
-      <td>7.188000e-04</td>
-      <td>7172.844669</td>
-      <td>7165.335530</td>
-      <td>1.000304</td>
-    </tr>
-    <tr>
-      <th>transit_limb_darkening_w2[1]</th>
-      <td>-0.028803</td>
-      <td>0.146806</td>
-      <td>-0.226166</td>
-      <td>0.062104</td>
-      <td>1.821600e-03</td>
-      <td>1.288100e-03</td>
-      <td>5241.889446</td>
-      <td>3300.049279</td>
-      <td>1.000720</td>
-    </tr>
-    <tr>
-      <th>transit_limb_darkening_w3[0]</th>
-      <td>0.331411</td>
-      <td>0.087270</td>
-      <td>0.262827</td>
-      <td>0.434720</td>
-      <td>9.236000e-04</td>
-      <td>6.855000e-04</td>
-      <td>8326.935897</td>
-      <td>7883.285443</td>
-      <td>1.000342</td>
-    </tr>
-    <tr>
-      <th>transit_limb_darkening_w3[1]</th>
-      <td>-0.012111</td>
-      <td>0.144503</td>
-      <td>-0.205404</td>
-      <td>0.065244</td>
-      <td>1.662000e-03</td>
-      <td>1.175300e-03</td>
-      <td>5802.919728</td>
-      <td>3557.528409</td>
-      <td>1.000540</td>
-    </tr>
-    <tr>
-      <th>transit_limb_darkening_w4[0]</th>
-      <td>0.399725</td>
-      <td>0.091249</td>
-      <td>0.331058</td>
-      <td>0.506786</td>
-      <td>9.346000e-04</td>
-      <td>7.048000e-04</td>
-      <td>8545.725944</td>
-      <td>7320.797781</td>
-      <td>1.000565</td>
-    </tr>
-    <tr>
-      <th>transit_limb_darkening_w4[1]</th>
-      <td>-0.052149</td>
-      <td>0.144996</td>
-      <td>-0.243752</td>
-      <td>0.020698</td>
-      <td>1.607700e-03</td>
-      <td>1.209700e-03</td>
-      <td>5851.202906</td>
-      <td>4054.146420</td>
-      <td>1.000761</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs  ">
-<div class="jp-Cell-inputWrapper">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea">
-<div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[&nbsp;]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
-        
-        
-        <div class="CodeMirror cm-s-jupyter">
-        <div class="zeroclipboard-container">
-            <clipboard-copy for="cell-24">
-            <div>
-                <span class="notice" hidden>Copied!</span>
-                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" version="1.1"  data-view-component="true" class="clipboard-copy-icon">
-                    <path fill="currentColor" fill-rule="evenodd" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"></path>
-                    <path fill="currentColor" fill-rule="evenodd" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"></path>
-                </svg>
-                </div>
-            </clipboard-copy>
-        </div>
-            <div class="highlight-ipynb hl-python"><pre><span></span>
-</pre></div>
-<div id="cell-24" class="clipboard-copy-txt"></div>
-    
-        </div>
-    </div>
-
-</div>
-</div>
-
-</div>
 </div>
 </div>
 
@@ -4213,13 +3809,13 @@ jp-needs-light-background
       
       
         
-        <a href="../tutorial_for_polynomial_fitting/" class="md-footer__link md-footer__link--next" aria-label="Next: Polynomial Fitting" rel="next">
+        <a href="../tutorial_for_whitelightcurve_fitting/" class="md-footer__link md-footer__link--next" aria-label="Next: White-Light Transit Fitting" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Polynomial Fitting
+              White-Light Transit Fitting
             </div>
           </div>
           <div class="md-footer__button md-icon">

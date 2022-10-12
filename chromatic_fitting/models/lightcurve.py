@@ -1,3 +1,5 @@
+import warnings
+
 from ..imports import *
 from pymc3 import (
     sample_prior_predictive,
@@ -601,30 +603,29 @@ class LightcurveModel:
 
         results = {}
         for i, w in enumerate(self.data.wavelength):
-            transit_params_mean = self.extract_from_posteriors(self.summary, i)
-            transit_params_lower_error = self.extract_from_posteriors(
+            params_mean = self.extract_from_posteriors(self.summary, i)
+            params_lower_error = self.extract_from_posteriors(
                 self.summary, i, op=uncertainty[0]
             )
-            transit_params_lower_error = dict(
+
+            if params_lower_error is None:
+                warnings.warn(f"{uncertainty[0]} is not in Summary table!")
+                return
+
+            params_lower_error = dict(
                 (key + f"_{uncertainty[0]}", value)
-                for (key, value) in transit_params_lower_error.items()
+                for (key, value) in params_lower_error.items()
             )
-            transit_params_upper_error = self.extract_from_posteriors(
+            params_upper_error = self.extract_from_posteriors(
                 self.summary, i, op=uncertainty[1]
             )
-            transit_params_upper_error = dict(
+            params_upper_error = dict(
                 (key + f"_{uncertainty[1]}", value)
-                for (key, value) in transit_params_upper_error.items()
+                for (key, value) in params_upper_error.items()
             )
-            transit_params = (
-                transit_params_mean
-                | transit_params_lower_error
-                | transit_params_upper_error
-            )
-            ordered_transit_params = collections.OrderedDict(
-                sorted(transit_params.items())
-            )
-            results[f"w{i}"] = ordered_transit_params
+            params = params_mean | params_lower_error | params_upper_error
+            ordered_params = collections.OrderedDict(sorted(params.items()))
+            results[f"w{i}"] = ordered_params
             results[f"w{i}"]["wavelength"] = w
 
         if as_df:
