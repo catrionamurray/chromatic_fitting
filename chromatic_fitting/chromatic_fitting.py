@@ -97,6 +97,7 @@ class LightcurveModel:
         # define some default parameters (fixed):
         self.defaults = dict()
         self.optimization = "simultaneous"
+        self.store_model = False
         self.name = name
         # pass
 
@@ -201,6 +202,40 @@ class LightcurveModel:
         self.parameters = add_string_before_each_dictionary_key(
             self.parameters, self.name
         )
+    def extract_deterministic_model(self):
+        """
+        Extract the deterministic model from the summary statistics
+        """
+        if self.optimization == "separate":
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+        else:
+            datas = [self.get_data()]
+
+        model = {}
+        for nm, data in enumerate(datas):
+            for w in range(data.nwave):
+                if self.optimization == "separate":
+                    summary = self.summary[w + nm]
+                else:
+                    summary = self.summary
+
+                if f"w{w + nm}" not in model.keys():
+                    model[f"w{w + nm}"] = []
+                for t in range(data.ntime):
+                    model[f"w{w + nm}"].append(
+                        summary["median"][f"{self.name}_model_w{w + nm}[{t}]"]
+                    )
+        return model
+    def get_model(self, as_dict=True, as_array=False):
+        """
+        Return the 'best-fit' model from the summary table as a dictionary or as an array
+        """
+        model = self.extract_deterministic_model()
+
+        if as_array:
+            return np.array(list(model.values()))
+        elif as_dict:
+            return model
 
     def get_parameter_shape(self, param):
         inputs = param.inputs
@@ -434,9 +469,9 @@ class LightcurveModel:
                             start = mod.test_point
     
                         try:
-                            trace_it = sample(start=start, **kw)
-                            save_trace(trace_it, "/Users/pawa3371/Work/secondaryfitting_chromatic/nomap/trace_fwhm/eclipse_simulated_full_"+str(i)+".trace",overwrite=True)
-                            #self.trace.append(sample(start=start, **kw))
+                            #trace_it = sample(start=start, **kw)
+                            #save_trace(trace_it, "/Users/pawa3371/Work/secondaryfitting_chromatic/nomap/trace_ypos/eclipse_simulated_full_"+str(i)+".trace",overwrite=True)
+                            self.trace.append(sample(start=start, **kw))
                         except Exception as e:
                             print(f"Sampling failed for one of the models: {e}")
                             self.trace.append(None)
@@ -914,8 +949,8 @@ class PolynomialModel(LightcurveModel):
                         # print(f"{name}p_{d}", p)
                         poly.append(p * (x**d))
                     # print(poly, "\n", eval_in_model(pm.math.sum(poly,axis=0)))
-
-                    Deterministic(f"{name}model_w{i + j}", pm.math.sum(poly, axis=0))
+                    if self.store_model:
+                        Deterministic(f"{name}model_w{i + j}", pm.math.sum(poly, axis=0))
 
                     if f"wavelength_data_{i + j}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_data_{i + j}"] = pm.math.sum(
@@ -1228,8 +1263,10 @@ class EclipseModel(LightcurveModel):
             "omega",
             "limbdark1",
             "limbdark2",
-            "offset",
-            "Y10",
+            #"offset",
+            #"Y10",
+            #"Y1min1",
+            #"Y11",
             ]
 
         super().__init__(**kw)
@@ -1256,8 +1293,10 @@ class EclipseModel(LightcurveModel):
             omega = 0.0,
             limbdark1 = 0.4,
             limbdark2 = 0.2,
-            offset = 0.0,
-            Y10 = 0.0
+            #offset = 0.0,
+            #Y10 = 0.0,
+            #Y1min1 = 0.0,
+            #Y11 = 0.0,
         )
 
     def set_name(self, name):
@@ -1299,33 +1338,36 @@ class EclipseModel(LightcurveModel):
                 for i, w in enumerate(data.wavelength):
 
                     # Set up a primary start
-                    star = starry.Primary(starry.Map(ydeg=0, udeg=2, amp=self.parameters[name+"stellar_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),
+                    star = starry.Primary(starry.Map(ydeg=0, udeg=0, amp=self.parameters[name+"stellar_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),
                                                     m=self.parameters[name+"stellar_mass"].get_prior(j + i),
                                                     r= self.parameters[name+"stellar_radius"].get_prior(j + i),
                                                     prot=self.parameters[name+"stellar_prot"].get_prior(j + i),
                                                     )
-                    star.map[1] = self.parameters[name+"limbdark1"].get_prior(j + i)
-                    star.map[2] = self.parameters[name+"limbdark2"].get_prior(j + i)
+                    #star.map[1] = self.parameters[name+"limbdark1"].get_prior(j + i)
+                    #star.map[2] = self.parameters[name+"limbdark2"].get_prior(j + i)
 
                     # Set up a Keplerian orbit for the planets
                     planet = starry.kepler.Secondary(
-                                                starry.Map(ydeg=1,udeg=0, amp=10 ** self.parameters[name+"planet_log_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),  # the surface map
+                                                starry.Map(ydeg=0,udeg=0, amp=10 ** self.parameters[name+"planet_log_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),  # the surface map
                                                 inc=self.parameters[name+"inclination"].get_prior(j + i),
                                                 m=self.parameters[name+"planet_mass"].get_prior(j + i),  # mass in solar masses
                                                 r=self.parameters[name+"planet_radius"].get_prior(j + i),  # radius in solar radii
                                                 porb=self.parameters[name+"period"].get_prior(j + i),  # orbital period in days
+                                                prot=self.parameters[name+"period"].get_prior(j + i),  # orbital period in days
                                                 ecc=self.parameters[name+"eccentricity"].get_prior(j + i),  # eccentricity
                                                 w=self.parameters[name+"omega"].get_prior(j + i),  # longitude of pericenter in degrees
                                                 t0=self.parameters[name+"t0"].get_prior(j + i),  # time of transit in days
                                             length_unit=u.R_jup,mass_unit=u.M_jup,)
 
-                    planet.map[1, 0] = self.parameters[name+"Y10"].get_prior(j + i)
-                    planet.theta0 = 180.0 + self.parameters[name+"offset"].get_prior(j + i)
+                    #planet.map[1, 0] = self.parameters[name+"Y10"].get_prior(j + i)
+                    #planet.map[1, -1] = self.parameters[name+"Y1min1"].get_prior(j + i)
+                    #planet.map[1, 1] = self.parameters[name+"Y11"].get_prior(j + i)
+                    #planet.theta0 = 180.0 + self.parameters[name+"offset"].get_prior(j + i)
 
                     system = starry.System(star, planet)
-                    flux_model = Deterministic(name+f"{j+i}", system.flux(data.time))
-                    
-		    # self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
+                    flux_model = system.flux(data.time)
+                    #flux_model = Deterministic(name+f"{j+i}", system.flux(data.time))
+		    #self.every_light_curve = dict(Counter(self.every_light_curve)+Counter({f"wavelength_{i}":mu}))
                     if f"wavelength_data_{j + i}" not in self.every_light_curve.keys():
                         self.every_light_curve[f"wavelength_data_{j + i}"] = flux_model
                     else:
