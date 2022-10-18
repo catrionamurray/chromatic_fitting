@@ -127,6 +127,12 @@ class PolynomialModel(LightcurveModel):
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
                 # for every wavelength set up a polynomial model
+                p = []
+                for d in range(self.degree + 1):
+                    p.append(
+                        self.parameters[f"{name}p_{d}"].get_prior_vector(data.nwave)
+                    )
+
                 for i, w in enumerate(data.wavelength):
                     poly = []
 
@@ -155,9 +161,10 @@ class PolynomialModel(LightcurveModel):
                     self.normalize = normalize
 
                     # compute the polynomial by looping over the coeffs for each degree:
+
                     for d in range(self.degree + 1):
-                        p = self.parameters[f"{name}p_{d}"].get_prior(i + j)
-                        poly.append(p * (x**d))
+                        # p = self.parameters[f"{name}p_{d}"].get_prior_vector(i + j)
+                        poly.append(p[d][i + j] * (x**d))
 
                     # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                     # later:

@@ -104,6 +104,33 @@ class Fitted(Parameter):
         except AttributeError:
             return self.generate_pymc3()
 
+    def generate_pymc3_vector(self, *args, **kwargs):
+        """
+        Generate a PyMC3 prior.
+
+        Parameters
+        ----------
+        kw : dict
+            All keyword arguments will be ignored.
+        """
+        self.inputs["shape"] = 1
+        self._pymc3_prior = self.distribution(**self.inputs)
+        return self._pymc3_prior
+
+    def get_prior_vector(self, *args, **kwargs):
+        """
+        Get the PyMC3 prior.
+
+        Returns
+        -------
+        prior : PyMC3 distribution
+            The prior for this parameter for this wavelength
+        """
+        try:
+            return self._pymc3_prior
+        except AttributeError:
+            return self.generate_pymc3_vector()
+
     def clear_prior(self, *args, **kwargs):
         """
         Clear the stored PyMC3 prior.
@@ -175,6 +202,50 @@ class WavelikeFitted(Fitted):
             return self._pymc3_priors[self.label(i)]
         except KeyError:
             return self.generate_pymc3(i)
+
+    def generate_pymc3_vector(self, shape, *args, **kwargs):
+        """
+        Generate a PyMC3 prior for wavelength i.
+
+        Parameters
+        ----------
+        shape : int
+            The number of wavelengths associated with this prior.
+        kw : dict
+            All keyword arguments will be ignored.
+        """
+        inputs = self.inputs.copy()
+        # if a different prior is passed for every wavelength then we use only the one for wavelength i
+        # for k, v in self.inputs.items():
+        #     if len(np.shape(v)) > 1:
+        #         inputs[k] = v[i]
+
+        inputs = dict(**inputs)
+        # inputs["name"] = self.inputs["name"]
+        inputs["shape"] = shape
+
+        prior = self.distribution(**inputs)
+        self._pymc3_prior = prior
+        return prior
+
+    def get_prior_vector(self, shape, *args, **kwargs):
+        """
+        Get the PyMC3 prior for this wavelength.
+
+        Parameters
+        ----------
+        shape : int
+            The number of wavelengths associated with this prior.
+
+        Returns
+        -------
+        prior : PyMC3 distribution
+            The prior for this parameter
+        """
+        try:
+            return self._pymc3_prior
+        except AttributeError:
+            return self.generate_pymc3_vector(shape)
 
     def clear_prior(self, *args, **kwargs):
         """

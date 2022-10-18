@@ -894,12 +894,19 @@ class LightcurveModel:
         for k, v in self.parameters.items():
             if k in posterior_means.index:
                 fv[k] = posterior_means[k]
-            elif f"{k}[0]" in posterior_means.index:
-                n = 0
-                fv[k] = []
-                while f"{k}[{n}]" in posterior_means.index:
-                    fv[k].append(posterior_means[f"{k}[{n}]"])
-                    n += 1
+            elif f"{k}[{i}]" in posterior_means.index:
+                fv[k] = posterior_means[f"{k}[{i}]"]
+                # n = 0
+                # fv[k] = []
+                # while f"{k}[{n}]" in posterior_means.index:
+                #     fv[f"{k}[{n}]"] = posterior_means[f"{k}[{n}]"]
+                #     n += 1
+
+                # while f"{k}[{n}]" in posterior_means.index:
+                #     fv[k].append(posterior_means[f"{k}[{n}]"])
+                #     n += 1
+                # if n == 1:
+                #     fv[k] = fv[k][0]
             elif f"{k}_w{i}" in posterior_means.index:
                 fv[k] = posterior_means[f"{k}_w{i}"]
             elif f"{k}_w{i}[0]" in posterior_means.index:
