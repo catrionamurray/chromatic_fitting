@@ -8,7 +8,7 @@ JWST_data
 chromatic_fitting/archive
 chromatic_fitting/tests
 site/*
-build/lib/chromatic_fitting/*
+build/*
 .DS_Store
 *.npy
 *.fits
