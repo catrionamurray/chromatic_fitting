@@ -7,6 +7,9 @@ JWST_data
 .idea
 chromatic_fitting/archive
 chromatic_fitting/tests
+site
+build/lib/chromatic_fitting
+.DS_Store
 *.npy
 *.fits
 *.txt
