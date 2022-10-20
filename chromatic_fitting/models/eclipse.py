@@ -1,0 +1,402 @@
+from ..imports import *
+
+from .lightcurve import *
+import warnings
+
+"""
+Example of setting up a TransitModel:
+
+def create_new_transit_model():
+    # create transit model:
+    e = EclipseModel()
+    
+    # add empty pymc3 model:
+    e.initialize_empty_model()
+    
+    # add our parameters:
+    e.setup_parameters(
+                      period=1, # a fixed value!
+                       epoch=Fitted(Uniform,lower=-0.05,upper=0.05), # one fitted value across all wavelengths
+                       stellar_radius = Fitted(Uniform, lower=0.8, upper=1.2,testval=1),
+                       stellar_mass =Fitted(Uniform, lower=0.8, upper=1.2,testval=1),
+                       radius_ratio=WavelikeFitted(Normal, mu=0.5, sigma=0.05), # a value fitted for every wavelength!
+                       impact_parameter=Fitted(ImpactParameter,ror=0.15,testval=0.44),
+                       limb_darkening=WavelikeFitted(QuadLimbDark,testval=[0.05,0.35]),
+                        baseline = WavelikeFitted(Normal, mu=1.0, sigma=0.05), # I will keep this fixed for when we add a polynomial model!
+                    )
+    
+    # attach a Rainbow object, r, to the model:
+    e.attach_data(r)
+    
+    # setup the lightcurves for the transit model:
+    e.setup_lightcurves()
+    
+    # relate the "actual" data to the model (using a Normal likelihood function)
+    e.setup_likelihood()    
+    
+    # MCMC (NUTS) sample the parameters:
+    e.sample(tune=2000, draws=2000, chains=4, cores=4)
+    
+    # summarize the results:
+    e.summarize(round_to=7, fmt='wide')
+    
+    return e
+                
+"""
+
+
+class EclipseModel(LightcurveModel):
+    """
+    A transit model for the lightcurve.
+    """
+
+    def __init__(self, name: str = "eclipse", **kw: object) -> None:
+        """
+        Initialise the eclipse model.
+
+        Parameters
+        ----------
+        name: the name of the model ('eclipse' by default)
+        kw: any keywords to pass to the lightcurve model
+        """
+
+        # require the following eclipse parameters to initialize the model:
+        self.required_parameters = [
+            "stellar_radius",
+            "stellar_mass",
+            "stellar_amplitude",
+            "stellar_prot",
+            "period",
+            "t0",
+            "planet_log_amplitude",
+            "inclination",
+            "planet_mass",
+            "planet_radius",
+            "eccentricity",
+            "omega",
+            "limbdark1",
+            "limbdark2",
+        ]
+
+        super().__init__(**kw)
+        self.set_defaults()
+        self.set_name(name)
+        self.model = self.eclipse_model
+
+    def __repr__(self):
+        """
+        Print the transit model.
+        """
+        return f"<chromatic transit model '{self.name}' 🌈>"
+
+    def set_defaults(self):
+        """
+        Set the default parameters for the model.
+        """
+        self.defaults = dict(
+            stellar_radius = 1,
+            stellar_mass = 1,
+            stellar_amplitude = 1.0,
+            stellar_prot = 1.0,
+            period = 1.0,
+            t0 = 1.0,
+            planet_log_amplitude = -2.8,
+            inclination = 90.0,
+            planet_mass = 0.01,
+            planet_radius = 0.01,
+            eccentricity = 0.0,
+            omega = 0.0,
+            limbdark1 = 0.4,
+            limbdark2 = 0.2,)
+
+    def setup_lightcurves(self, store_models: bool = False):
+        """
+        Create an `starry` light curve model, given the stored parameters.
+        [This should be run after .attach_data()]
+
+        Parameters
+        ----------
+        store_models: boolean for whether to store the eclipse model during fitting (for faster
+        plotting/access later), default=False
+        """
+
+        # ensure that attach data has been run before setup_lightcurves
+        if not hasattr(self, "data"):
+            print("You need to attach some data to this chromatic model!")
+            return
+
+        # if the model has a name then add this to each parameter's name
+        if hasattr(self, "name"):
+            name = self.name + "_"
+        else:
+            name = ""
+            print("No name set for the model.")
+
+        # set up the models, data and orbits in a format for looping
+        if self.optimization == "separate":
+            models = self._pymc3_model
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+        else:
+            models = [self._pymc3_model]
+            datas = [self.get_data()]
+
+        # if the .every_light_curve attribute (final lc model) is not already present then create it now
+        if not hasattr(self, "every_light_curve"):
+            self.every_light_curve = {}
+
+        # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
+        # of RAM)
+        if store_models == True:
+            self.store_models = store_models
+
+        for j, (mod, data) in enumerate(zip(models, datas)):
+            with mod:
+                for i, w in enumerate(data.wavelength):
+
+                    # extract light curve from Starry model at given times
+                    star = starry.Primary(starry.Map(ydeg=0, udeg=0, amp=self.parameters[name + "stellar_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),
+                                                   m=self.parameters[name + "stellar_mass"].get_prior(j+i),
+                                                   r=self.parameters[name + "stellar_radius"].get_prior(j+i),
+                                                   prot=self.parameters[name+"stellar_prot"].get_prior(j+i),
+                                                   )
+
+                    planet = starry.kepler.Secondary(
+                                                starry.Map(ydeg=0,udeg=0, amp=10 ** self.parameters[name+"planet_log_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),  # the surface map
+                                                inc=self.parameters[name+"inclination"].get_prior(j + i),
+                                                m=self.parameters[name+"planet_mass"].get_prior(j + i),  # mass in Jupiter masses
+                                                r=self.parameters[name+"planet_radius"].get_prior(j + i),  # radius in Jupiter radii
+                                                porb=self.parameters[name+"period"].get_prior(j + i),  # orbital period in days
+                                                prot=self.parameters[name+"period"].get_prior(j + i),  # orbital period in days
+                                                ecc=self.parameters[name+"eccentricity"].get_prior(j + i),  # eccentricity
+                                                w=self.parameters[name+"omega"].get_prior(j + i),  # longitude of pericenter in degrees
+                                                t0=self.parameters[name+"t0"].get_prior(j + i),  # time of transit in days
+                                                length_unit=u.R_jup,mass_unit=u.M_jup,
+                                                )
+
+                    system = starry.System(star,planet)
+                    flux_model = system.flux(data.time)
+
+                    # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
+                    # later:
+                    if self.store_models:
+                        Deterministic(f"{name}model_w{i + j}", flux_model)
+
+                    # add the eclipse to the final light curve
+                    if f"wavelength_{j + i}" not in self.every_light_curve.keys():
+                        self.every_light_curve[f"wavelength_{j + i}"] = flux_model
+                    else:
+                        self.every_light_curve[f"wavelength_{j + i}"] += flux_model
+
+                self.model_chromatic_eclipse_flux = [
+                    self.every_light_curve[k] for k in tqdm(self.every_light_curve)
+                ]
+
+
+    def add_model_to_rainbow(self):
+        """
+        Add the eclipse model to the Rainbow object.
+        """
+        # if we decided to flag outliers then flag these in the final model
+        if self.outlier_flag:
+            data = self.data_without_outliers
+        else:
+            data = self.data
+
+        # if optimization method is "white_light" then extract the white light curve
+        if self.optimization == "white_light":
+            data = self.white_light
+
+        # extract model as an array
+        model = self.get_model(as_array=True)
+        # attach the model to the Rainbow (creating a Rainbow_with_model object)
+        r_with_model = data.attach_model(model=model, planet_model=model)
+        # save the Rainbow_with_model for later
+        self.data_with_model = r_with_model
+
+    def eclipse_model(
+        self, eclipse_params: dict, i: int = 0, time: list = None
+    ) -> np.array:
+        """
+        Create a transit model given the passed parameters.
+
+        Parameters
+        ----------
+        transit_params: A dictionary of parameters to be used in the transit model.
+        i: wavelength index
+        time: If we don't want to use the default time then the user can pass a time array on which to calculate the model
+
+        Returns
+        -------
+        object
+        """
+
+        if self.optimization == "separate":
+            data = self.get_data(i)
+        else:
+            data = self.get_data()
+
+        # if the model has a name then add this to each parameter"s name
+        if hasattr(self, "name"):
+            name = self.name + "_"
+        else:
+            name = ""
+
+        if time is None:
+            time = list(self.data.time.to_value("day"))
+
+        star = starry.Primary(starry.Map(ydeg=0, udeg=0, amp=eclipse_params[f"{name}stellar_amplitude"], inc=90.0, obl=0.0),
+                                                           m=eclipse_params[f"{name}stellar_mass"],
+                                                           r=eclipse_params[f"{name}stellar_radius"],
+                                                           prot=eclipse_params[f"{name}stellar_prot"],
+                                                   )
+
+        planet = starry.kepler.Secondary(
+                                    starry.Map(ydeg=0,udeg=0, amp=10 ** eclipse_params[f"{name}planet_log_amplitude"], inc=90.0, obl=0.0),  # the surface map
+                                    inc=eclipse_params[f"{name}inclination"],
+                                    m=eclipse_params[f"{name}planet_mass"],  # mass in Jupiter masses
+                                    r=eclipse_params[f"{name}planet_radius"],  # radius in Jupiter radii
+                                    porb=eclipse_params[f"{name}period"],  # orbital period in days
+                                    prot=eclipse_params[f"{name}period"],  # orbital period in days
+                                    ecc=eclipse_params[f"{name}eccentricity"],  # eccentricity
+                                    w=eclipse_params[f"{name}omega"],  # longitude of pericenter in degrees
+                                    t0=eclipse_params[f"{name}t0"],  # time of transit in days
+                                    length_unit=u.R_jup,mass_unit=u.M_jup,
+                                    )
+
+        system = starry.System(star,planet)
+        flux_model = system.flux(data.time).eval()
+
+        return flux_model
+'''
+
+    def plot_orbit(self, timedata: object = None):
+        """
+        Plot the orbit model (to check that the planet is transiting at the times we've set).
+
+        Parameters
+        ----------
+        timedata: An array of times to plot the orbit at, only used if .attach_data() hasn't been
+        run yet (default=None)
+
+        """
+
+        # If the data hasn't been attached yet, then use the timedata passed to the function
+        if not hasattr(self, "data"):
+            if timedata is None:
+                warnings.warn(
+                    "No data attached to this object and no time data provided. Plotting orbit will not work."
+                )
+                print(
+                    "No data attached to this object and no time data provided. Plotting orbit will not work."
+                )
+                return
+        else:
+            timedata = self.data.time
+
+        # if the optimization method is separate wavelengths then set up for looping
+        if self.optimization == "separate":
+            models = self._pymc3_model
+            orbits = self.orbit
+        else:
+            models = [self._pymc3_model]
+            orbits = [self.orbit]
+
+        # plot the orbit
+        for j, (mod, orbit) in enumerate(zip(models, orbits)):
+            with mod:
+                # find the x,y,z position of the planet at each timestamp relative to the centre of the star
+                x, y, z = [
+                    eval_in_model(bla, point=mod.test_point)
+                    for bla in orbit.get_planet_position(timedata)
+                ]
+                plt.figure(figsize=(10, 3))
+                theta = np.linspace(0, 2 * np.pi)
+                plt.fill_between(np.cos(theta), np.sin(theta), color="gray")
+                plt.scatter(x, y, c=timedata)
+                plt.axis("scaled")
+                plt.ylim(-1, 1)
+                plt.show()
+                plt.close()
+
+    def make_transmission_spectrum_table(
+        self, uncertainty=["hdi_3%", "hdi_97%"], svname=None
+    ):
+        """
+        Generate and return a transmission spectrum table
+        """
+        results = self.get_results(uncertainty=uncertainty)[
+            [
+                "wavelength",
+                f"{self.name}_radius_ratio",
+                f"{self.name}_radius_ratio_{uncertainty[0]}",
+                f"{self.name}_radius_ratio_{uncertainty[1]}",
+            ]
+        ]
+        trans_table = results[["wavelength", f"{self.name}_radius_ratio"]]
+        if "hdi" in uncertainty[0]:
+            trans_table[f"{self.name}_radius_ratio_neg_error"] = (
+                results[f"{self.name}_radius_ratio"]
+                - results[f"{self.name}_radius_ratio_{uncertainty[0]}"]
+            )
+            trans_table[f"{self.name}_radius_ratio_pos_error"] = (
+                results[f"{self.name}_radius_ratio_{uncertainty[1]}"]
+                - results[f"{self.name}_radius_ratio"]
+            )
+        else:
+            trans_table[f"{self.name}_radius_ratio_neg_error"] = results[
+                f"{self.name}_radius_ratio_{uncertainty[0]}"
+            ]
+            trans_table[f"{self.name}_radius_ratio_pos_error"] = results[
+                f"{self.name}_radius_ratio_{uncertainty[1]}"
+            ]
+
+        if svname is not None:
+            assert isinstance(svname, object)
+            trans_table.to_csv(svname)
+        else:
+            return trans_table
+
+    def plot_transmission_spectrum(
+        self, table=None, uncertainty=["hdi_3%", "hdi_97%"], **kw
+    ):
+        if table is not None:
+            transmission_spectrum = table
+            try:
+                # ensure the correct columns exist in the transmission spectrum table
+                assert transmission_spectrum[f"{self.name}_radius_ratio"]
+                assert transmission_spectrum[f"{self.name}_radius_ratio_neg_error"]
+                assert transmission_spectrum[f"{self.name}_radius_ratio_pos_error"]
+                assert transmission_spectrum["wavelength"]
+            except:
+                print(
+                    f"The given table doesn't have the correct columns 'wavelength', '{self.name}_radius_ratio', "
+                    f"{self.name}_radius_ratio_pos_error' and '{self.name}_radius_ratio_neg_error'"
+                )
+        else:
+            kw["uncertainty"] = uncertainty
+            transmission_spectrum = self.make_transmission_spectrum_table(**kw)
+            transmission_spectrum["wavelength"] = [
+                t.to_value("micron") for t in transmission_spectrum["wavelength"].values
+            ]
+
+        plt.figure(figsize=(10, 4))
+        plt.title("Transmission Spectrum")
+        plt.plot(
+            transmission_spectrum["wavelength"],
+            transmission_spectrum[f"{self.name}_radius_ratio"],
+            "kx",
+        )
+        plt.errorbar(
+            transmission_spectrum["wavelength"],
+            transmission_spectrum[f"{self.name}_radius_ratio"],
+            yerr=[
+                transmission_spectrum[f"{self.name}_radius_ratio_neg_error"],
+                transmission_spectrum[f"{self.name}_radius_ratio_pos_error"],
+            ],
+            color="k",
+            capsize=2,
+            linestyle="None",
+        )
+        plt.xlabel("Wavelength (microns)")
+        plt.ylabel("Radius Ratio")
+'''
