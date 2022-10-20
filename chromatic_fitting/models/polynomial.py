@@ -164,7 +164,7 @@ class PolynomialModel(LightcurveModel):
 
                 for d in range(self.degree + 1):
                     # p = self.parameters[f"{name}p_{d}"].get_prior_vector(i + j)
-                    poly.append(p[d] * ([x**d] * data.nwave))
+                    poly.append(p[d] * np.array([x**d] * data.nwave))
 
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:

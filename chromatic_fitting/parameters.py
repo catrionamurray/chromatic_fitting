@@ -241,13 +241,9 @@ class WavelikeFitted(Fitted):
                     inputs["shape"] = (shape, self.inputs["shape"])
                     if "testval" in inputs:
                         inputs["testval"] = inputs["testval"] * shape
-                        # print(shape(inputs["testval"]))
-            # print(shape, self.inputs["shape"])
 
-        # print(inputs["shape"])
         self.inputs["shape"] = inputs["shape"]
         prior = self.distribution(**inputs)
-        # print(prior)
         self._pymc3_prior = prior
         return prior
 

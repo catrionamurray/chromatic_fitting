@@ -233,18 +233,36 @@ class TransitModel(LightcurveModel):
                 light_curves = []
                 for i, w in enumerate(data.wavelength):
 
+                    if isinstance(
+                        self.parameters[name + "limb_darkening"], WavelikeFitted
+                    ):
+                        ld = limb_darkening[j][i]
+                    else:
+                        ld = limb_darkening[j]
+
+                    if isinstance(
+                        self.parameters[name + "radius_ratio"], WavelikeFitted
+                    ):
+                        pr = planet_radius[j][i]
+                    else:
+                        pr = planet_radius[j]
+
                     # extract light curve from Exoplanet model at given times
                     light_curves.append(
-                        xo.LimbDarkLightCurve(limb_darkening[j][i]).get_light_curve(
+                        xo.LimbDarkLightCurve(ld).get_light_curve(
                             orbit=orbit,
-                            r=planet_radius[j][i],
+                            r=pr,
                             t=list(data.time.to_value("day")),
                         )
                     )
 
-                print(light_curves)
                 # calculate the transit + flux (out-of-transit) baseline model
-                mu = light_curves + [baseline[j][i] for i in range(data.nwave)]
+                if isinstance(self.parameters[name + "baseline"], WavelikeFitted):
+                    lc = [light_curves[i] + baseline[j][i] for i in range(data.nwave)]
+                else:
+                    lc = light_curves[i] + baseline[j]
+
+                mu = pm.math.sum(lc, axis=-1)
                 # mu = pm.math.sum(np.array(light_curves), axis=-1) + baseline[j]  # [i]
 
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
@@ -254,17 +272,9 @@ class TransitModel(LightcurveModel):
 
                 # add the transit to the final light curve
                 if f"wavelength" not in self.every_light_curve.keys():
-                    self.every_light_curve[f"wavelength"] = pm.math.sum(
-                        light_curves, axis=-1
-                    ) + [
-                        baseline[j][i] for i in range(data.nwave)
-                    ]  # [i]
+                    self.every_light_curve[f"wavelength"] = mu  # [i]
                 else:
-                    self.every_light_curve[f"wavelength"] += pm.math.sum(
-                        light_curves, axis=-1
-                    ) + [
-                        baseline[j][i] for i in range(data.nwave)
-                    ]  # [i]
+                    self.every_light_curve[f"wavelength"] += mu  # [i]
 
                 self.model_chromatic_transit_flux = [
                     self.every_light_curve[k] for k in tqdm(self.every_light_curve)

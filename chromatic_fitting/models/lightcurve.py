@@ -893,35 +893,62 @@ class LightcurveModel:
         posterior_means = summary[op]
         fv = {}
         for k, v in self.parameters.items():
-            if k in posterior_means.index:
-                fv[k] = posterior_means[k]
-            elif f"{k}[{i}]" in posterior_means.index:
-                fv[k] = posterior_means[f"{k}[{i}]"]
-            elif f"{k}[0]" in posterior_means.index:
-                fv[k] = posterior_means[f"{k}[0]"]
-            elif f"{k}[{i}, 0]" in posterior_means.index:
-                n = 0
-                fv[k] = []
-                while f"{k}[{i}, {n}]" in posterior_means.index:
-                    fv[k].append(posterior_means[f"{k}[{i}, {n}]"])
-                    n += 1
-                if n == 1:
-                    fv[k] = fv[k][0]
-            elif f"{k}_w{i}" in posterior_means.index:
-                fv[k] = posterior_means[f"{k}_w{i}"]
-            elif f"{k}_w{i}[0]" in posterior_means.index:
-                n = 0
-                fv[k] = []
-                while f"{k}_w{i}[{n}]" in posterior_means.index:
-                    fv[k].append(posterior_means[f"{k}_w{i}[{n}]"])
-                    n += 1
-            elif f"{k}_w{i}" in posterior_means.index:
-                fv[k] = posterior_means[f"{k}_w{i}"]
+            more_than_one_input = False
+            if isinstance(v, Fitted):
+                if type(v.inputs["shape"]) == int:
+                    if v.inputs["shape"] != 1:
+                        more_than_one_input = True
+                elif v.inputs["shape"] != (self.data.nwave, 1):
+                    more_than_one_input = True
+
+            if more_than_one_input:
+                if f"{k}[0]" in posterior_means.index:
+                    n = 0
+                    fv[k] = []
+                    while f"{k}[{n}]" in posterior_means.index:
+                        fv[k].append(posterior_means[f"{k}[{n}]"])
+                        n += 1
+                    if n == 1:
+                        fv[k] = fv[k][0]
+                elif f"{k}[{i}, 0]" in posterior_means.index:
+                    n = 0
+                    fv[k] = []
+                    while f"{k}[{i}, {n}]" in posterior_means.index:
+                        fv[k].append(posterior_means[f"{k}[{i}, {n}]"])
+                        n += 1
+                    if n == 1:
+                        fv[k] = fv[k][0]
             else:
-                if isinstance(v, WavelikeFixed):
-                    fv[k] = v.values[0]
-                elif isinstance(v, Fixed):
-                    fv[k] = v.value
+                if k in posterior_means.index:
+                    fv[k] = posterior_means[k]
+                elif f"{k}[{i}]" in posterior_means.index:
+                    fv[k] = posterior_means[f"{k}[{i}]"]
+                elif f"{k}[0]" in posterior_means.index:
+                    fv[k] = posterior_means[f"{k}[0]"]
+                elif f"{k}[{i}, 0]" in posterior_means.index:
+                    fv[k] = posterior_means[f"{k}[{i}, 0]"]
+                    # n = 0
+                    # fv[k] = []
+                    # while f"{k}[{i}, {n}]" in posterior_means.index:
+                    #     fv[k].append(posterior_means[f"{k}[{i}, {n}]"])
+                    #     n += 1
+                    # if n == 1:
+                    #     fv[k] = fv[k][0]
+                # elif f"{k}_w{i}" in posterior_means.index:
+                #     fv[k] = posterior_means[f"{k}_w{i}"]
+                # elif f"{k}_w{i}[0]" in posterior_means.index:
+                #     n = 0
+                #     fv[k] = []
+                #     while f"{k}_w{i}[{n}]" in posterior_means.index:
+                #         fv[k].append(posterior_means[f"{k}_w{i}[{n}]"])
+                #         n += 1
+                # elif f"{k}_w{i}" in posterior_means.index:
+                #     fv[k] = posterior_means[f"{k}_w{i}"]
+                else:
+                    if isinstance(v, WavelikeFixed):
+                        fv[k] = v.values[0]
+                    elif isinstance(v, Fixed):
+                        fv[k] = v.value
 
         return fv
 
