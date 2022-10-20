@@ -126,13 +126,23 @@ class TransitModel(LightcurveModel):
 
                 # Set up a Keplerian orbit for the planets (for now without eccentricity)
                 orbit = xo.orbits.KeplerianOrbit(
-                    period=self.parameters[name + "period"].get_prior(j),
-                    t0=self.parameters[name + "epoch"].get_prior(j),
-                    b=self.parameters[name + "impact_parameter"].get_prior(j),
+                    period=self.parameters[name + "period"].get_prior_vector(
+                        self.data.nwave
+                    ),
+                    t0=self.parameters[name + "epoch"].get_prior_vector(
+                        self.data.nwave
+                    ),
+                    b=self.parameters[name + "impact_parameter"].get_prior_vector(
+                        self.data.nwave
+                    ),
                     # ecc=self.parameters[name + "eccentricity"].get_prior(j),
                     # omega=self.parameters[name + "omega"].get_prior(j),
-                    r_star=self.parameters[name + "stellar_radius"].get_prior(j),
-                    m_star=self.parameters[name + "stellar_mass"].get_prior(j),
+                    r_star=self.parameters[name + "stellar_radius"].get_prior_vector(
+                        self.data.nwave
+                    ),
+                    m_star=self.parameters[name + "stellar_mass"].get_prior_vector(
+                        self.data.nwave
+                    ),
                 )
 
                 # store a separate orbit for each model if we are optimizing wavelengths separately
@@ -197,7 +207,10 @@ class TransitModel(LightcurveModel):
                 # store Deterministic parameter {a/R*} for use later
                 Deterministic(
                     f"{name}a_R*",
-                    orbit.a / self.parameters[name + "stellar_radius"].get_prior(j),
+                    orbit.a
+                    / self.parameters[name + "stellar_radius"].get_prior_vector(
+                        data.nwave
+                    ),
                 )
                 # stored_a_r = True
 
@@ -217,34 +230,41 @@ class TransitModel(LightcurveModel):
                     self.parameters[name + "baseline"].get_prior_vector(data.nwave)
                 )
 
+                light_curves = []
                 for i, w in enumerate(data.wavelength):
 
                     # extract light curve from Exoplanet model at given times
-                    light_curves = xo.LimbDarkLightCurve(
-                        limb_darkening[j][i]
-                    ).get_light_curve(
-                        orbit=orbit,
-                        r=planet_radius[j][i],
-                        t=list(data.time.to_value("day")),
+                    light_curves.append(
+                        xo.LimbDarkLightCurve(limb_darkening[j][i]).get_light_curve(
+                            orbit=orbit,
+                            r=planet_radius[j][i],
+                            t=list(data.time.to_value("day")),
+                        )
                     )
 
-                    # calculate the transit + flux (out-of-transit) baseline model
-                    mu = pm.math.sum(light_curves, axis=-1) + baseline[j][i]
+                print(light_curves)
+                # calculate the transit + flux (out-of-transit) baseline model
+                mu = light_curves + [baseline[j][i] for i in range(data.nwave)]
+                # mu = pm.math.sum(np.array(light_curves), axis=-1) + baseline[j]  # [i]
 
-                    # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
-                    # later:
-                    if self.store_models:
-                        Deterministic(f"{name}model_w{i + j}", mu)
+                # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
+                # later:
+                if self.store_models:
+                    Deterministic(f"{name}model", mu)
 
-                    # add the transit to the final light curve
-                    if f"wavelength_{j + i}" not in self.every_light_curve.keys():
-                        self.every_light_curve[f"wavelength_{j + i}"] = pm.math.sum(
-                            light_curves, axis=-1
-                        ) + (self.parameters[name + "baseline"].get_prior(j + i))
-                    else:
-                        self.every_light_curve[f"wavelength_{j + i}"] += (
-                            pm.math.sum(light_curves, axis=-1) + baseline[j][i]
-                        )
+                # add the transit to the final light curve
+                if f"wavelength" not in self.every_light_curve.keys():
+                    self.every_light_curve[f"wavelength"] = pm.math.sum(
+                        light_curves, axis=-1
+                    ) + [
+                        baseline[j][i] for i in range(data.nwave)
+                    ]  # [i]
+                else:
+                    self.every_light_curve[f"wavelength"] += pm.math.sum(
+                        light_curves, axis=-1
+                    ) + [
+                        baseline[j][i] for i in range(data.nwave)
+                    ]  # [i]
 
                 self.model_chromatic_transit_flux = [
                     self.every_light_curve[k] for k in tqdm(self.every_light_curve)

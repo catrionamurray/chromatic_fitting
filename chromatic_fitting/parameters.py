@@ -31,6 +31,9 @@ class Fixed(Parameter):
         """
         return self.value
 
+    def get_prior_vector(self, *args, **kwargs):
+        return self.get_prior(self, *args, **kwargs)
+
     def __repr__(self):
         return f"<🧮 Fixed | {self.value} 🧮>"
 
@@ -59,6 +62,9 @@ class WavelikeFixed(Fixed):
             The value or array for this parameter at this wavelength.
         """
         return self.values[i]
+
+    def get_prior_vector(self, i, *args, **kwargs):
+        return self.get_prior(self, i, *args, **kwargs)
 
     def __repr__(self):
         return f"<🧮 WavelikeFixed | one value for each wavelength ({len(self.values)} elements)🧮>"
@@ -113,7 +119,8 @@ class Fitted(Parameter):
         kw : dict
             All keyword arguments will be ignored.
         """
-        self.inputs["shape"] = 1
+        if "shape" not in self.inputs:
+            self.inputs["shape"] = 1
         self._pymc3_prior = self.distribution(**self.inputs)
         return self._pymc3_prior
 
@@ -222,9 +229,25 @@ class WavelikeFitted(Fitted):
 
         inputs = dict(**inputs)
         # inputs["name"] = self.inputs["name"]
-        inputs["shape"] = shape
+        if "shape" not in self.inputs:
+            inputs["shape"] = (shape, 1)
+        else:
+            if type(self.inputs["shape"]) == int:
+                inputs["shape"] = (shape, self.inputs["shape"])
+                if "testval" in inputs:
+                    inputs["testval"] = [inputs["testval"]] * shape
+            else:
+                if len(self.inputs["shape"]) == 1:
+                    inputs["shape"] = (shape, self.inputs["shape"])
+                    if "testval" in inputs:
+                        inputs["testval"] = inputs["testval"] * shape
+                        # print(shape(inputs["testval"]))
+            # print(shape, self.inputs["shape"])
 
+        # print(inputs["shape"])
+        self.inputs["shape"] = inputs["shape"]
         prior = self.distribution(**inputs)
+        # print(prior)
         self._pymc3_prior = prior
         return prior
 

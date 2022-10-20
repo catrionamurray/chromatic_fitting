@@ -386,32 +386,40 @@ class LightcurveModel:
 
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
+                uncertainties, flux = [], []
                 for i, w in enumerate(data.wavelength):
-                    k = f"wavelength_{j + i}"
+                    # k = f"wavelength_{j + i}"
 
                     if inflate_uncertainties:
-                        uncertainties = data.uncertainty[i, :] * eval_in_model(
-                            self.parameters["nsigma"].get_prior(j + i)
+                        uncertainties.append(
+                            data.uncertainty[i, :]
+                            * eval_in_model(self.parameters["nsigma"].get_prior(j + i))
                         )
                     else:
-                        uncertainties = data.uncertainty[i, :]
+                        uncertainties.append(data.uncertainty[i, :])
 
-                    try:
-                        # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
-                        if mask_outliers:
-                            flux = self.data_without_outliers.flux[i + j, :]
-                        else:
-                            flux = data.flux[i, :]
+                    # try:
+                    # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
+                    if mask_outliers:
+                        flux.append(self.data_without_outliers.flux[i + j, :])
+                    else:
+                        flux.append(data.flux[i, :])
 
-                        pm.Normal(
-                            f"{k}_data",
-                            mu=self.every_light_curve[k],
-                            sd=uncertainties,
-                            observed=flux,
-                        )
-                    except Exception as e:
-                        print(f"Setting up likelihood failed for wavelength {i}: {e}")
-                        self.bad_wavelengths.append(i)
+                try:
+                    pm.Normal(
+                        "data",
+                        mu=self.every_light_curve["wavelength"],
+                        sd=np.array(uncertainties),
+                        observed=np.array(flux),
+                    )
+                    # pm.Normal(f"{k}_data",
+                    #         mu=self.every_light_curve[k],
+                    #         sd=uncertainties,
+                    #         observed=flux,
+                    # )
+                except Exception as e:
+                    print(f"Setting up likelihood failed for wavelength {i}: {e}")
+                    self.bad_wavelengths.append(i)
 
     def sample_prior(self, ndraws=3):
         """
@@ -714,10 +722,7 @@ class LightcurveModel:
         ):
             for i in range(n):
                 flux_for_this_sample = np.array(
-                    [
-                        prior_predictive_trace[f"wavelength_{w + nm}_data"][i]
-                        for w in range(data.nwave)
-                    ]
+                    [prior_predictive_trace[f"data"][i] for w in range(data.nwave)]
                 )
                 # model_for_this_sample = np.array(
                 #     [
@@ -752,34 +757,30 @@ class LightcurveModel:
         ):
 
             for w in range(data.nwave):
-                if f"wavelength_{w + nm}_data" in posterior_predictive_trace.keys():
+                if "data" in posterior_predictive_trace.keys():
                     # generate a posterior model for every wavelength:
                     if (
                         f"{self.name}_model_w{w + nm}"
                         in posterior_predictive_trace.keys()
                     ):
-                        posterior_model[
-                            f"{self.name}_model_w{w + nm}"
-                        ] = self.sample_posterior(
-                            n, var_names=[f"{self.name}_model_w{w + nm}"]
-                        )[
-                            f"{self.name}_model_w{w + nm}"
-                        ]
+                        posterior_model[f"{self.name}_model"] = self.sample_posterior(
+                            n, var_names=[f"{self.name}_model"]
+                        )[f"{self.name}_model"]
 
             for w in range(data.nwave):
                 for i in range(n):
                     # for every posterior sample extract the posterior model and distribution draw for every wavelength:
                     flux_for_this_sample = np.array(
                         [
-                            posterior_predictive_trace[f"wavelength_{w + nm}_data"][i]
+                            posterior_predictive_trace[f"data"][i]
                             for w in range(data.nwave)
                         ]
                     )
 
-                    if f"{self.name}_model_w{w + nm}" in posterior_model.keys():
+                    if f"{self.name}_model" in posterior_model.keys():
                         model_for_this_sample = np.array(
                             [
-                                posterior_model[f"{self.name}_model_w{w + nm}"][i]
+                                posterior_model[f"{self.name}_model"][i]
                                 for w in range(data.nwave)
                             ]
                         )
@@ -813,7 +814,7 @@ class LightcurveModel:
                     model[f"w{w + nm}"] = []
                 for t in range(data.ntime):
                     model[f"w{w + nm}"].append(
-                        summary["mean"][f"{self.name}_model_w{w + nm}[{t}]"]
+                        summary["mean"][f"{self.name}_model[{w}, {t}]"]
                     )
         return model
 
@@ -896,17 +897,16 @@ class LightcurveModel:
                 fv[k] = posterior_means[k]
             elif f"{k}[{i}]" in posterior_means.index:
                 fv[k] = posterior_means[f"{k}[{i}]"]
-                # n = 0
-                # fv[k] = []
-                # while f"{k}[{n}]" in posterior_means.index:
-                #     fv[f"{k}[{n}]"] = posterior_means[f"{k}[{n}]"]
-                #     n += 1
-
-                # while f"{k}[{n}]" in posterior_means.index:
-                #     fv[k].append(posterior_means[f"{k}[{n}]"])
-                #     n += 1
-                # if n == 1:
-                #     fv[k] = fv[k][0]
+            elif f"{k}[0]" in posterior_means.index:
+                fv[k] = posterior_means[f"{k}[0]"]
+            elif f"{k}[{i}, 0]" in posterior_means.index:
+                n = 0
+                fv[k] = []
+                while f"{k}[{i}, {n}]" in posterior_means.index:
+                    fv[k].append(posterior_means[f"{k}[{i}, {n}]"])
+                    n += 1
+                if n == 1:
+                    fv[k] = fv[k][0]
             elif f"{k}_w{i}" in posterior_means.index:
                 fv[k] = posterior_means[f"{k}_w{i}"]
             elif f"{k}_w{i}[0]" in posterior_means.index:
