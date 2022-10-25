@@ -975,11 +975,12 @@ class LightcurveModel:
         """
 
         # if the optimization method is "separate" then loop over each wavelength's data
-        if self.optimization == "separate":
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            data = self.get_data()
-            datas = [data[i, :] for i in range(data.nwave)]
+        # if self.optimization == "separate":
+        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
+        # else:
+        #     # data = [self.get_data()]
+        #     data = self.get_data()
+        # datas = [data[i, :] for i in range(data.nwave)]
 
         if self.store_models:
             # if we decided to store the LC model extract this now
@@ -992,7 +993,8 @@ class LightcurveModel:
             # if we decided not to store the LC model then generate the model
             model = {}
             # generate the transit model from the best fit parameters for each wavelength
-            for i, data in enumerate(datas):
+            # for j, data in enumerate(datas):
+            for i, wave in enumerate(range(self.data.nwave)):
                 if params_dict is None:
                     if hasattr(self, "summary"):
                         params = self.extract_from_posteriors(self.summary, i)
