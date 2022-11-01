@@ -63,8 +63,11 @@ class WavelikeFixed(Fixed):
         """
         return self.values[i]
 
-    def get_prior_vector(self, i, *args, **kwargs):
-        return self.get_prior(self, i, *args, **kwargs)
+    def get_prior_vector(self, i=None, shape=1, *args, **kwargs):
+        if i is None:
+            return [self.get_prior(i, *args, **kwargs) for i in range(shape)]
+        else:
+            return self.get_prior(i, *args, **kwargs)
 
     def __repr__(self):
         return f"<🧮 WavelikeFixed | one value for each wavelength ({len(self.values)} elements)🧮>"
@@ -210,7 +213,7 @@ class WavelikeFitted(Fitted):
         except KeyError:
             return self.generate_pymc3(i)
 
-    def generate_pymc3_vector(self, shape, *args, **kwargs):
+    def generate_pymc3_vector(self, shape, i=None, *args, **kwargs):
         """
         Generate a PyMC3 prior for wavelength i.
 
@@ -228,7 +231,6 @@ class WavelikeFitted(Fitted):
         #         inputs[k] = v[i]
 
         inputs = dict(**inputs)
-        # inputs["name"] = self.inputs["name"]
         if "shape" not in self.inputs:
             inputs["shape"] = (shape, 1)
         else:
@@ -247,7 +249,7 @@ class WavelikeFitted(Fitted):
         self._pymc3_prior = prior
         return prior
 
-    def get_prior_vector(self, shape, *args, **kwargs):
+    def get_prior_vector(self, shape=1, *args, **kwargs):
         """
         Get the PyMC3 prior for this wavelength.
 
@@ -272,6 +274,7 @@ class WavelikeFitted(Fitted):
         """
         try:
             delattr(self, "_pymc3_priors")
+            delattr(self, "_pymc3_prior")
             print(f"Cleared {self.name} prior")
             self._pymc3_priors = {}
         except AttributeError:

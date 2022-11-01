@@ -186,6 +186,8 @@ class LightcurveModel:
         for v in self.parameters.values():
             v.set_name(f"{self.name}_{v.name}")
 
+        self._original_parameters = self.parameters.copy()
+
     def get_parameter_shape(self, param):
         inputs = param.inputs
         for k in ["testval", "mu", "lower", "upper", "sigma"]:
@@ -218,10 +220,11 @@ class LightcurveModel:
         """
         Remove the pymc3 prior model from every parameter not in exclude
         """
-        for k, v in self.parameters.items():
+        for k, v in self._original_parameters.copy().items():
             if k not in exclude:
                 if isinstance(v, Fitted):
                     v.clear_prior()
+                self.parameters[k] = v
 
     def extract_extra_class_inputs(self):
         """
@@ -266,7 +269,7 @@ class LightcurveModel:
             self.optimization = optimization_method
             if self.optimization == "separate":
                 try:
-                    self.create_multiple_models()
+                    # self.create_multiple_models()
                     self.change_all_priors_to_Wavelike()
                 except:
                     pass
@@ -318,7 +321,7 @@ class LightcurveModel:
             data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
         return data_copy
 
-    def get_data(self, i=0):
+    def get_data(self, i=None):
         """
         Extract the data to use for the optimization depending on the method chosen
         """
@@ -329,7 +332,13 @@ class LightcurveModel:
                 self.white_light_curve()
                 return self.white_light
             if self.optimization == "separate":
-                return self.separate_wavelengths(i)
+                if i is not None:
+                    return self.separate_wavelengths(i)
+                else:
+                    return self.data
+                    # return [
+                    #     self.separate_wavelengths(i) for i in range(self.data.nwave)
+                    # ]
         # if self.outlier_flag:
         #     return self.data_without_outliers
         # else:
@@ -350,14 +359,14 @@ class LightcurveModel:
         # data = self.get_data()
         self.bad_wavelengths = []
 
-        if self.optimization == "separate":
-            models = self._pymc3_model
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-            data = self.data
-        else:
-            models = [self._pymc3_model]
-            data = self.get_data()
-            datas = [data]
+        # if self.optimization == "separate":
+        #     models = self._pymc3_model
+        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
+        #     data = self.data
+        # else:
+        models = [self._pymc3_model]
+        data = self.get_data()
+        datas = [data]
 
         # if the data has outliers, then mask them out
         if mask_outliers:
@@ -649,7 +658,13 @@ class LightcurveModel:
             uncertainty = [uncertainty, uncertainty]
 
         results = {}
-        for i, w in enumerate(self.data.wavelength):
+
+        if self.optimization == "white_light":
+            data = self.get_data()
+        else:
+            data = self.data
+
+        for i, w in enumerate(data.wavelength):
             params_mean = self.extract_from_posteriors(self.summary, i)
             params_lower_error = self.extract_from_posteriors(
                 self.summary, i, op=uncertainty[0]
@@ -994,7 +1009,12 @@ class LightcurveModel:
             model = {}
             # generate the transit model from the best fit parameters for each wavelength
             # for j, data in enumerate(datas):
-            for i, wave in enumerate(range(self.data.nwave)):
+            if self.optimization == "white_light":
+                data = self.get_data()
+            else:
+                data = self.data
+
+            for i, wave in enumerate(range(data.nwave)):
                 if params_dict is None:
                     if hasattr(self, "summary"):
                         params = self.extract_from_posteriors(self.summary, i)

@@ -108,10 +108,12 @@ class TransitModel(LightcurveModel):
         """
 
         # if the optimization method is separate wavelengths then set up for looping
-        if self.optimization == "separate":
-            models = self._pymc3_model
-        else:
-            models = [self._pymc3_model]
+        # if self.optimization == "separate":
+        #     models = [self._pymc3_model for i in range(self.data.nwave)]
+        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
+        # else:
+        model = self._pymc3_model
+        data = self.get_data()
 
         # if the model has a name then add this to each parameter"s name
         if hasattr(self, "name"):
@@ -121,35 +123,61 @@ class TransitModel(LightcurveModel):
             print("No name set for the model.")
 
         self.orbit = []
-        for j, mod in enumerate(models):
-            with mod:
+        # we need to separate the orbits in wavelength otherwise they're treated as
+        # multiple planets in the same system
+        # for j, (mod, data) in enumerate(zip(models, datas)):
 
+        if self.optimization == "separate":
+            with model:
+                for i in range(self.data.nwave):
+                    # Set up a Keplerian orbit for the planets (for now without eccentricity)
+                    orbit = xo.orbits.KeplerianOrbit(
+                        period=self.parameters[name + "period"].get_prior_vector(
+                            shape=data.nwave
+                        )[i],
+                        t0=self.parameters[name + "epoch"].get_prior_vector(
+                            shape=data.nwave
+                        )[i],
+                        b=self.parameters[name + "impact_parameter"].get_prior_vector(
+                            shape=data.nwave
+                        )[i],
+                        # ecc=self.parameters[name + "eccentricity"].get_prior(j),
+                        # omega=self.parameters[name + "omega"].get_prior(j),
+                        r_star=self.parameters[
+                            name + "stellar_radius"
+                        ].get_prior_vector(shape=data.nwave)[i],
+                        m_star=self.parameters[name + "stellar_mass"].get_prior_vector(
+                            shape=data.nwave
+                        )[i],
+                    )
+
+                    # store a separate orbit for each model if we are optimizing wavelengths separately
+                    self.orbit.append(orbit)
+
+        else:
+            with model:
                 # Set up a Keplerian orbit for the planets (for now without eccentricity)
                 orbit = xo.orbits.KeplerianOrbit(
                     period=self.parameters[name + "period"].get_prior_vector(
-                        self.data.nwave
+                        shape=data.nwave
                     ),
                     t0=self.parameters[name + "epoch"].get_prior_vector(
-                        self.data.nwave
+                        shape=data.nwave
                     ),
                     b=self.parameters[name + "impact_parameter"].get_prior_vector(
-                        self.data.nwave
+                        shape=data.nwave
                     ),
                     # ecc=self.parameters[name + "eccentricity"].get_prior(j),
                     # omega=self.parameters[name + "omega"].get_prior(j),
                     r_star=self.parameters[name + "stellar_radius"].get_prior_vector(
-                        self.data.nwave
+                        shape=data.nwave
                     ),
                     m_star=self.parameters[name + "stellar_mass"].get_prior_vector(
-                        self.data.nwave
+                        shape=data.nwave
                     ),
                 )
 
-                # store a separate orbit for each model if we are optimizing wavelengths separately
-                if self.optimization == "separate":
-                    self.orbit.append(orbit)
-                else:
-                    self.orbit = orbit
+                self.orbit = orbit
 
     def setup_lightcurves(self, store_models: bool = False):
         """
@@ -179,14 +207,14 @@ class TransitModel(LightcurveModel):
             print("No name set for the model.")
 
         # set up the models, data and orbits in a format for looping
-        if self.optimization == "separate":
-            models = self._pymc3_model
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-            orbits = self.orbit
-        else:
-            models = [self._pymc3_model]
-            datas = [self.get_data()]
-            orbits = [self.orbit]
+        # if self.optimization == "separate":
+        #     #     models = self._pymc3_model
+        #     #     datas = [self.get_data(i) for i in range(self.data.nwave)]
+        #     orbits = self.orbit
+        # else:
+        #     orbits = [self.orbit]
+        mod = self._pymc3_model
+        data = self.get_data()
 
         # if the .every_light_curve attribute (final lc model) is not already present then create it now
         if not hasattr(self, "every_light_curve"):
@@ -197,88 +225,105 @@ class TransitModel(LightcurveModel):
         if store_models == True:
             self.store_models = store_models
 
-        # stored_a_r = False
+        stored_a_r = False
 
         limb_darkening, planet_radius, baseline = [], [], []
 
-        for j, (mod, data, orbit) in enumerate(zip(models, datas, orbits)):
-            with mod:
-                # if not stored_a_r:
-                # store Deterministic parameter {a/R*} for use later
-                Deterministic(
-                    f"{name}a_R*",
-                    orbit.a
-                    / self.parameters[name + "stellar_radius"].get_prior_vector(
-                        data.nwave
-                    ),
-                )
-                # stored_a_r = True
+        j = 0
+        # for j, (mod, data) in enumerate(zip(models, datas)):
+        # for j, orbit in enumerate(orbits):
+        with mod:
+            # if not stored_a_r:
+            # store Deterministic parameter {a/R*} for use later
+            # Deterministic(
+            #     f"{name}a_R*",
+            #     orbit.a
+            #     / self.parameters[name + "stellar_radius"].get_prior_vector(
+            #         shape=data.nwave
+            #     ),
+            # )
+            # stored_a_r = True
 
-                # for each wavelength create a quadratic limb-darkening lightcurve model from Exoplanet
-                limb_darkening.append(
-                    self.parameters[name + "limb_darkening"].get_prior_vector(
-                        data.nwave
+            # for each wavelength create a quadratic limb-darkening lightcurve model from Exoplanet
+            limb_darkening.append(
+                self.parameters[name + "limb_darkening"].get_prior_vector(
+                    shape=data.nwave
+                )
+            )
+
+            planet_radius.append(
+                self.parameters[name + "radius_ratio"].get_prior_vector(
+                    shape=data.nwave
+                )
+                * self.parameters[name + "stellar_radius"].get_prior_vector(
+                    shape=data.nwave
+                )
+            )
+
+            baseline.append(
+                self.parameters[name + "baseline"].get_prior_vector(shape=data.nwave)
+            )
+
+            light_curves = []
+            for i, w in enumerate(data.wavelength):
+                if self.optimization == "separate":
+                    orbit = self.orbit[i]
+                else:
+                    orbit = self.orbit
+
+                if not stored_a_r:
+                    # store Deterministic parameter {a/R*} for use later
+                    Deterministic(
+                        f"{name}a_R*",
+                        orbit.a
+                        / self.parameters[name + "stellar_radius"].get_prior_vector(
+                            shape=data.nwave
+                        ),
+                    )
+                stored_a_r = True
+
+                if isinstance(self.parameters[name + "limb_darkening"], WavelikeFitted):
+                    ld = limb_darkening[j][i]
+                else:
+                    ld = limb_darkening[j]
+
+                if isinstance(self.parameters[name + "radius_ratio"], WavelikeFitted):
+                    pr = planet_radius[j][i]
+                else:
+                    pr = planet_radius[j]
+
+                # extract light curve from Exoplanet model at given times
+                light_curves.append(
+                    xo.LimbDarkLightCurve(ld).get_light_curve(
+                        orbit=orbit,
+                        r=pr,
+                        t=list(data.time.to_value("day")),
                     )
                 )
 
-                planet_radius.append(
-                    self.parameters[name + "radius_ratio"].get_prior_vector(data.nwave)
-                    * self.parameters[name + "stellar_radius"].get_prior(j)
-                )
+            # calculate the transit + flux (out-of-transit) baseline model
+            if isinstance(self.parameters[name + "baseline"], WavelikeFitted):
+                lc = [light_curves[i] + baseline[j][i] for i in range(data.nwave)]
+            else:
+                lc = light_curves[i] + baseline[j]
 
-                baseline.append(
-                    self.parameters[name + "baseline"].get_prior_vector(data.nwave)
-                )
+            mu = pm.math.sum(lc, axis=-1)
+            # mu = pm.math.sum(np.array(light_curves), axis=-1) + baseline[j]  # [i]
 
-                light_curves = []
-                for i, w in enumerate(data.wavelength):
+            # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
+            # later:
+            if self.store_models:
+                Deterministic(f"{name}model", mu)
 
-                    if isinstance(
-                        self.parameters[name + "limb_darkening"], WavelikeFitted
-                    ):
-                        ld = limb_darkening[j][i]
-                    else:
-                        ld = limb_darkening[j]
+            # add the transit to the final light curve
+            if f"wavelength" not in self.every_light_curve.keys():
+                self.every_light_curve[f"wavelength"] = mu  # [i]
+            else:
+                self.every_light_curve[f"wavelength"] += mu  # [i]
 
-                    if isinstance(
-                        self.parameters[name + "radius_ratio"], WavelikeFitted
-                    ):
-                        pr = planet_radius[j][i]
-                    else:
-                        pr = planet_radius[j]
-
-                    # extract light curve from Exoplanet model at given times
-                    light_curves.append(
-                        xo.LimbDarkLightCurve(ld).get_light_curve(
-                            orbit=orbit,
-                            r=pr,
-                            t=list(data.time.to_value("day")),
-                        )
-                    )
-
-                # calculate the transit + flux (out-of-transit) baseline model
-                if isinstance(self.parameters[name + "baseline"], WavelikeFitted):
-                    lc = [light_curves[i] + baseline[j][i] for i in range(data.nwave)]
-                else:
-                    lc = light_curves[i] + baseline[j]
-
-                mu = pm.math.sum(lc, axis=-1)
-                # mu = pm.math.sum(np.array(light_curves), axis=-1) + baseline[j]  # [i]
-
-                # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
-                # later:
-                if self.store_models:
-                    Deterministic(f"{name}model", mu)
-
-                # add the transit to the final light curve
-                if f"wavelength" not in self.every_light_curve.keys():
-                    self.every_light_curve[f"wavelength"] = mu  # [i]
-                else:
-                    self.every_light_curve[f"wavelength"] += mu  # [i]
-
-                self.model_chromatic_transit_flux = [
-                    self.every_light_curve[k] for k in tqdm(self.every_light_curve)
-                ]
+            self.model_chromatic_transit_flux = [
+                self.every_light_curve[k] for k in tqdm(self.every_light_curve)
+            ]
 
     def transit_model(
         self, transit_params: dict, i: int = 0, time: list = None
