@@ -419,7 +419,7 @@ class LightcurveModel:
                     #     data_name = f"data_w{j}"
                     #     light_curve_name = f"wavelength_{j}"
                     # else:
-                    data_name = f"data_w{j}"
+                    data_name = f"data"  # _w{j}"
                     light_curve_name = f"wavelength_{j}"
 
                     pm.Normal(
@@ -592,6 +592,8 @@ class LightcurveModel:
                 kw.pop("start")
 
             for i, mod in enumerate(self._pymc3_model):
+                if self.optimization == "separate":
+                    print(f"\nSampling for Wavelength: {i}")
                 with mod:
                     if len(starts) > 0:
                         start = starts[i]
@@ -924,7 +926,9 @@ class LightcurveModel:
                     more_than_one_input = True
 
             if more_than_one_input:
-                if f"{k}[0]" in posterior_means.index:
+                if f"{k}[{i}]" in posterior_means.index:
+                    fv[k] = posterior_means[f"{k}[{i}]"]
+                elif f"{k}[0]" in posterior_means.index:
                     n = 0
                     fv[k] = []
                     while f"{k}[{n}]" in posterior_means.index:
@@ -937,6 +941,14 @@ class LightcurveModel:
                     fv[k] = []
                     while f"{k}[{i}, {n}]" in posterior_means.index:
                         fv[k].append(posterior_means[f"{k}[{i}, {n}]"])
+                        n += 1
+                    if n == 1:
+                        fv[k] = fv[k][0]
+                elif f"{k}[0, 0]" in posterior_means.index:
+                    n = 0
+                    fv[k] = []
+                    while f"{k}[0, {n}]" in posterior_means.index:
+                        fv[k].append(posterior_means[f"{k}[0, {n}]"])
                         n += 1
                     if n == 1:
                         fv[k] = fv[k][0]

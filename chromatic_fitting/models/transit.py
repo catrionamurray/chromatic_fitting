@@ -235,7 +235,7 @@ class TransitModel(LightcurveModel):
 
                 light_curves = []
                 for i, w in enumerate(data.wavelength):
-                    print(j, i, w)
+                    # print(j, i, w)
                     # if self.optimization == "separate":
                     #     ld = limb_darkening[j][0]
                     #     pr = planet_radius[j][0]

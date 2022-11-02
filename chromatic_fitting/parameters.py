@@ -213,7 +213,7 @@ class WavelikeFitted(Fitted):
         except KeyError:
             return self.generate_pymc3(i)
 
-    def generate_pymc3_vector(self, shape, i=None, *args, **kwargs):
+    def generate_pymc3_vector(self, shape=None, i=None, *args, **kwargs):
         """
         Generate a PyMC3 prior for wavelength i.
 
@@ -232,25 +232,31 @@ class WavelikeFitted(Fitted):
 
         inputs = dict(**inputs)
         if "shape" not in self.inputs:
-            if shape > 1:
-                inputs["shape"] = (shape, 1)
+            if shape is None:
+                inputs["shape"] = 1
+            elif shape > 1:
+                inputs["shape"] = shape  # (shape, 1)
             else:
                 inputs["shape"] = 1
         else:
-            if type(self.inputs["shape"]) == int:
-                inputs["shape"] = (shape, self.inputs["shape"])
-                if "testval" in inputs:
-                    inputs["testval"] = [inputs["testval"]] * shape
-            else:
-                if len(self.inputs["shape"]) == 1:
-                    inputs["shape"] = (shape, self.inputs["shape"])
-                    if "testval" in inputs:
-                        inputs["testval"] = inputs["testval"] * shape
+            if shape is not None:
+                if type(self.inputs["shape"]) == int:
+                    if self.inputs["shape"] > 1:
+                        inputs["shape"] = (shape, self.inputs["shape"])
+                        if "testval" in inputs:
+                            inputs["testval"] = [inputs["testval"]] * shape
+                    else:
+                        inputs["shape"] = shape
+                else:
+                    if len(self.inputs["shape"]) == 1:
+                        inputs["shape"] = (shape, self.inputs["shape"])
+                        if "testval" in inputs:
+                            inputs["testval"] = inputs["testval"] * shape
 
         self.inputs["shape"] = inputs["shape"]
 
-        if i is not None:
-            inputs["name"] = self.label(i)
+        # if i is not None:
+        #     inputs["name"] = self.label(i)
 
         prior = self.distribution(**inputs)
 
@@ -261,7 +267,7 @@ class WavelikeFitted(Fitted):
 
         return prior
 
-    def get_prior_vector(self, shape=1, i=None, *args, **kwargs):
+    def get_prior_vector(self, shape=None, i=None, *args, **kwargs):
         """
         Get the PyMC3 prior for this wavelength.
 
