@@ -269,7 +269,7 @@ class LightcurveModel:
             self.optimization = optimization_method
             if self.optimization == "separate":
                 try:
-                    # self.create_multiple_models()
+                    self.create_multiple_models()
                     self.change_all_priors_to_Wavelike()
                 except:
                     pass
@@ -359,14 +359,14 @@ class LightcurveModel:
         # data = self.get_data()
         self.bad_wavelengths = []
 
-        # if self.optimization == "separate":
-        #     models = self._pymc3_model
-        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
-        #     data = self.data
-        # else:
-        models = [self._pymc3_model]
-        data = self.get_data()
-        datas = [data]
+        if self.optimization == "separate":
+            models = self._pymc3_model
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+            data = self.data
+        else:
+            models = [self._pymc3_model]
+            data = self.get_data()
+            datas = [data]
 
         # if the data has outliers, then mask them out
         if mask_outliers:
@@ -415,9 +415,16 @@ class LightcurveModel:
                         flux.append(data.flux[i, :])
 
                 try:
+                    # if self.optimization == "separate":
+                    #     data_name = f"data_w{j}"
+                    #     light_curve_name = f"wavelength_{j}"
+                    # else:
+                    data_name = f"data_w{j}"
+                    light_curve_name = f"wavelength_{j}"
+
                     pm.Normal(
-                        "data",
-                        mu=self.every_light_curve["wavelength"],
+                        data_name,
+                        mu=self.every_light_curve[light_curve_name],
                         sd=np.array(uncertainties),
                         observed=np.array(flux),
                     )
@@ -607,7 +614,7 @@ class LightcurveModel:
                     for m in self._chromatic_models.values():
                         m.summary = self.summary
 
-            # for mod in self.pymc3_model:
+            # for mod in self._pymc3_model:
             #     with mod:
             #         try:
             #             self.trace.append(sample(**kw))

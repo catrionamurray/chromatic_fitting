@@ -232,7 +232,10 @@ class WavelikeFitted(Fitted):
 
         inputs = dict(**inputs)
         if "shape" not in self.inputs:
-            inputs["shape"] = (shape, 1)
+            if shape > 1:
+                inputs["shape"] = (shape, 1)
+            else:
+                inputs["shape"] = 1
         else:
             if type(self.inputs["shape"]) == int:
                 inputs["shape"] = (shape, self.inputs["shape"])
@@ -245,11 +248,20 @@ class WavelikeFitted(Fitted):
                         inputs["testval"] = inputs["testval"] * shape
 
         self.inputs["shape"] = inputs["shape"]
+
+        if i is not None:
+            inputs["name"] = self.label(i)
+
         prior = self.distribution(**inputs)
-        self._pymc3_prior = prior
+
+        if i is not None:
+            self._pymc3_priors[self.label(i)] = prior
+        else:
+            self._pymc3_prior = prior
+
         return prior
 
-    def get_prior_vector(self, shape=1, *args, **kwargs):
+    def get_prior_vector(self, shape=1, i=None, *args, **kwargs):
         """
         Get the PyMC3 prior for this wavelength.
 
@@ -257,16 +269,25 @@ class WavelikeFitted(Fitted):
         ----------
         shape : int
             The number of wavelengths associated with this prior.
+        i : int
+            If we only want to extract one wavelength prior
 
         Returns
         -------
         prior : PyMC3 distribution
             The prior for this parameter
         """
-        try:
-            return self._pymc3_prior
-        except AttributeError:
-            return self.generate_pymc3_vector(shape)
+        if i is not None:
+            # if we've specified a specific wavelength then extract only that wavelength:
+            try:
+                return self._pymc3_priors[self.label(i)]
+            except KeyError:
+                return self.generate_pymc3_vector(shape=shape, i=i)
+        else:
+            try:
+                return self._pymc3_prior
+            except AttributeError:
+                return self.generate_pymc3_vector(shape=shape)
 
     def clear_prior(self, *args, **kwargs):
         """
