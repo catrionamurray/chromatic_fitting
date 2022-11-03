@@ -107,6 +107,7 @@ class PolynomialModel(LightcurveModel):
         else:
             models = [self._pymc3_model]
             datas = [self.get_data()]
+        kw = {"shape": datas[0].nwave}
 
         # if the model has a name then add this to each parameter's name (needed to prevent overwriting parameter names
         # if you combine >1 polynomial model)
@@ -125,13 +126,14 @@ class PolynomialModel(LightcurveModel):
             self.store_models = store_models
 
         for j, (mod, data) in enumerate(zip(models, datas)):
+            if self.optimization == "separate":
+                kw["i"] = j
+
             with mod:
                 # for every wavelength set up a polynomial model
                 p = []
                 for d in range(self.degree + 1):
-                    p.append(
-                        self.parameters[f"{name}p_{d}"].get_prior_vector(data.nwave)
-                    )
+                    p.append(self.parameters[f"{name}p_{d}"].get_prior_vector(**kw))
 
                 # for i, w in enumerate(data.wavelength):
                 poly = []
@@ -162,20 +164,36 @@ class PolynomialModel(LightcurveModel):
 
                 # compute the polynomial by looping over the coeffs for each degree:
 
-                for d in range(self.degree + 1):
-                    # p = self.parameters[f"{name}p_{d}"].get_prior_vector(i + j)
-                    poly.append(p[d] * np.array([x**d] * data.nwave))
+                # poly_wave = []
+                for i, w in enumerate(data.wavelength):
+                    coeff, variable = [], []
+                    for d in range(self.degree + 1):
+                        coeff.append(p[d][i])
+                        variable.append(x**d)
+                    poly.append(pm.math.dot(coeff, variable))
+                # poly = pm.math.stack(poly_wave, axis=0)
+                # for d in range(self.degree + 1):
+                #     # for i, w in enumerate(data.wavelength):
+                #     # p = self.parameters[f"{name}p_{d}"].get_prior_vector(i + j)
+                #     # poly.append(np.array(p[d]) * np.array([x**d] * data.nwave))
+                #     poly.append(pm.math.dot([p[d]] * data.nwave, [x**d] * data.nwave))
 
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
                 if self.store_models:
-                    Deterministic(f"{name}model", pm.math.sum(poly, axis=0))
+                    Deterministic(
+                        f"{name}model", pm.math.stack(poly, axis=0)
+                    )  # pm.math.sum(poly, axis=0))
 
                 # add the polynomial model to the overall lightcurve:
-                if f"wavelength" not in self.every_light_curve.keys():
-                    self.every_light_curve[f"wavelength"] = pm.math.sum(poly, axis=0)
+                if f"wavelength_{j}" not in self.every_light_curve.keys():
+                    self.every_light_curve[f"wavelength_{j}"] = pm.math.stack(
+                        poly, axis=0
+                    )  # pm.math.sum(poly, axis=0)
                 else:
-                    self.every_light_curve[f"wavelength"] += pm.math.sum(poly, axis=0)
+                    self.every_light_curve[f"wavelength_{j}"] += pm.math.stack(
+                        poly, axis=0
+                    )  # pm.math.sum(poly, axis=0)
 
     def polynomial_model(self, poly_params: dict, i: int = 0) -> np.array:
         """

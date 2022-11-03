@@ -235,7 +235,7 @@ class WavelikeFitted(Fitted):
             if shape is None:
                 inputs["shape"] = 1
             elif shape > 1:
-                inputs["shape"] = shape  # (shape, 1)
+                inputs["shape"] = shape  # shape  # (shape, 1)
             else:
                 inputs["shape"] = 1
         else:
@@ -245,13 +245,14 @@ class WavelikeFitted(Fitted):
                         inputs["shape"] = (shape, self.inputs["shape"])
                         if "testval" in inputs:
                             inputs["testval"] = [inputs["testval"]] * shape
-                    else:
-                        inputs["shape"] = shape
+                    # else:
+                    #     inputs["shape"] = shape
                 else:
                     if len(self.inputs["shape"]) == 1:
-                        inputs["shape"] = (shape, self.inputs["shape"])
-                        if "testval" in inputs:
-                            inputs["testval"] = inputs["testval"] * shape
+                        if self.inputs["shape"] > 1:
+                            inputs["shape"] = (shape, self.inputs["shape"])
+                            if "testval" in inputs:
+                                inputs["testval"] = inputs["testval"] * shape
 
         self.inputs["shape"] = inputs["shape"]
 

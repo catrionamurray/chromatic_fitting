@@ -201,7 +201,7 @@ class TransitModel(LightcurveModel):
         if store_models == True:
             self.store_models = store_models
 
-        stored_a_r = False
+        # stored_a_r = False
 
         limb_darkening, planet_radius, baseline = [], [], []
 
@@ -235,11 +235,6 @@ class TransitModel(LightcurveModel):
 
                 light_curves = []
                 for i, w in enumerate(data.wavelength):
-                    # print(j, i, w)
-                    # if self.optimization == "separate":
-                    #     ld = limb_darkening[j][0]
-                    #     pr = planet_radius[j][0]
-                    # else:
                     if isinstance(
                         self.parameters[name + "limb_darkening"], WavelikeFitted
                     ):
@@ -264,9 +259,6 @@ class TransitModel(LightcurveModel):
                     )
 
                 ## calculate the transit + flux (out-of-transit) baseline model
-                # if self.optimization == "separate":
-                #     lc = light_curves[0] + baseline[j][0]
-                # else:
                 if isinstance(self.parameters[name + "baseline"], WavelikeFitted):
                     lc = [light_curves[i] + baseline[j][i] for i in range(data.nwave)]
                 else:
@@ -281,7 +273,7 @@ class TransitModel(LightcurveModel):
                     Deterministic(f"{name}model", mu)
 
                 # add the transit to the final light curve
-                if f"wavelength" not in self.every_light_curve.keys():
+                if f"wavelength_{j}" not in self.every_light_curve.keys():
                     self.every_light_curve[f"wavelength_{j}"] = mu  # [i]
                 else:
                     self.every_light_curve[f"wavelength_{j}"] += mu  # [i]

@@ -412,7 +412,7 @@ class CombinedModel(LightcurveModel):
                     # for w in range(data.nwave):
                     # k = f"wavelength_{i + w}"
                     Deterministic(
-                        f"{self.name}_model", self.every_light_curve["wavelength"]
+                        f"{self.name}_model", self.every_light_curve[f"wavelength_{i}"]
                     )
 
     def get_results(self, **kw):
