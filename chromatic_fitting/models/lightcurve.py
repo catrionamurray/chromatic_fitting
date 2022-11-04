@@ -902,7 +902,7 @@ class LightcurveModel:
         # if add_model and detrend:
 
     def extract_from_posteriors(self, summary, i, op="mean"):
-        # there"s definitely a sleeker way to do this
+        # there's definitely a sleeker way to do this
         if self.optimization == "separate":
             summary = summary[i]
 
@@ -926,7 +926,7 @@ class LightcurveModel:
                     more_than_one_input = True
 
             if more_than_one_input:
-                if f"{k}[{i}]" in posterior_means.index:
+                if f"{k}[{i}]" in posterior_means.index and "limb_darkening" not in k:
                     fv[k] = posterior_means[f"{k}[{i}]"]
                 elif f"{k}[0]" in posterior_means.index:
                     n = 0

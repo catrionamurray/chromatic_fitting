@@ -165,11 +165,20 @@ class PolynomialModel(LightcurveModel):
                 # compute the polynomial by looping over the coeffs for each degree:
 
                 # poly_wave = []
+                to_sub = 0
                 for i, w in enumerate(data.wavelength):
                     coeff, variable = [], []
+                    if len(np.shape(x)) > 1:
+                        xi = x[i, :]
+                    else:
+                        xi = x
                     for d in range(self.degree + 1):
-                        coeff.append(p[d][i])
-                        variable.append(x**d)
+                        if type(p[d]) == float or type(p[d]) == int:
+                            coeff.append(p[d])
+                            to_sub += 1
+                        else:
+                            coeff.append(p[d][i - to_sub])
+                        variable.append(xi**d)
                     poly.append(pm.math.dot(coeff, variable))
                 # poly = pm.math.stack(poly_wave, axis=0)
                 # for d in range(self.degree + 1):
