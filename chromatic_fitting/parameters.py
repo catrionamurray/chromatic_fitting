@@ -47,7 +47,7 @@ class WavelikeFixed(Fixed):
     def __init__(self, values, **inputs):
         self.values = values
 
-    def get_prior(self, i, *args, **kwargs):
+    def get_prior(self, i=None, *args, **kwargs):
         """
         Get the "prior", which is just a value, for this wavelength.
 
@@ -61,11 +61,17 @@ class WavelikeFixed(Fixed):
         prior : float, array
             The value or array for this parameter at this wavelength.
         """
-        return self.values[i]
-
-    def get_prior_vector(self, i=None, shape=1, *args, **kwargs):
         if i is None:
-            return [self.get_prior(i, *args, **kwargs) for i in range(shape)]
+            return [v for v in self.values]
+        else:
+            return self.values[i]
+
+    def get_prior_vector(self, i=None, shape=None, *args, **kwargs):
+        if i is None:
+            # if shape is None:
+            return self.get_prior(*args, **kwargs)
+            # else:
+            #     return [self.get_prior(i, *args, **kwargs) for i in range(shape)]
         else:
             return self.get_prior(i, *args, **kwargs)
 
