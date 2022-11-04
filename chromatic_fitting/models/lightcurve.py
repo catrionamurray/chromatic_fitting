@@ -170,7 +170,7 @@ class LightcurveModel:
                 self.parameters[k].set_name(new_v)
             else:
                 self.parameters[k] = Fixed(v)
-                self.parameters[k].set_name(v)
+                self.parameters[k].set_name(k)
 
         # check that all the necessary parameters are defined somehow
         for k in self.required_parameters:
