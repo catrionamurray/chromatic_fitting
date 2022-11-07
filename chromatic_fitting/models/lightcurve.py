@@ -896,7 +896,11 @@ class LightcurveModel:
                     model["total"][f"w{i}"] - (i * spacing),
                     color="k",
                 )
-        plt.show()
+
+        if "filename" not in kw.keys():
+            plt.show()
+        else:
+            plt.savefig(kw["filename"])
         plt.close()
 
         # if add_model and detrend:

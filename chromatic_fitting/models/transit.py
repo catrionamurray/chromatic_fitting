@@ -96,7 +96,7 @@ class TransitModel(LightcurveModel):
             baseline=1.0,
             impact_parameter=0.5,
             eccentricity=0.0,
-            omega=np.pi / 2.0,
+            omega=0,  # np.pi / 2.0,
             limb_darkening=[0.2, 0.2],
         )
 
@@ -336,7 +336,7 @@ class TransitModel(LightcurveModel):
 
         return ldlc.transpose()[0] + transit_params[f"{name}baseline"]
 
-    def plot_orbit(self, timedata: object = None):
+    def plot_orbit(self, timedata: object = None, filename: str = None):
         """
         Plot the orbit model (to check that the planet is transiting at the times we've set).
 
@@ -344,6 +344,7 @@ class TransitModel(LightcurveModel):
         ----------
         timedata: An array of times to plot the orbit at, only used if .attach_data() hasn't been
         run yet (default=None)
+        svname: Name if we want to save the plot (default=None)
 
         """
 
@@ -382,7 +383,10 @@ class TransitModel(LightcurveModel):
                 plt.scatter(x, y, c=timedata)
                 plt.axis("scaled")
                 plt.ylim(-1, 1)
-                plt.show()
+                if filename is None:
+                    plt.show()
+                else:
+                    plt.savefig(filename)
                 plt.close()
 
     def make_transmission_spectrum_table(
