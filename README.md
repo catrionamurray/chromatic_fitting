@@ -5,3 +5,5 @@ This chromatic_fitting package is being designed as a companion to [chromatic](h
 
 
 [Documentation](https://catrionamurray.github.io/chromatic_fitting/) will be available once it's been written...
+
+![Testing](https://github.com/catrionamurray/chromatic_fitting/actions/workflows/python-package.yml/badge.svg)
