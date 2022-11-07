@@ -126,7 +126,7 @@ class LightcurveModel:
 
         Parameters
         ----------
-        kw : dict
+        kw : object
             All keyword arguments will be treated as model
             parameters and stored in the `self.parameters`
             dictionary attribute. This input both sets
