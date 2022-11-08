@@ -7,7 +7,10 @@ from pymc3 import Uniform, Normal
 from pymc3_ext import eval_in_model
 from exoplanet import ImpactParameter, orbits
 from chromatic import *
+import chromatic
 import math
+
+print(chromatic.version())
 
 
 class TestTransit(unittest.TestCase):
@@ -18,13 +21,17 @@ class TestTransit(unittest.TestCase):
         # add transit (with depth varying with wavelength):
         r = r.inject_transit(
             planet_radius=np.linspace(0.2, 0.15, r.nwave),
-            # method="batman",
+            method="trapezoid",
+            P=1.0,
+            t0=0.0,
+            baseline=1.0
             # planet_params={
             #     "P": 1.0,
-            #     "a": 8.0,
-            #     "inc": 88,
+            #     "t0": 0.0,
+            #     "baseline": 1.0
+            # "a": 8.0,
+            # "inc": 88,
             # },
-
         )
 
         # bin into 10 wavelength bins:
@@ -171,12 +178,13 @@ class TestTransit(unittest.TestCase):
 
         t.parameters["transit_a_R*"] = []
         results = t.get_results(uncertainty="sd")
-        true_t0 = r.metadata["transit_parameters"]["t0"]
-        true_per = r.metadata["transit_parameters"]["per"]
-        true_aR = r.metadata["transit_parameters"]["a"]
-        true_incl = r.metadata["transit_parameters"]["inc"]
-        true_cosi = math.cos(true_incl * math.pi / 180)
-        true_b = true_aR * true_cosi
+        true_params = r.metadata["injected_transit_parameters"]
+        true_t0 = true_params["t0"]
+        # true_per = r.metadata["transit_parameters"]["P"]
+        # true_aR = r.metadata["transit_parameters"]["a"]
+        # true_incl = r.metadata["transit_parameters"]["inc"]
+        # true_cosi = math.cos(true_incl * math.pi / 180)
+        # true_b = true_aR * true_cosi
 
         twosigma = {
             "t0": 3 * results["transit_epoch_sd"].values,
