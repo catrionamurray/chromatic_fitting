@@ -18,12 +18,12 @@ class TestTransit(unittest.TestCase):
         # add transit (with depth varying with wavelength):
         r = r.inject_transit(
             planet_radius=np.linspace(0.2, 0.15, r.nwave),
-            method="batman",
-            planet_params={
-                "per": 1.0,
-                "a": 8.0,
-                "inc": 88,
-            },
+            # method="batman",
+            # planet_params={
+            #     "P": 1.0,
+            #     "a": 8.0,
+            #     "inc": 88,
+            # },
         )
 
         # bin into 10 wavelength bins:
