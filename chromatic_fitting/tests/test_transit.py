@@ -152,6 +152,7 @@ class TestTransit(unittest.TestCase):
                 )
 
     def test_optimization_and_sampling(self):
+        print(chromatic.version())
         t = self.setup_example_transit()
         ri, r = self.create_rainbow()
         t.attach_data(r)
