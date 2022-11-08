@@ -179,8 +179,8 @@ class TestTransit(unittest.TestCase):
 
         t.parameters["transit_a_R*"] = []
         results = t.get_results(uncertainty="sd")
-        true_params = r.metadata["injected_transit_parameters"]
-        true_t0 = true_params["t0"]
+        # true_params = r.metadata["injected_transit_parameters"]
+        # true_t0 = true_params["t0"]
         # true_per = r.metadata["transit_parameters"]["P"]
         # true_aR = r.metadata["transit_parameters"]["a"]
         # true_incl = r.metadata["transit_parameters"]["inc"]
