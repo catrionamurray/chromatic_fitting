@@ -24,6 +24,7 @@ class TestTransit(unittest.TestCase):
             #     "a": 8.0,
             #     "inc": 88,
             # },
+
         )
 
         # bin into 10 wavelength bins:
