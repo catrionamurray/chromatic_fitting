@@ -126,7 +126,7 @@ class LightcurveModel:
 
         Parameters
         ----------
-        kw : dict
+        kw : object
             All keyword arguments will be treated as model
             parameters and stored in the `self.parameters`
             dictionary attribute. This input both sets
@@ -170,7 +170,7 @@ class LightcurveModel:
                 self.parameters[k].set_name(new_v)
             else:
                 self.parameters[k] = Fixed(v)
-                self.parameters[k].set_name(v)
+                self.parameters[k].set_name(k)
 
         # check that all the necessary parameters are defined somehow
         for k in self.required_parameters:
@@ -185,6 +185,8 @@ class LightcurveModel:
 
         for v in self.parameters.values():
             v.set_name(f"{self.name}_{v.name}")
+
+        self._original_parameters = self.parameters.copy()
 
     def get_parameter_shape(self, param):
         inputs = param.inputs
@@ -218,10 +220,11 @@ class LightcurveModel:
         """
         Remove the pymc3 prior model from every parameter not in exclude
         """
-        for k, v in self.parameters.items():
+        for k, v in self._original_parameters.copy().items():
             if k not in exclude:
                 if isinstance(v, Fitted):
                     v.clear_prior()
+                self.parameters[k] = v
 
     def extract_extra_class_inputs(self):
         """
@@ -318,7 +321,7 @@ class LightcurveModel:
             data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
         return data_copy
 
-    def get_data(self, i=0):
+    def get_data(self, i=None):
         """
         Extract the data to use for the optimization depending on the method chosen
         """
@@ -329,7 +332,13 @@ class LightcurveModel:
                 self.white_light_curve()
                 return self.white_light
             if self.optimization == "separate":
-                return self.separate_wavelengths(i)
+                if i is not None:
+                    return self.separate_wavelengths(i)
+                else:
+                    return self.data
+                    # return [
+                    #     self.separate_wavelengths(i) for i in range(self.data.nwave)
+                    # ]
         # if self.outlier_flag:
         #     return self.data_without_outliers
         # else:
@@ -386,32 +395,47 @@ class LightcurveModel:
 
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
+                uncertainties, flux = [], []
                 for i, w in enumerate(data.wavelength):
-                    k = f"wavelength_{j + i}"
+                    # k = f"wavelength_{j + i}"
 
                     if inflate_uncertainties:
-                        uncertainties = data.uncertainty[i, :] * eval_in_model(
-                            self.parameters["nsigma"].get_prior(j + i)
+                        uncertainties.append(
+                            data.uncertainty[i, :]
+                            * eval_in_model(self.parameters["nsigma"].get_prior(j + i))
                         )
                     else:
-                        uncertainties = data.uncertainty[i, :]
+                        uncertainties.append(data.uncertainty[i, :])
 
-                    try:
-                        # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
-                        if mask_outliers:
-                            flux = self.data_without_outliers.flux[i + j, :]
-                        else:
-                            flux = data.flux[i, :]
+                    # try:
+                    # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
+                    if mask_outliers:
+                        flux.append(self.data_without_outliers.flux[i + j, :])
+                    else:
+                        flux.append(data.flux[i, :])
 
-                        pm.Normal(
-                            f"{k}_data",
-                            mu=self.every_light_curve[k],
-                            sd=uncertainties,
-                            observed=flux,
-                        )
-                    except Exception as e:
-                        print(f"Setting up likelihood failed for wavelength {i}: {e}")
-                        self.bad_wavelengths.append(i)
+                try:
+                    # if self.optimization == "separate":
+                    #     data_name = f"data_w{j}"
+                    #     light_curve_name = f"wavelength_{j}"
+                    # else:
+                    data_name = f"data"  # _w{j}"
+                    light_curve_name = f"wavelength_{j}"
+
+                    pm.Normal(
+                        data_name,
+                        mu=self.every_light_curve[light_curve_name],
+                        sd=np.array(uncertainties),
+                        observed=np.array(flux),
+                    )
+                    # pm.Normal(f"{k}_data",
+                    #         mu=self.every_light_curve[k],
+                    #         sd=uncertainties,
+                    #         observed=flux,
+                    # )
+                except Exception as e:
+                    print(f"Setting up likelihood failed for wavelength {i}: {e}")
+                    self.bad_wavelengths.append(i)
 
     def sample_prior(self, ndraws=3):
         """
@@ -568,6 +592,8 @@ class LightcurveModel:
                 kw.pop("start")
 
             for i, mod in enumerate(self._pymc3_model):
+                if self.optimization == "separate":
+                    print(f"\nSampling for Wavelength: {i}")
                 with mod:
                     if len(starts) > 0:
                         start = starts[i]
@@ -590,7 +616,7 @@ class LightcurveModel:
                     for m in self._chromatic_models.values():
                         m.summary = self.summary
 
-            # for mod in self.pymc3_model:
+            # for mod in self._pymc3_model:
             #     with mod:
             #         try:
             #             self.trace.append(sample(**kw))
@@ -641,7 +667,13 @@ class LightcurveModel:
             uncertainty = [uncertainty, uncertainty]
 
         results = {}
-        for i, w in enumerate(self.data.wavelength):
+
+        if self.optimization == "white_light":
+            data = self.get_data()
+        else:
+            data = self.data
+
+        for i, w in enumerate(data.wavelength):
             params_mean = self.extract_from_posteriors(self.summary, i)
             params_lower_error = self.extract_from_posteriors(
                 self.summary, i, op=uncertainty[0]
@@ -714,10 +746,7 @@ class LightcurveModel:
         ):
             for i in range(n):
                 flux_for_this_sample = np.array(
-                    [
-                        prior_predictive_trace[f"wavelength_{w + nm}_data"][i]
-                        for w in range(data.nwave)
-                    ]
+                    [prior_predictive_trace[f"data"][i] for w in range(data.nwave)]
                 )
                 # model_for_this_sample = np.array(
                 #     [
@@ -752,34 +781,30 @@ class LightcurveModel:
         ):
 
             for w in range(data.nwave):
-                if f"wavelength_{w + nm}_data" in posterior_predictive_trace.keys():
+                if "data" in posterior_predictive_trace.keys():
                     # generate a posterior model for every wavelength:
                     if (
                         f"{self.name}_model_w{w + nm}"
                         in posterior_predictive_trace.keys()
                     ):
-                        posterior_model[
-                            f"{self.name}_model_w{w + nm}"
-                        ] = self.sample_posterior(
-                            n, var_names=[f"{self.name}_model_w{w + nm}"]
-                        )[
-                            f"{self.name}_model_w{w + nm}"
-                        ]
+                        posterior_model[f"{self.name}_model"] = self.sample_posterior(
+                            n, var_names=[f"{self.name}_model"]
+                        )[f"{self.name}_model"]
 
             for w in range(data.nwave):
                 for i in range(n):
                     # for every posterior sample extract the posterior model and distribution draw for every wavelength:
                     flux_for_this_sample = np.array(
                         [
-                            posterior_predictive_trace[f"wavelength_{w + nm}_data"][i]
+                            posterior_predictive_trace[f"data"][i]
                             for w in range(data.nwave)
                         ]
                     )
 
-                    if f"{self.name}_model_w{w + nm}" in posterior_model.keys():
+                    if f"{self.name}_model" in posterior_model.keys():
                         model_for_this_sample = np.array(
                             [
-                                posterior_model[f"{self.name}_model_w{w + nm}"][i]
+                                posterior_model[f"{self.name}_model"][i]
                                 for w in range(data.nwave)
                             ]
                         )
@@ -813,7 +838,7 @@ class LightcurveModel:
                     model[f"w{w + nm}"] = []
                 for t in range(data.ntime):
                     model[f"w{w + nm}"].append(
-                        summary["mean"][f"{self.name}_model_w{w + nm}[{t}]"]
+                        summary["mean"][f"{self.name}_model[{w}, {t}]"]
                     )
         return model
 
@@ -871,13 +896,17 @@ class LightcurveModel:
                     model["total"][f"w{i}"] - (i * spacing),
                     color="k",
                 )
-        plt.show()
+
+        if "filename" not in kw.keys():
+            plt.show()
+        else:
+            plt.savefig(kw["filename"])
         plt.close()
 
         # if add_model and detrend:
 
     def extract_from_posteriors(self, summary, i, op="mean"):
-        # there"s definitely a sleeker way to do this
+        # there's definitely a sleeker way to do this
         if self.optimization == "separate":
             summary = summary[i]
 
@@ -892,29 +921,72 @@ class LightcurveModel:
         posterior_means = summary[op]
         fv = {}
         for k, v in self.parameters.items():
-            if k in posterior_means.index:
-                fv[k] = posterior_means[k]
-            elif f"{k}[0]" in posterior_means.index:
-                n = 0
-                fv[k] = []
-                while f"{k}[{n}]" in posterior_means.index:
-                    fv[k].append(posterior_means[f"{k}[{n}]"])
-                    n += 1
-            elif f"{k}_w{i}" in posterior_means.index:
-                fv[k] = posterior_means[f"{k}_w{i}"]
-            elif f"{k}_w{i}[0]" in posterior_means.index:
-                n = 0
-                fv[k] = []
-                while f"{k}_w{i}[{n}]" in posterior_means.index:
-                    fv[k].append(posterior_means[f"{k}_w{i}[{n}]"])
-                    n += 1
-            elif f"{k}_w{i}" in posterior_means.index:
-                fv[k] = posterior_means[f"{k}_w{i}"]
+            more_than_one_input = False
+            if isinstance(v, Fitted):
+                if type(v.inputs["shape"]) == int:
+                    if v.inputs["shape"] != 1:
+                        more_than_one_input = True
+                elif v.inputs["shape"] != (self.data.nwave, 1):
+                    more_than_one_input = True
+
+            if more_than_one_input:
+                if f"{k}[{i}]" in posterior_means.index and "limb_darkening" not in k:
+                    fv[k] = posterior_means[f"{k}[{i}]"]
+                elif f"{k}[0]" in posterior_means.index:
+                    n = 0
+                    fv[k] = []
+                    while f"{k}[{n}]" in posterior_means.index:
+                        fv[k].append(posterior_means[f"{k}[{n}]"])
+                        n += 1
+                    if n == 1:
+                        fv[k] = fv[k][0]
+                elif f"{k}[{i}, 0]" in posterior_means.index:
+                    n = 0
+                    fv[k] = []
+                    while f"{k}[{i}, {n}]" in posterior_means.index:
+                        fv[k].append(posterior_means[f"{k}[{i}, {n}]"])
+                        n += 1
+                    if n == 1:
+                        fv[k] = fv[k][0]
+                elif f"{k}[0, 0]" in posterior_means.index:
+                    n = 0
+                    fv[k] = []
+                    while f"{k}[0, {n}]" in posterior_means.index:
+                        fv[k].append(posterior_means[f"{k}[0, {n}]"])
+                        n += 1
+                    if n == 1:
+                        fv[k] = fv[k][0]
             else:
-                if isinstance(v, WavelikeFixed):
-                    fv[k] = v.values[0]
-                elif isinstance(v, Fixed):
-                    fv[k] = v.value
+                if k in posterior_means.index:
+                    fv[k] = posterior_means[k]
+                elif f"{k}[{i}]" in posterior_means.index:
+                    fv[k] = posterior_means[f"{k}[{i}]"]
+                elif f"{k}[0]" in posterior_means.index:
+                    fv[k] = posterior_means[f"{k}[0]"]
+                elif f"{k}[{i}, 0]" in posterior_means.index:
+                    fv[k] = posterior_means[f"{k}[{i}, 0]"]
+                    # n = 0
+                    # fv[k] = []
+                    # while f"{k}[{i}, {n}]" in posterior_means.index:
+                    #     fv[k].append(posterior_means[f"{k}[{i}, {n}]"])
+                    #     n += 1
+                    # if n == 1:
+                    #     fv[k] = fv[k][0]
+                # elif f"{k}_w{i}" in posterior_means.index:
+                #     fv[k] = posterior_means[f"{k}_w{i}"]
+                # elif f"{k}_w{i}[0]" in posterior_means.index:
+                #     n = 0
+                #     fv[k] = []
+                #     while f"{k}_w{i}[{n}]" in posterior_means.index:
+                #         fv[k].append(posterior_means[f"{k}_w{i}[{n}]"])
+                #         n += 1
+                # elif f"{k}_w{i}" in posterior_means.index:
+                #     fv[k] = posterior_means[f"{k}_w{i}"]
+                else:
+                    if isinstance(v, WavelikeFixed):
+                        fv[k] = v.values[0]
+                    elif isinstance(v, Fixed):
+                        fv[k] = v.value
 
         return fv
 
@@ -941,11 +1013,12 @@ class LightcurveModel:
         """
 
         # if the optimization method is "separate" then loop over each wavelength's data
-        if self.optimization == "separate":
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            data = self.get_data()
-            datas = [data[i, :] for i in range(data.nwave)]
+        # if self.optimization == "separate":
+        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
+        # else:
+        #     # data = [self.get_data()]
+        #     data = self.get_data()
+        # datas = [data[i, :] for i in range(data.nwave)]
 
         if self.store_models:
             # if we decided to store the LC model extract this now
@@ -958,7 +1031,13 @@ class LightcurveModel:
             # if we decided not to store the LC model then generate the model
             model = {}
             # generate the transit model from the best fit parameters for each wavelength
-            for i, data in enumerate(datas):
+            # for j, data in enumerate(datas):
+            if self.optimization == "white_light":
+                data = self.get_data()
+            else:
+                data = self.data
+
+            for i, wave in enumerate(range(data.nwave)):
                 if params_dict is None:
                     if hasattr(self, "summary"):
                         params = self.extract_from_posteriors(self.summary, i)

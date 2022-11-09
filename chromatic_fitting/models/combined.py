@@ -409,11 +409,11 @@ class CombinedModel(LightcurveModel):
         if self.store_models:
             for i, (mod, data) in enumerate(zip(models, datas)):
                 with mod:
-                    for w in range(data.nwave):
-                        k = f"wavelength_{i + w}"
-                        Deterministic(
-                            f"{self.name}_model_w{i + w}", self.every_light_curve[k]
-                        )
+                    # for w in range(data.nwave):
+                    # k = f"wavelength_{i + w}"
+                    Deterministic(
+                        f"{self.name}_model", self.every_light_curve[f"wavelength_{i}"]
+                    )
 
     def get_results(self, **kw):
         """
