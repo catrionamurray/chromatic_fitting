@@ -11,6 +11,7 @@ import chromatic
 import math
 
 print(chromatic.version())
+pltdir = "tests/test_plots"
 
 
 class TestTransit(unittest.TestCase):
@@ -89,7 +90,7 @@ class TestTransit(unittest.TestCase):
         assert t.data.nwave == 5
         assert t.data.ntime == 61
 
-        t.plot_lightcurves(filename="test_plots/lightcurves.png")
+        t.plot_lightcurves(filename=f"{pltdir}/lightcurves.png")
 
     def test_setup_orbit(self):
         t = self.setup_example_transit()
@@ -110,7 +111,7 @@ class TestTransit(unittest.TestCase):
             assert eval_in_model(t.orbit.b).round(8) == 0.2
             assert eval_in_model(t.orbit.t0) == 0.0
 
-        t.plot_orbit(filename="test_plots/orbit_plot.png")
+        t.plot_orbit(filename=f"{pltdir}/orbit_plot.png")
 
     def test_setup_lightcurve(self):
         t = self.setup_example_transit()
@@ -204,9 +205,9 @@ class TestTransit(unittest.TestCase):
         assert "w0" in models.keys()
         assert "w4" in models.keys()
 
-        t.plot_lightcurves(filename="test_plots/lightcurves_with_models.png")
-        t.plot_with_model_and_residuals(filename="test_plots/residuals.png")
-        t.imshow_with_models(filename="test_plots/imshow_models.png")
+        t.plot_lightcurves(filename=f"{pltdir}/lightcurves_with_models.png")
+        t.plot_with_model_and_residuals(filename=f"{pltdir}/residuals.png")
+        t.imshow_with_models(filename=f"{pltdir}/imshow_models.png")
 
         t.plot_transmission_spectrum(uncertainty=["hdi_16%", "hdi_84%"])
         plt.plot(
@@ -215,7 +216,7 @@ class TestTransit(unittest.TestCase):
             label="True Rp/R*",
         )
         plt.legend()
-        plt.savefig("test_plots/transmission_spectrum.png")
+        plt.savefig(f"{pltdir}/transmission_spectrum.png")
 
 
 if __name__ == "__main__":

@@ -178,6 +178,10 @@ class LightcurveModel:
 
         for k in self.parameters.keys():
             if self.name in k:
+                warnings.warn(
+                    f"{self.name} in the parameter name: {k}. Please avoid having the model name in the "
+                    f"parameter name as it can get confusing!"
+                )
                 return
         self.parameters = add_string_before_each_dictionary_key(
             self.parameters, self.name
@@ -836,10 +840,17 @@ class LightcurveModel:
 
                 if f"w{w + nm}" not in model.keys():
                     model[f"w{w + nm}"] = []
-                for t in range(data.ntime):
-                    model[f"w{w + nm}"].append(
-                        summary["mean"][f"{self.name}_model[{w}, {t}]"]
-                    )
+
+                if f"{self.name}_model[{w}, 0]" in summary["mean"].keys():
+                    for t in range(data.ntime):
+                        model[f"w{w + nm}"].append(
+                            summary["mean"][f"{self.name}_model[{w}, {t}]"]
+                        )
+                elif f"{self.name}_model[0]" in summary["mean"].keys():
+                    for t in range(data.ntime):
+                        model[f"w{w + nm}"].append(
+                            summary["mean"][f"{self.name}_model[{t}]"]
+                        )
         return model
 
     def get_stored_model(self, as_dict=True, as_array=False):

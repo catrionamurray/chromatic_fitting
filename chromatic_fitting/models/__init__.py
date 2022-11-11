@@ -2,6 +2,7 @@ from .lightcurve import *
 from .polynomial import *
 from .transit import *
 from .combined import *
+from .step import *
 
 from ..utils import *
 from tqdm import tqdm
