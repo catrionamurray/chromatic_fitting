@@ -11,7 +11,7 @@ import chromatic
 import math
 
 print(chromatic.version())
-pltdir = "tests/test_plots"
+pltdir = "chromatic_fitting/tests/test_plots"
 
 
 class TestTransit(unittest.TestCase):
