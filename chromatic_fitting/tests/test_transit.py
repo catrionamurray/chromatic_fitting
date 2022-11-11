@@ -211,8 +211,8 @@ class TestTransit(unittest.TestCase):
 
         t.plot_transmission_spectrum(uncertainty=["hdi_16%", "hdi_84%"])
         plt.plot(
-            ri.wavelength,
-            r.metadata["transit_parameters"]["rp_unbinned"],
+            r.wavelength,
+            np.sqrt(r.metadata["injected_transit_parameters"]["delta"]),
             label="True Rp/R*",
         )
         plt.legend()
