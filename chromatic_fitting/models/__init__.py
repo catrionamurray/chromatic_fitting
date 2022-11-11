@@ -2,6 +2,7 @@ from .lightcurve import *
 from .polynomial import *
 from .transit import *
 from .combined import *
+from .trapezoid import *
 from .step import *
 
 from ..utils import *
