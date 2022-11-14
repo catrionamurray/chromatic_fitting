@@ -1,5 +1,6 @@
 ![Testing](https://github.com/catrionamurray/chromatic_fitting/actions/workflows/python-package.yml/badge.svg)
 [![GitHub release](https://img.shields.io/github/v/release/catrionamurray/chromatic_fitting?display_name=release&include_prereleases)](https://github.com/catrionamurray/chromatic_fitting/releases/tag/v0)
+![License](https://img.shields.io/github/license/catrionamurray/chromatic_fitting)
 
 # chromatic_fitting
 
