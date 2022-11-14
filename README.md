@@ -12,11 +12,15 @@ This tool was developed alongside the JWST ERS program and successfully applied 
 Full documentation and tutorials are available [here](https://catrionamurray.github.io/chromatic_fitting/)!
 
 # Installation 
-To install this code run:
+To install this code (at its last stable release version) run:
+
+`pip install git+https://github.com/catrionamurray/chromatic_fitting.git@v0.3.0-stable`
+
+which should install the chromatic_fitting package as well as any necessary dependencies. If you want to install the newest (in development) version then run:
 
 `pip install git+https://github.com/catrionamurray/chromatic_fitting`
 
-which should install the chromatic_fitting package as well as any necessary dependencies. If you already have chromatic_fitting already installed but need a newer version then run:
+If you already have chromatic_fitting already installed but need a newer version then run:
 
 `pip install --upgrade git+https://github.com/catrionamurray/chromatic_fitting`
 
