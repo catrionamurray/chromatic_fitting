@@ -698,7 +698,11 @@ class LightcurveModel:
                 (key + f"_{uncertainty[1]}", value)
                 for (key, value) in params_upper_error.items()
             )
-            params = params_mean | params_lower_error | params_upper_error
+            try:
+                params = params_mean | params_lower_error | params_upper_error
+            except TypeError:
+                # for Python < 3.9 add dictionaries using a different method
+                params = {**params_mean, **params_lower_error, **params_upper_error}
             ordered_params = collections.OrderedDict(sorted(params.items()))
             results[f"w{i}"] = ordered_params
             results[f"w{i}"]["wavelength"] = w
