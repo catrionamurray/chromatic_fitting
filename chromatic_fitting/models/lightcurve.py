@@ -1072,7 +1072,11 @@ class LightcurveModel:
             _ = corner.corner(self.trace, **kw)
 
     def check_and_fill_missing_parameters(self, params, i):
-        name = f"{self.name}_"
+        if all([f"{self.name}_" in rp for rp in self.required_parameters]):
+            name = ""
+        else:
+            name = f"{self.name}_"
+
         for rp in self.required_parameters:
             if f"{name}{rp}" not in params.keys():
                 if isinstance(self.parameters[f"{name}{rp}"], WavelikeFixed):
@@ -1150,14 +1154,6 @@ class LightcurveModel:
                         params = params_dict[f"w{i}"]
 
                 model_i = self.model(params, i)
-                # if is instance(self, TransitModel):
-                #     model_i = self.transit_model(params, i)
-                # elif isinstance(self, PolynomialModel):
-                #     model_i = self.polynomial_model(params, i)
-                # else:
-                #     warnings.warn(
-                #         f"{self} doesn't have a defined model in lightcurve.py"
-                #     )
                 model[f"w{i}"] = model_i
 
             if store:
