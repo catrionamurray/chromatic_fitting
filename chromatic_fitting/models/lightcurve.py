@@ -262,7 +262,7 @@ class LightcurveModel:
         #     data = self.data_without_outliers
         # else:
         #     data = self.data
-        self.white_light = self.data.bin(nwavelengths=self.data.nwave)
+        self.white_light = self.data.bin(nwavelengths=self.data.nwave).trim()
 
     def choose_optimization_method(self, optimization_method="simultaneous"):
         """

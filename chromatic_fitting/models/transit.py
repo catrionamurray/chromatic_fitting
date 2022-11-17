@@ -311,7 +311,7 @@ class TransitModel(LightcurveModel):
             name = ""
 
         if time is None:
-            time = list(self.data.time.to_value("day"))
+            time = list(data.time.to_value("day"))
 
         self.check_and_fill_missing_parameters(transit_params, i)
 
