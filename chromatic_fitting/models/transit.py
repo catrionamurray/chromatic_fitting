@@ -313,6 +313,8 @@ class TransitModel(LightcurveModel):
         if time is None:
             time = list(self.data.time.to_value("day"))
 
+        self.check_and_fill_missing_parameters(transit_params, i)
+
         orbit = xo.orbits.KeplerianOrbit(
             period=transit_params[f"{name}period"],
             t0=transit_params[f"{name}epoch"],

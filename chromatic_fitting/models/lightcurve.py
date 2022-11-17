@@ -15,6 +15,7 @@ from ..utils import *
 from chromatic import *
 import collections
 
+
 #  - Q=sqrt(N)*depth/error (Winn 2010/ Carter 2008)
 #  - chi-sq
 
@@ -467,6 +468,9 @@ class LightcurveModel:
             print("Sampling has not been run yet! Running now with defaults...")
             self.sample()
 
+        if var_names is None:
+            var_names = {**self.trace[0], **{"data": []}}.keys()
+
         if self.optimization != "separate":
             with self._pymc3_model:
                 return sample_posterior_predictive(
@@ -735,7 +739,7 @@ class LightcurveModel:
     #     self.data_outliers_removed = data_outliers_removed
     #     self.outlier_flag = True
 
-    def plot_priors(self, n=3):
+    def plot_priors(self, n=3, quantity="data", plot_all=True):
         """
         Plot n prior samples from the parameter distributions defined by the user
         :parameter n
@@ -753,21 +757,48 @@ class LightcurveModel:
             zip(datas, prior_predictive_traces)
         ):
             for i in range(n):
-                flux_for_this_sample = np.array(
-                    [prior_predictive_trace[f"data"][i] for w in range(data.nwave)]
-                )
-                # model_for_this_sample = np.array(
-                #     [
-                #         prior_predictive_trace[f"{self.name}_model_w{w + nm}"][i]
-                #         for w in range(data.nwave)
-                #     ]
-                # )
-                # f"{name}model_w{i + j}"
-                data.fluxlike[f"prior-predictive-{i}"] = flux_for_this_sample
-                # data.fluxlike[f"prior-model-{i}"] = model_for_this_sample
-            data.imshow_quantities()
+                # if data.nwave == 1:
+                try:
+                    flux_for_this_sample = np.array(prior_predictive_trace[quantity][i])
+                except:
+                    warnings.warn(f"Couldn't generate prior for {quantity}!")
+                    return
 
-    def plot_posteriors(self, n=3):
+                if f"{self.name}_model" in prior_predictive_trace.keys():
+                    model_for_this_sample = np.array(
+                        prior_predictive_trace[f"{self.name}_model"][i]
+                    )
+                else:
+                    model_for_this_sample = []
+                    for w in range(data.nwave):
+                        i_dict = {}
+                        for k, v in prior_predictive_trace.items():
+                            if np.shape(v) == 1:
+                                i_dict = {**i_dict, **{k: v[i]}}
+                            elif np.shape(v)[1] == 1:
+                                i_dict = {**i_dict, **{k: v[i][0]}}
+                            else:
+                                i_dict = {**i_dict, **{k: v[i][w]}}
+                        model_for_this_sample.append(self.model(i_dict))
+                    model_for_this_sample = np.array(model_for_this_sample)
+
+                # add posterior model and draw from posterior distribution to the Rainbow quantities:
+                data.fluxlike[f"prior-model-{i}"] = model_for_this_sample
+                data.fluxlike[f"prior-predictive-{i}"] = flux_for_this_sample
+
+            if plot_all:
+                data.imshow_quantities()
+            else:
+                f, ax = plt.subplots(
+                    nrows=n, sharex=True, sharey=True, figsize=(6, 4 * n)
+                )
+                for i in range(n):
+                    if f"{self.name}_model" in prior_predictive_trace.keys():
+                        data.imshow(ax=ax[i], quantity=f"prior-model-{i}")
+                    else:
+                        data.imshow(ax=ax[i], quantity=f"prior-predictive-{i}")
+
+    def plot_posteriors(self, n=3, quantity="data", plot_all=True):
         """
         Plot n posterior samples from the parameter distributions defined by the user
         :parameter trace
@@ -788,42 +819,61 @@ class LightcurveModel:
             zip(datas, posterior_predictive_traces)
         ):
 
-            for w in range(data.nwave):
-                if "data" in posterior_predictive_trace.keys():
-                    # generate a posterior model for every wavelength:
-                    if (
-                        f"{self.name}_model_w{w + nm}"
-                        in posterior_predictive_trace.keys()
-                    ):
-                        posterior_model[f"{self.name}_model"] = self.sample_posterior(
-                            n, var_names=[f"{self.name}_model"]
-                        )[f"{self.name}_model"]
+            # for w in range(data.nwave):
+            # if "data" in posterior_predictive_trace.keys():
+            #     # generate a posterior model for every wavelength:
+            #     if (
+            #         f"{self.name}_model"  # _w{w + nm}"
+            #         in posterior_predictive_trace.keys()
+            #     ):
+            #         posterior_model[f"{self.name}_model"] = posterior_predictive_trace[
+            #             f"{self.name}_model"
+            #         ]
 
-            for w in range(data.nwave):
-                for i in range(n):
-                    # for every posterior sample extract the posterior model and distribution draw for every wavelength:
+            # for w in range(data.nwave):
+            for i in range(n):
+                # for every posterior sample extract the posterior model and distribution draw:
+                try:
                     flux_for_this_sample = np.array(
-                        [
-                            posterior_predictive_trace[f"data"][i]
-                            for w in range(data.nwave)
-                        ]
+                        posterior_predictive_trace[quantity][i]
                     )
+                except:
+                    warnings.warn(f"Couldn't generate prior for {quantity}!")
+                    return
 
+                if f"{self.name}_model" in posterior_predictive_trace.keys():
+                    model_for_this_sample = np.array(
+                        posterior_predictive_trace[f"{self.name}_model"][i]
+                    )
+                else:
+                    model_for_this_sample = []
+                    for w in range(data.nwave):
+                        i_dict = {}
+                        for k, v in posterior_predictive_trace.items():
+                            if np.shape(v) == 1:
+                                i_dict = {**i_dict, **{k: v[i]}}
+                            elif np.shape(v)[1] == 1:
+                                i_dict = {**i_dict, **{k: v[i][0]}}
+                            else:
+                                i_dict = {**i_dict, **{k: v[i][w]}}
+                        model_for_this_sample.append(self.model(i_dict))
+                    model_for_this_sample = np.array(model_for_this_sample)
+
+                # add posterior model and draw from posterior distribution to the Rainbow quantities:
+                data.fluxlike[f"posterior-model-{i}"] = model_for_this_sample
+                data.fluxlike[f"posterior-predictive-{i}"] = flux_for_this_sample
+
+            if plot_all:
+                data.imshow_quantities()
+            else:
+                f, ax = plt.subplots(
+                    nrows=n, sharex=True, sharey=True, figsize=(6, 4 * n)
+                )
+                for i in range(n):
                     if f"{self.name}_model" in posterior_model.keys():
-                        model_for_this_sample = np.array(
-                            [
-                                posterior_model[f"{self.name}_model"][i]
-                                for w in range(data.nwave)
-                            ]
-                        )
-
-                        # add posterior model and draw from posterior distribution to the Rainbow quantities:
-                        data.fluxlike[f"posterior-model-{i}"] = model_for_this_sample
-                        data.fluxlike[
-                            f"posterior-predictive-{i}"
-                        ] = flux_for_this_sample
-            # plot the rainbow quantities:
-            data.imshow_quantities()
+                        data.imshow(ax=ax[i], quantity=f"posterior-model-{i}")
+                    else:
+                        data.imshow(ax=ax[i], quantity=f"posterior-predictive-{i}")
 
     def extract_deterministic_model(self):
         """
@@ -1004,6 +1054,36 @@ class LightcurveModel:
                         fv[k] = v.value
 
         return fv
+
+    def corner_plot(self, **kw):
+        try:
+            import corner
+        except ImportError:
+            warnings.warn(
+                "corner is not installed, please install corner before trying this method!"
+            )
+            return
+
+        if not hasattr(self, "trace"):
+            print("Sampling has not been run yet! Running now with defaults...")
+            self.sample()
+
+        with self._pymc3_model:
+            _ = corner.corner(self.trace, **kw)
+
+    def check_and_fill_missing_parameters(self, params, i):
+        name = f"{self.name}_"
+        for rp in self.required_parameters:
+            if f"{name}{rp}" not in params.keys():
+                if isinstance(self.parameters[f"{name}{rp}"], WavelikeFixed):
+                    params[f"{name}{rp}"] = self.parameters[f"{name}{rp}"].values[i]
+                elif isinstance(self.parameters[f"{name}{rp}"], Fixed):
+                    params[f"{name}{rp}"] = self.parameters[f"{name}{rp}"].value
+                else:
+                    warnings.warn(
+                        f"{name}{rp} is missing from the parameter dictionary!"
+                    )
+        return params
 
     def get_model(
         self,

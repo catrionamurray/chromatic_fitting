@@ -182,6 +182,8 @@ class StepModel(LightcurveModel):
         if len(np.shape(x)) > 1:
             x = x[i, :]
 
+        self.check_and_fill_missing_parameters(step_params, i)
+
         try:
             #             for d in range(self.degree + 1)
             step = np.ones(len(x)) * step_params[f"{self.name}_f0"]

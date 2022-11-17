@@ -176,6 +176,9 @@ class PolynomialModel(LightcurveModel):
                         if type(p[d]) == float or type(p[d]) == int:
                             coeff.append(p[d])
                             to_sub += 1
+                        elif eval_in_model(p[d].shape) == 1:
+                            coeff.append(p[d][0])
+                            to_sub += 1
                         else:
                             coeff.append(p[d][i - to_sub])
                         variable.append(xi**d)
@@ -240,6 +243,8 @@ class PolynomialModel(LightcurveModel):
 
         if len(np.shape(x)) > 1:
             x = x[i, :]
+
+        self.check_and_fill_missing_parameters(poly_params, i)
 
         try:
             for d in range(self.degree + 1):

@@ -197,6 +197,8 @@ class TrapezoidModel(LightcurveModel):
         else:
             data = self.get_data()
 
+        self.check_and_fill_missing_parameters(trap_params, i)
+
         P = trap_params[f"{self.name}_P"]
         t0 = trap_params[f"{self.name}_t0"]
         tau = trap_params[f"{self.name}_tau"]
