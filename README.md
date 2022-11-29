@@ -15,7 +15,7 @@ Full documentation and tutorials are available [here](https://catrionamurray.git
 # Installation 
 To install this code (at its [last stable release version](https://github.com/catrionamurray/chromatic_fitting/releases/tag/v0)) run:
 
-`pip install git+https://github.com/catrionamurray/chromatic_fitting.git@v0.3.0-stable`
+`pip install git+https://github.com/catrionamurray/chromatic_fitting.git@v0`
 
 which should install the chromatic_fitting package as well as any necessary dependencies. If you want to install the newest (in development) version then run:
 
