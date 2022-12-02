@@ -5,6 +5,8 @@ from .combined import *
 from .trapezoid import *
 from .step import *
 
+# from .spot import *
+
 from ..utils import *
 from tqdm import tqdm
 from ..parameters import *

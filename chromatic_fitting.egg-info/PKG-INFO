@@ -1,11 +1,12 @@
 Metadata-Version: 2.1
 Name: chromatic-fitting
-Version: 0.6.3
+Version: 0.7.1
 Summary: Tools for fitting spectroscopic light curves (of transiting exoplanets), built on top of chromatic.
 Home-page: https://github.com/catrionamurray/chromatic_fitting
 Author: Catriona Anne Murray
 Author-email: catriona.murray@colorado.edu
 License: MIT
+Platform: UNKNOWN
 Classifier: Intended Audience :: Education
 Classifier: Intended Audience :: Science/Research
 Classifier: Programming Language :: Python
@@ -16,3 +17,4 @@ Provides-Extra: gp
 License-File: LICENSE
 
 Read the complete documentation at https://catrionamurray.github.io/chromatic_fitting/
+

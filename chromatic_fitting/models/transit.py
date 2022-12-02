@@ -152,7 +152,7 @@ class TransitModel(LightcurveModel):
                 else:
                     self.orbit = orbit
 
-    def setup_lightcurves(self, store_models: bool = False):
+    def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create an `exoplanet` light curve model, given the stored parameters.
         [This should be run after .attach_data()]

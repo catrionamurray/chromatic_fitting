@@ -42,7 +42,7 @@ class TrapezoidModel(LightcurveModel):
         """
         self.defaults = dict(delta=0.01, P=1, t0=0, T=0.1, tau=0.01, baseline=1.0)
 
-    def setup_lightcurves(self, store_models: bool = False):
+    def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create a trapezoid model, given the stored parameters.
         [This should be run after .attach_data()]

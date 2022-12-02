@@ -45,7 +45,7 @@ class StepModel(LightcurveModel):
         """
         self.defaults = dict(df=0.01, f0=1.0, t0=0.0)
 
-    def setup_lightcurves(self, store_models: bool = False):
+    def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create a polynomial model, given the stored parameters.
         [This should be run after .attach_data()]

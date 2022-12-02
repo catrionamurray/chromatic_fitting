@@ -89,7 +89,9 @@ class PolynomialModel(LightcurveModel):
                 # for Python < 3.9 add dictionaries using a different method
                 self.defaults = {**self.defaults, **{f"p_{d}": 0.0}}
 
-    def setup_lightcurves(self, store_models: bool = False, normalize: bool = False):
+    def setup_lightcurves(
+        self, store_models: bool = False, normalize: bool = False, **kwargs
+    ):
         """
         Create a polynomial model, given the stored parameters.
         [This should be run after .attach_data()]
