@@ -1,4 +1,4 @@
-__version__ = "0.7.1"
+__version__ = "0.7.2"
 
 
 def version():
@@ -15,3 +15,4 @@ def version():
 #    v 0.6.3 - trim white light curve
 # v 0.7.0 - added spot model
 # v 0.7.1 - added kw to CombinedModel.setup_lightcurves()
+# v 0.7.2 - added some diagnostic tools

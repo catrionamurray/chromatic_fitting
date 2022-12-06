@@ -90,7 +90,7 @@ class PolynomialModel(LightcurveModel):
                 self.defaults = {**self.defaults, **{f"p_{d}": 0.0}}
 
     def setup_lightcurves(
-        self, store_models: bool = False, normalize: bool = False, **kwargs
+        self, store_models: bool = False, normalize: bool = True, **kwargs
     ):
         """
         Create a polynomial model, given the stored parameters.

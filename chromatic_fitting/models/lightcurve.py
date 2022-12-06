@@ -14,6 +14,7 @@ from ..parameters import *
 from ..utils import *
 from chromatic import *
 import collections
+from ..diagnostics import chi_sq, generate_periodogram
 
 
 #  - Q=sqrt(N)*depth/error (Winn 2010/ Carter 2008)
@@ -1312,6 +1313,164 @@ class LightcurveModel:
             )
         else:
             plot_one_model(model, normalize=normalize, **kw)
+
+    def chi_squared(self, **kw):
+        if hasattr(self, "data_with_model"):
+            if self.optimization == "simultaneous":
+                fit_params = len(self.summary)
+                degrees_of_freedom = (self.data.nwave * self.data.ntime) - fit_params
+                print("\nFor Entire Simultaneous Fit:")
+                chi_sq(
+                    data=self.data_with_model.flux,
+                    model=self.data_with_model.model,
+                    uncertainties=self.data_with_model.uncertainty,
+                    degrees_of_freedom=degrees_of_freedom,
+                    **kw,
+                )
+
+                count_wave_fit_params, count_nonwave_fit_params = 0, 0
+                for p in self.parameters.values():
+                    try:
+                        if type(p.inputs["shape"]) == int:
+                            if p.inputs["shape"] > 1:
+                                count_wave_fit_params += 1
+                            else:
+                                count_nonwave_fit_params += 1
+                        else:
+                            if p.inputs["shape"][0] > 1:
+                                count_wave_fit_params += p.inputs["shape"][1]
+                    except:
+                        pass
+                fit_params = count_wave_fit_params + (
+                    count_nonwave_fit_params / self.data.nwave
+                )
+                degrees_of_freedom = self.data.ntime - fit_params
+
+                for i in range(self.data.nwave):
+                    print(f"\nFor Wavelength {i}:")
+                    chi_sq(
+                        data=self.data_with_model.flux[i],
+                        model=self.data_with_model.model[i],
+                        uncertainties=self.data_with_model.uncertainty[i],
+                        degrees_of_freedom=degrees_of_freedom,
+                        **kw,
+                    )
+
+            elif self.optimization == "separate":
+                for i in range(self.data.nwave):
+                    fit_params = len(self.summary[i])
+                    degrees_of_freedom = self.data.ntime - fit_params
+                    print(f"\nFor Wavelength {i}:")
+                    chi_sq(
+                        data=self.data_with_model.flux[i],
+                        model=self.data_with_model.model[i],
+                        uncertainties=self.data_with_model.uncertainty[i],
+                        degrees_of_freedom=degrees_of_freedom,
+                        **kw,
+                    )
+            elif self.optimization == "white_light":
+                fit_params = len(self.summary)
+                degrees_of_freedom = self.data.ntime - fit_params
+                chi_sq(
+                    data=self.data_with_model.flux,
+                    model=self.data_with_model.model,
+                    uncertainties=self.data_with_model.uncertainty,
+                    degrees_of_freedom=degrees_of_freedom,
+                    **kw,
+                )
+
+        else:
+            warnings.warn(
+                f"""Could not find .data_with_model in {self.name} model! 
+            Please run [self].add_model_to_rainbow() or one of the plotting methods
+            with models before rerunning this method."""
+            )
+
+    def plot_residuals_histogram(self, **kw):
+        if hasattr(self, "data_with_model"):
+            plt.figure(figsize=(8, 6))
+            for i in range(self.data.nwave):
+                plt.hist(
+                    self.data_with_model.residuals[i],
+                    alpha=0.5,
+                    label=f"Wavelength {i}",
+                    histtype="step",
+                    **kw,
+                )
+            plt.hist(
+                np.mean(self.data_with_model.residuals, axis=0),
+                color="k",
+                label=f"Mean Wavelength",
+                histtype="step",
+            )
+            plt.legend()
+            plt.show()
+            plt.close()
+        else:
+            warnings.warn(
+                f"""Could not find .data_with_model in {self.name} model! 
+                Please run [self].add_model_to_rainbow() or one of the plotting methods
+                with models before rerunning this method."""
+            )
+
+    def plot_residuals(self, **kw):
+        if hasattr(self, "data_with_model"):
+            plt.figure(figsize=(12, 6))
+            for i in range(self.data.nwave):
+                plt.plot(
+                    self.data_with_model.time,
+                    self.data_with_model.residuals[i],
+                    alpha=0.5,
+                    label=f"Wavelength {i}",
+                    **kw,
+                )
+            plt.plot(
+                self.data_with_model.time,
+                np.mean(self.data_with_model.residuals, axis=0),
+                color="k",
+                label=f"Mean Wavelength",
+            )
+            plt.legend()
+            plt.show()
+            plt.close()
+        else:
+            warnings.warn(
+                f"""Could not find .data_with_model in {self.name} model! 
+                Please run [self].add_model_to_rainbow() or one of the plotting methods
+                with models before rerunning this method."""
+            )
+
+    def residual_noise_calculator(self, **kw):
+        if hasattr(self, "data_with_model"):
+            print("For the Wavelength-Averaged Residuals...")
+            noise_calculator(np.mean(self.data_with_model.residuals, axis=0), **kw)
+            for i in range(self.data.nwave):
+                print(f"For wavelength {i}")
+                noise_calculator(self.data_with_model.residuals[i], **kw)
+        else:
+            warnings.warn(
+                f"""Could not find .data_with_model in {self.name} model! 
+                Please run [self].add_model_to_rainbow() or one of the plotting methods
+                with models before rerunning this method."""
+            )
+
+    def plot_residuals_periodogram(self, **kw):
+        if hasattr(self, "data_with_model"):
+            plt.figure(figsize=(12, 6))
+            plt.title("Periodogram of Wavelength-Averaged Residuals")
+            generate_periodogram(
+                x=np.mean(self.data_with_model.residuals, axis=0),
+                fs=(
+                    1 / (self.data_with_model.time[1] - self.data_with_model.time[0])
+                ).to_value("1/d"),
+                **kw,
+            )
+        else:
+            warnings.warn(
+                f"""Could not find .data_with_model in {self.name} model! 
+                Please run [self].add_model_to_rainbow() or one of the plotting methods
+                with models before rerunning this method."""
+            )
 
 
 from .combined import *
