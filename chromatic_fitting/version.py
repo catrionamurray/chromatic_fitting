@@ -1,4 +1,4 @@
-__version__ = "0.7.2"
+__version__ = "0.8.0"
 
 
 def version():
@@ -16,3 +16,5 @@ def version():
 # v 0.7.0 - added spot model
 # v 0.7.1 - added kw to CombinedModel.setup_lightcurves()
 # v 0.7.2 - added some diagnostic tools
+# v 0.8.0 - changed pymc3_ext.sample() to pymc3.sample()
+# v.0.8.1 - added exponential model

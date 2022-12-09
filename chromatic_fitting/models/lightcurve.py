@@ -7,8 +7,11 @@ from pymc3 import (
     Deterministic,
     Normal,
     TruncatedNormal,
+    sample,
 )
-from pymc3_ext import eval_in_model, optimize, sample
+from pymc3_ext import eval_in_model, optimize
+from pymc3_ext import sample as sample_ext
+
 from arviz import summary
 from ..parameters import *
 from ..utils import *
@@ -610,7 +613,7 @@ class LightcurveModel:
                         start = mod.test_point
 
                     try:
-                        samp = sample(start=start, **kw)
+                        samp = sample(start=start, init="adapt_full", **kw)
                         if summarize_step_by_step:
                             self.summary.append(summary(samp, **summarize_kw))
                         else:
@@ -634,7 +637,7 @@ class LightcurveModel:
             #             self.trace.append(None)
         else:
             with self._pymc3_model:
-                self.trace = sample(**kw)
+                self.trace = sample(init="adapt_full", **kw)
 
     def summarize(self, print_table=True, **kw):
         """
@@ -1320,6 +1323,10 @@ class LightcurveModel:
                 fit_params = len(self.summary)
                 degrees_of_freedom = (self.data.nwave * self.data.ntime) - fit_params
                 print("\nFor Entire Simultaneous Fit:")
+                print("Fitted Parameters:\n", "\n".join(self.summary.index))
+                print(
+                    f"\nDegrees of Freedom = n_waves ({self.data.nwave}) * n_times ({self.data.ntime}) - n_fitted_parameters ({fit_params})"
+                )
                 chi_sq(
                     data=self.data_with_model.flux,
                     model=self.data_with_model.model,
@@ -1329,16 +1336,21 @@ class LightcurveModel:
                 )
 
                 count_wave_fit_params, count_nonwave_fit_params = 0, 0
+                wave_fit_params, nonwave_fit_params = [], []
                 for p in self.parameters.values():
                     try:
                         if type(p.inputs["shape"]) == int:
                             if p.inputs["shape"] > 1:
                                 count_wave_fit_params += 1
+                                wave_fit_params.append(p.name)
                             else:
                                 count_nonwave_fit_params += 1
+                                nonwave_fit_params.append(p.name)
                         else:
                             if p.inputs["shape"][0] > 1:
                                 count_wave_fit_params += p.inputs["shape"][1]
+                                for i in range(p.inputs["shape"][1]):
+                                    wave_fit_params.append(p.name + f"_{i}")
                     except:
                         pass
                 fit_params = count_wave_fit_params + (
@@ -1348,6 +1360,14 @@ class LightcurveModel:
 
                 for i in range(self.data.nwave):
                     print(f"\nFor Wavelength {i}:")
+                    print("Wavelength Fitted Parameters:\n", "\n".join(wave_fit_params))
+                    print(
+                        "Non-Wavelength Fitted Parameters:\n",
+                        "\n".join(nonwave_fit_params),
+                    )
+                    print(
+                        f"\nDegrees of Freedom = n_times ({self.data.ntime}) - n_fitted_parameters ({fit_params})"
+                    )
                     chi_sq(
                         data=self.data_with_model.flux[i],
                         model=self.data_with_model.model[i],
@@ -1445,7 +1465,7 @@ class LightcurveModel:
             print("For the Wavelength-Averaged Residuals...")
             noise_calculator(np.mean(self.data_with_model.residuals, axis=0), **kw)
             for i in range(self.data.nwave):
-                print(f"For wavelength {i}")
+                print(f"\nFor wavelength {i}")
                 noise_calculator(self.data_with_model.residuals[i], **kw)
         else:
             warnings.warn(
