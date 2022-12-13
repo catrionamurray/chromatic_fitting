@@ -430,7 +430,7 @@ class TransitModel(LightcurveModel):
             return trans_table
 
     def plot_transmission_spectrum(
-        self, table=None, uncertainty=["hdi_3%", "hdi_97%"], **kw
+        self, table=None, uncertainty=["hdi_3%", "hdi_97%"], ax=None, plotkw={}, **kw
     ):
         if table is not None:
             transmission_spectrum = table
@@ -452,12 +452,16 @@ class TransitModel(LightcurveModel):
                 t.to_value("micron") for t in transmission_spectrum["wavelength"].values
             ]
 
-        plt.figure(figsize=(10, 4))
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 4))
+
+        plt.sca(ax)
         plt.title("Transmission Spectrum")
         plt.plot(
             transmission_spectrum["wavelength"],
             transmission_spectrum[f"{self.name}_radius_ratio"],
             "kx",
+            **plotkw,
         )
         plt.errorbar(
             transmission_spectrum["wavelength"],
@@ -469,6 +473,7 @@ class TransitModel(LightcurveModel):
             color="k",
             capsize=2,
             linestyle="None",
+            **plotkw,
         )
         plt.xlabel("Wavelength (microns)")
         plt.ylabel("Radius Ratio")

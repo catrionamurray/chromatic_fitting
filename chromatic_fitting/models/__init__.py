@@ -4,6 +4,7 @@ from .transit import *
 from .combined import *
 from .trapezoid import *
 from .step import *
+from .exponential import *
 
 # from .spot import *
 

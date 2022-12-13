@@ -159,7 +159,7 @@ class CombinedModel(LightcurveModel):
         self.name = name
         self.metadata = {}
         self.parameters = {}
-        self.model = combined_model
+        self.model = self.combined_model
 
     def __repr__(self):
         """

@@ -1,4 +1,4 @@
-__version__ = "0.8.0"
+__version__ = "0.9.2"
 
 
 def version():
@@ -17,4 +17,6 @@ def version():
 # v 0.7.1 - added kw to CombinedModel.setup_lightcurves()
 # v 0.7.2 - added some diagnostic tools
 # v 0.8.0 - changed pymc3_ext.sample() to pymc3.sample()
-# v.0.8.1 - added exponential model
+# v 0.9.0 - added exponential model
+# v 0.9.1 - made t0 a mandatory param of exponential model
+# v 0.9.2 - added axis argument to .plot_transmission_spectrum()

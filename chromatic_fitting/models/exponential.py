@@ -1,3 +1,5 @@
+import astropy.units.quantity
+
 from ..imports import *
 
 from .lightcurve import *
@@ -10,6 +12,7 @@ class ExponentialModel(LightcurveModel):
 
     def __init__(
         self,
+        t0: int,
         independant_variable: str = "time",
         name: str = "exponential",
         **kw: object,
@@ -19,15 +22,23 @@ class ExponentialModel(LightcurveModel):
 
         Parameters
         ----------
-        independant_variable: the independant variable of the exponentialstep (default = time)
+        t0: where the exponential = the amplitude (traditionally the first data point)
+        independant_variable: the independant variable of the exponential (default = time)
         name: the name of the model (default = "exponential")
         kw: keyword arguments for initialising the chromatic model
         """
         # only require a constant (0th order) term:
-        self.required_parameters = ["A", "t0", "decay_time", "baseline"]
+        self.required_parameters = ["A", "decay_time", "baseline"]
 
         super().__init__(**kw)
         self.independant_variable = independant_variable
+        if (
+            type(t0) == astropy.units.quantity.Quantity
+            and independant_variable == "time"
+        ):
+            self.t0 = t0.to_value("day")
+        else:
+            self.t0 = t0
         self.set_defaults()
         self.set_name(name)
         self.metadata = {}
@@ -43,7 +54,7 @@ class ExponentialModel(LightcurveModel):
         """
         Set the default parameters for the model.
         """
-        self.defaults = dict(A=0.01, t0=0.0, decay_time=0.01, baseline=1.0)
+        self.defaults = dict(A=0.01, decay_time=0.01, baseline=1.0)
 
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
@@ -81,7 +92,7 @@ class ExponentialModel(LightcurveModel):
         if store_models == True:
             self.store_models = store_models
 
-        A, t0, decay_t, baseline = [], [], [], []
+        A, decay_t, baseline = [], [], []
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j
@@ -90,7 +101,6 @@ class ExponentialModel(LightcurveModel):
                 # for every wavelength set up an exponential model
 
                 A.append(self.parameters[f"{name}A"].get_prior_vector(**kw))
-                t0.append(self.parameters[f"{name}t0"].get_prior_vector(**kw))
                 decay_t.append(
                     self.parameters[f"{name}decay_time"].get_prior_vector(**kw)
                 )
@@ -120,10 +130,10 @@ class ExponentialModel(LightcurveModel):
                         A_i = A[j][i]
                     else:
                         A_i = A[j]
-                    if isinstance(self.parameters[f"{name}t0"], WavelikeFitted):
-                        t0_i = t0[j][i]
-                    else:
-                        t0_i = t0[j]
+                    # if isinstance(self.parameters[f"{name}t0"], WavelikeFitted):
+                    #     t0_i = t0[j][i]
+                    # else:
+                    #     t0_i = t0[j]
                     if isinstance(self.parameters[f"{name}decay_time"], WavelikeFitted):
                         decay_t_i = decay_t[j][i]
                     else:
@@ -133,7 +143,7 @@ class ExponentialModel(LightcurveModel):
                     else:
                         baseline_i = baseline[j]
 
-                    exp.append(A_i * np.exp(-(x - t0_i) / decay_t_i) + baseline_i)
+                    exp.append(A_i * np.exp(-(xi - self.t0) / decay_t_i) + baseline_i)
 
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
@@ -187,20 +197,10 @@ class ExponentialModel(LightcurveModel):
         #             for d in range(self.degree + 1)
         exponential = (
             exponential_params[f"{self.name}_A"]
-            * np.exp(
-                -(x - exponential_params[f"{self.name}_t0"])
-                / exponential_params[f"{self.name}_decay_time"]
-            )
+            * np.exp(-(x - self.t0) / exponential_params[f"{self.name}_decay_time"])
             + exponential_params[f"{self.name}_baseline"]
         )
         return exponential
-
-    #         except KeyError:
-    #             step = np.ones(len(x)) * step_params[f"{self.name}_f0_w0"]
-    #             step[x >= step_params[f"{self.name}_t0_w0"]] = (
-    #                 step_params[f"{self.name}_f0_w0"] + step_params[f"{self.name}_df_w0"]
-    #             )
-    #             return step
 
     def add_model_to_rainbow(self):
         """
