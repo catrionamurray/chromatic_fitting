@@ -174,7 +174,7 @@ class EclipseModel(LightcurveModel):
                                                 )
 
                     system = starry.System(star,planet)
-                    flux_model = system.flux(data.time)
+                    flux_model = system.flux(data.time.value)
 
                     # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                     # later:
