@@ -4,6 +4,7 @@
 
 # chromatic_fitting
 
+![models_horiz](https://user-images.githubusercontent.com/34891147/207686512-609280a0-e1d5-4053-a930-e66cbd3cff3e.gif)
 
 This `chromatic_fitting` package is being designed as a companion to [chromatic](https://github.com/zkbt/chromatic). `chromatic_fitting` can perform efficient model fits to spectroscopic light-curve data and produce transmission (or emission) spectra. This package can combine any number of transit, eclipse, polynomial (in time, in x or y position, etc.), Gaussian Process, or user-defined models and fit for all parameters at once. Therefore, in just one fit we can account for the spectral signatures imprinted by planets, stellar activity and instrumental systematics. `chromatic_fitting` also has the flexibility to carry out a 'white light’ fit and perform multi-wavelength fitting (either simultaneously or separately), so we can fully exploit the wide wavelength coverage of different facilities.
 
