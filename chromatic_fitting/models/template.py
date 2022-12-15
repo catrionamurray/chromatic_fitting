@@ -1,6 +1,6 @@
 """
 This module serves as a template for creating a new
-chromatic_fitting model. If you want to add a new mode a
+chromatic_fitting model. If you want to add a new model a
 good process would be to do something like the following:
 
     1. Copy this `template.py` file into a new file in the
@@ -9,14 +9,15 @@ good process would be to do something like the following:
     `temp` is the name of your model)
 
     2. Start by finding and replacing `temp` in this
-    template with the name of your format.
+    template with the name of your model.
 
-    3. Edit the `temp_model` function so that it does
-    whatever you would like your model to do.
+    3. Edit the `temp_model` function, and corresponding
+     function in .setup_lightcurves(), so that they perform
+    whatever function you would like your model to do.
 
-    4. Edit the `models/__init__.py` file to import
-    `from .temp import *` for your model to be accessible
-    through chromatic_fitting when you want to create a new
+    4. Add `from .temp import *` to the `models/__init__.py`
+    file to import your model so it is accessible through
+    chromatic_fitting when you want to create a new
     model.
 
     5. (optional) Submit a pull request to the github
