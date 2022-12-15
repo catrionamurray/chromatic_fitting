@@ -89,7 +89,9 @@ class PolynomialModel(LightcurveModel):
                 # for Python < 3.9 add dictionaries using a different method
                 self.defaults = {**self.defaults, **{f"p_{d}": 0.0}}
 
-    def setup_lightcurves(self, store_models: bool = False, normalize: bool = False):
+    def setup_lightcurves(
+        self, store_models: bool = False, normalize: bool = True, **kwargs
+    ):
         """
         Create a polynomial model, given the stored parameters.
         [This should be run after .attach_data()]
@@ -107,6 +109,7 @@ class PolynomialModel(LightcurveModel):
         else:
             models = [self._pymc3_model]
             datas = [self.get_data()]
+        kw = {"shape": datas[0].nwave}
 
         # if the model has a name then add this to each parameter's name (needed to prevent overwriting parameter names
         # if you combine >1 polynomial model)
@@ -125,56 +128,86 @@ class PolynomialModel(LightcurveModel):
             self.store_models = store_models
 
         for j, (mod, data) in enumerate(zip(models, datas)):
+            if self.optimization == "separate":
+                kw["i"] = j
+
             with mod:
                 # for every wavelength set up a polynomial model
+                p = []
+                for d in range(self.degree + 1):
+                    p.append(self.parameters[f"{name}p_{d}"].get_prior_vector(**kw))
+
+                # for i, w in enumerate(data.wavelength):
+                poly = []
+
+                # get the independent variable from the Rainbow object:
+                x = data.get(self.independant_variable)
+                # if len(np.shape(x)) > 1:
+                #     x = x[i, :]
+                # if the independant variable is time, convert to days:
+                if self.independant_variable == "time":
+                    x = x.to_value("day")
+                else:
+                    try:
+                        x = x.to_value()
+                    except AttributeError:
+                        pass
+
+                if normalize:
+                    # normalise the x values and store the mean/std values in metadata
+                    self.metadata["mean_" + self.independant_variable] = np.mean(x)
+                    self.metadata["std_" + self.independant_variable] = np.std(x)
+                    x = (x - np.mean(x)) / np.std(x)
+
+                    # store the normalised independant variable for later
+                    self.independant_variable_normalised = x
+
+                self.normalize = normalize
+
+                # compute the polynomial by looping over the coeffs for each degree:
+
+                # poly_wave = []
+                to_sub = 0
                 for i, w in enumerate(data.wavelength):
-                    poly = []
-
-                    # get the independent variable from the Rainbow object:
-                    x = data.get(self.independant_variable)
+                    coeff, variable = [], []
                     if len(np.shape(x)) > 1:
-                        x = x[i, :]
-                    # if the independant variable is time, convert to days:
-                    if self.independant_variable == "time":
-                        x = x.to_value("day")
+                        xi = x[i, :]
                     else:
-                        try:
-                            x = x.to_value()
-                        except AttributeError:
-                            pass
-
-                    if normalize:
-                        # normalise the x values and store the mean/std values in metadata
-                        self.metadata["mean_" + self.independant_variable] = np.mean(x)
-                        self.metadata["std_" + self.independant_variable] = np.std(x)
-                        x = (x - np.mean(x)) / np.std(x)
-
-                        # store the normalised independant variable for later
-                        self.independant_variable_normalised = x
-
-                    self.normalize = normalize
-
-                    # compute the polynomial by looping over the coeffs for each degree:
+                        xi = x
                     for d in range(self.degree + 1):
-                        p = self.parameters[f"{name}p_{d}"].get_prior(i + j)
-                        poly.append(p * (x**d))
+                        if type(p[d]) == float or type(p[d]) == int:
+                            coeff.append(p[d])
+                            to_sub += 1
+                        elif eval_in_model(p[d].shape) == 1:
+                            coeff.append(p[d][0])
+                            to_sub += 1
+                        else:
+                            coeff.append(p[d][i - to_sub])
+                        variable.append(xi**d)
+                    poly.append(pm.math.dot(coeff, variable))
+                # poly = pm.math.stack(poly_wave, axis=0)
+                # for d in range(self.degree + 1):
+                #     # for i, w in enumerate(data.wavelength):
+                #     # p = self.parameters[f"{name}p_{d}"].get_prior_vector(i + j)
+                #     # poly.append(np.array(p[d]) * np.array([x**d] * data.nwave))
+                #     poly.append(pm.math.dot([p[d]] * data.nwave, [x**d] * data.nwave))
 
-                    # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
-                    # later:
-                    if self.store_models:
-                        Deterministic(
-                            f"{name}model_w{i + j}", pm.math.sum(poly, axis=0)
-                        )
+                # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
+                # later:
+                if self.store_models:
+                    Deterministic(
+                        f"{name}model", pm.math.stack(poly, axis=0)
+                    )  # pm.math.sum(poly, axis=0))
 
-                    # add the polynomial model to the overall lightcurve:
-                    if f"wavelength_{i + j}" not in self.every_light_curve.keys():
-                        self.every_light_curve[f"wavelength_{i + j}"] = pm.math.sum(
-                            poly, axis=0
-                        )
-                    else:
-                        self.every_light_curve[f"wavelength_{i + j}"] += pm.math.sum(
-                            poly, axis=0
-                        )
+                # add the polynomial model to the overall lightcurve:
+                if f"wavelength_{j}" not in self.every_light_curve.keys():
+                    self.every_light_curve[f"wavelength_{j}"] = pm.math.stack(
+                        poly, axis=0
+                    )  # pm.math.sum(poly, axis=0)
+                else:
+                    self.every_light_curve[f"wavelength_{j}"] += pm.math.stack(
+                        poly, axis=0
+                    )  # pm.math.sum(poly, axis=0)
 
     def polynomial_model(self, poly_params: dict, i: int = 0) -> np.array:
         """
@@ -212,6 +245,8 @@ class PolynomialModel(LightcurveModel):
 
         if len(np.shape(x)) > 1:
             x = x[i, :]
+
+        self.check_and_fill_missing_parameters(poly_params, i)
 
         try:
             for d in range(self.degree + 1):

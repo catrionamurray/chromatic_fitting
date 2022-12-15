@@ -8,3 +8,4 @@ from .parameters import *
 from .spectrum import *
 from .utils import *
 from .models import *
+from .diagnostics import *

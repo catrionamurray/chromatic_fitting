@@ -3,6 +3,11 @@ from .polynomial import *
 from .transit import *
 from .combined import *
 from .eclipse import *
+from .trapezoid import *
+from .step import *
+from .exponential import *
+
+# from .spot import *
 
 from ..utils import *
 from tqdm import tqdm

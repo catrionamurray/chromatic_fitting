@@ -25,7 +25,7 @@ def wavecal(x):
     return poly(xprime)
 
 
-def noise_calculator(data, maxnbins=None, binstep=1):
+def noise_calculator(data, maxnbins=None, binstep=1, figname=None):
     """
     Author: Hannah R. Wakeford, University of Bristol
     Email: hannah.wakeford@bristol.ac.uk
@@ -109,8 +109,16 @@ def noise_calculator(data, maxnbins=None, binstep=1):
     plt.yscale("log")
     plt.legend()
     plt.tight_layout()
-    plt.show()
-    # plt.savefig('noise_calculator.pdf')
+    if figname is None:
+        plt.show()
+    else:
+        plt.savefig(figname)
+
+    print(
+        f"""Calculated white noise: {white_noise:.5g} \n
+        Calculated red noise: {red_noise:.5g} \n
+        Calculated beta: {beta:.5g}"""
+    )
 
     return white_noise, red_noise, beta
 

@@ -47,7 +47,7 @@ def create_new_transit_model():
 
 class EclipseModel(LightcurveModel):
     """
-    A transit model for the lightcurve.
+    A eclipse model for the lightcurve.
     """
 
     def __init__(self, name: str = "eclipse", **kw: object) -> None:
@@ -79,8 +79,10 @@ class EclipseModel(LightcurveModel):
         ]
 
         super().__init__(**kw)
+
         self.set_defaults()
         self.set_name(name)
+        self.metadata = {}
         self.model = self.eclipse_model
 
     def __repr__(self):
@@ -109,7 +111,7 @@ class EclipseModel(LightcurveModel):
             limbdark1 = 0.4,
             limbdark2 = 0.2,)
 
-    def setup_lightcurves(self, store_models: bool = False):
+    def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create an `starry` light curve model, given the stored parameters.
         [This should be run after .attach_data()]
@@ -139,6 +141,8 @@ class EclipseModel(LightcurveModel):
         else:
             models = [self._pymc3_model]
             datas = [self.get_data()]
+	
+        kw = {"shape": datas[0].nwave}
 
         # if the .every_light_curve attribute (final lc model) is not already present then create it now
         if not hasattr(self, "every_light_curve"):
@@ -149,47 +153,89 @@ class EclipseModel(LightcurveModel):
         if store_models == True:
             self.store_models = store_models
 
-        for j, (mod, data) in enumerate(zip(models, datas)):
-            with mod:
-                for i, w in enumerate(data.wavelength):
+        parameters_to_loop_over = {f"{name}stellar_amplitude": [],
+					f"{name}stellar_radius":[],
+					f"{name}stellar_mass":[],
+					f"{name}stellar_prot":[],
+					f"{name}period":[],
+					f"{name}t0":[],
+					f"{name}planet_log_amplitude":[],
+					f"{name}inclination":[],
+					f"{name}planet_mass":[],
+					f"{name}planet_radius":[],
+					f"{name}eccentricity":[],
+					f"{name}omega":[],
+					f"{name}limbdark1":[],
+					f"{name}limbdark2":[],
+}
 
+
+
+        for j, (mod, data) in enumerate(zip(models, datas)):
+            if self.optimization == "separate":
+                kw["i"] = j
+
+            with mod:
+                for pname in parameters_to_loop_over.keys():
+                    parameters_to_loop_over[pname].append(
+                         self.parameters[pname].get_prior_vector(**kw)
+                    )
+
+                y_model = []                
+                
+                for i, w in enumerate(data.wavelength):
+                    param_i = {}
+                    for param_name, param in parameters_to_loop_over.items():
+                        if isinstance(self.parameters[param_name], WavelikeFitted):
+                            param_i[param_name] = param[j][i]
+                        else:
+                            param_i[param_name] = param[j]
+
+                    # **FUNCTION TO MODEL - MAKE SURE IT MATCHES self.temp_model()!**
                     # extract light curve from Starry model at given times
-                    star = starry.Primary(starry.Map(ydeg=0, udeg=0, amp=self.parameters[name + "stellar_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),
-                                                   m=self.parameters[name + "stellar_mass"].get_prior(j+i),
-                                                   r=self.parameters[name + "stellar_radius"].get_prior(j+i),
-                                                   prot=self.parameters[name+"stellar_prot"].get_prior(j+i),
+                    star = starry.Primary(starry.Map(ydeg=0, udeg=0, amp=param_i[f"{name}stellar_amplitude"], inc=90.0, obl=0.0),
+                                                   m=   param_i[f"{name}stellar_mass"],
+                                                   r=   param_i[f"{name}stellar_radius"],
+                                                   prot=param_i[f"{name}stellar_prot"],
                                                    )
 
                     planet = starry.kepler.Secondary(
-                                                starry.Map(ydeg=0,udeg=0, amp=10 ** self.parameters[name+"planet_log_amplitude"].get_prior(j + i), inc=90.0, obl=0.0),  # the surface map
-                                                inc=self.parameters[name+"inclination"].get_prior(j + i),
-                                                m=self.parameters[name+"planet_mass"].get_prior(j + i),  # mass in Jupiter masses
-                                                r=self.parameters[name+"planet_radius"].get_prior(j + i),  # radius in Jupiter radii
-                                                porb=self.parameters[name+"period"].get_prior(j + i),  # orbital period in days
-                                                prot=self.parameters[name+"period"].get_prior(j + i),  # orbital period in days
-                                                ecc=self.parameters[name+"eccentricity"].get_prior(j + i),  # eccentricity
-                                                w=self.parameters[name+"omega"].get_prior(j + i),  # longitude of pericenter in degrees
-                                                t0=self.parameters[name+"t0"].get_prior(j + i),  # time of transit in days
+                                                starry.Map(ydeg=0,udeg=0, amp=10 ** param_i[f"{name}planet_log_amplitude"], inc=90.0, obl=0.0),  # the surface map
+                                                inc= param_i[f"{name}inclination"],
+                                                m=   param_i[f"{name}planet_mass"],  # mass in Jupiter masses
+                                                r=   param_i[f"{name}planet_radius"],  # radius in Jupiter radii
+                                                porb=param_i[f"{name}period"],  # orbital period in days
+                                                prot=param_i[f"{name}period"],  # orbital period in days
+                                                ecc= param_i[f"{name}eccentricity"],  # eccentricity
+                                                w=   param_i[f"{name}omega"],  # longitude of pericenter in degrees
+                                                t0=  param_i[f"{name}t0"],  # time of transit in days
                                                 length_unit=u.R_jup,mass_unit=u.M_jup,
                                                 )
 
                     system = starry.System(star,planet)
-                    flux_model = system.flux(data.time.value)
+                    flux_model = system.flux(data.time.to_value("day"))
+                    y_model.append(flux_model)
 
-                    # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
-                    # later:
-                    if self.store_models:
-                        Deterministic(f"{name}model_w{i + j}", flux_model)
+                # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
+                # later:
+                if self.store_models:
+                    Deterministic(f"{name}model", pm.math.stack(y_model, axis=0))
 
-                    # add the eclipse to the final light curve
-                    if f"wavelength_{j + i}" not in self.every_light_curve.keys():
-                        self.every_light_curve[f"wavelength_{j + i}"] = flux_model
-                    else:
-                        self.every_light_curve[f"wavelength_{j + i}"] += flux_model
+                # add the model to the overall lightcurve:
+                if f"wavelength_{j}" not in self.every_light_curve.keys():
+                    self.every_light_curve[f"wavelength_{j}"] = pm.math.stack(
+                        y_model, axis=0
+                    )
+                else:
+                    self.every_light_curve[f"wavelength_{j}"] += pm.math.stack(
+                        y_model, axis=0
+                    )
 
                 self.model_chromatic_eclipse_flux = [
                     self.every_light_curve[k] for k in tqdm(self.every_light_curve)
                 ]
+
+
 
 
     def add_model_to_rainbow(self):
@@ -217,11 +263,11 @@ class EclipseModel(LightcurveModel):
         self, eclipse_params: dict, i: int = 0, time: list = None
     ) -> np.array:
         """
-        Create a transit model given the passed parameters.
+        Create a eclipse model given the passed parameters.
 
         Parameters
         ----------
-        transit_params: A dictionary of parameters to be used in the transit model.
+        eclipse_params: A dictionary of parameters to be used in the eclipse model.
         i: wavelength index
         time: If we don't want to use the default time then the user can pass a time array on which to calculate the model
 
@@ -244,6 +290,8 @@ class EclipseModel(LightcurveModel):
         if time is None:
             time = list(self.data.time.to_value("day"))
 
+        self.check_and_fill_missing_parameters(eclipse_params, i)
+        
         star = starry.Primary(starry.Map(ydeg=0, udeg=0, amp=eclipse_params[f"{name}stellar_amplitude"], inc=90.0, obl=0.0),
                                                            m=eclipse_params[f"{name}stellar_mass"],
                                                            r=eclipse_params[f"{name}stellar_radius"],
@@ -267,8 +315,8 @@ class EclipseModel(LightcurveModel):
         flux_model = system.flux(data.time).eval()
 
         return flux_model
-'''
 
+'''
     def plot_orbit(self, timedata: object = None):
         """
         Plot the orbit model (to check that the planet is transiting at the times we've set).

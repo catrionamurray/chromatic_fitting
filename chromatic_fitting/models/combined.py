@@ -159,6 +159,7 @@ class CombinedModel(LightcurveModel):
         self.name = name
         self.metadata = {}
         self.parameters = {}
+        self.model = self.combined_model
 
     def __repr__(self):
         """
@@ -363,7 +364,13 @@ class CombinedModel(LightcurveModel):
         """
         self.apply_operation_to_constituent_models("setup_orbit")
 
-    def setup_lightcurves(self, store_models: bool = False):
+    def plot_orbit(self):
+        """
+        Plot an `exoplanet` orbit model, given the stored parameters.
+        """
+        self.apply_operation_to_constituent_models("plot_orbit")
+
+    def setup_lightcurves(self, store_models: bool = False, **kw):
         """
         Set-up lightcurves in combined model : for each consituent model set-up the lightcurves according to their
         model definition
@@ -383,7 +390,7 @@ class CombinedModel(LightcurveModel):
             cm.store_models = store_models
 
         # for each constituent model set-up the lightcurves according to their model type:
-        self.apply_operation_to_constituent_models("setup_lightcurves")
+        self.apply_operation_to_constituent_models("setup_lightcurves", **kw)
 
         for i, mod in enumerate(self._chromatic_models.values()):
             # for each lightcurve in the combined model, add/subtract/multiply/divide their lightcurve into the combined
@@ -409,11 +416,11 @@ class CombinedModel(LightcurveModel):
         if self.store_models:
             for i, (mod, data) in enumerate(zip(models, datas)):
                 with mod:
-                    for w in range(data.nwave):
-                        k = f"wavelength_{i + w}"
-                        Deterministic(
-                            f"{self.name}_model_w{i + w}", self.every_light_curve[k]
-                        )
+                    # for w in range(data.nwave):
+                    # k = f"wavelength_{i + w}"
+                    Deterministic(
+                        f"{self.name}_model", self.every_light_curve[f"wavelength_{i}"]
+                    )
 
     def get_results(self, **kw):
         """
@@ -483,6 +490,20 @@ class CombinedModel(LightcurveModel):
                 "There are no current saved models. You can, however, generate models by passing a dictionary with "
                 "all the necessary parameters"
             )
+
+    def combined_model(self, **kw):
+        all_models, total_model = {}, []
+        # for each constituent model get its 'best-fit' model:
+        models = self.apply_operation_to_constituent_models("model", **kw)
+
+        if models is not None:
+            for i in len(self._chromatic_models.keys()):
+                # add this model to the total model:
+                total_model = combination_options[self.how_to_combine[i - 1]](
+                    total_model, models[i]
+                )
+
+        return total_model
 
     def add_model_to_rainbow(self):
         """

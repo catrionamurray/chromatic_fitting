@@ -7,13 +7,18 @@ from pymc3 import (
     Deterministic,
     Normal,
     TruncatedNormal,
+    sample,
 )
-from pymc3_ext import eval_in_model, optimize, sample
+from pymc3_ext import eval_in_model, optimize
+from pymc3_ext import sample as sample_ext
+
 from arviz import summary
 from ..parameters import *
 from ..utils import *
 from chromatic import *
 import collections
+from ..diagnostics import chi_sq, generate_periodogram
+
 
 #  - Q=sqrt(N)*depth/error (Winn 2010/ Carter 2008)
 #  - chi-sq
@@ -126,7 +131,7 @@ class LightcurveModel:
 
         Parameters
         ----------
-        kw : dict
+        kw : object
             All keyword arguments will be treated as model
             parameters and stored in the `self.parameters`
             dictionary attribute. This input both sets
@@ -170,7 +175,7 @@ class LightcurveModel:
                 self.parameters[k].set_name(new_v)
             else:
                 self.parameters[k] = Fixed(v)
-                self.parameters[k].set_name(v)
+                self.parameters[k].set_name(k)
 
         # check that all the necessary parameters are defined somehow
         for k in self.required_parameters:
@@ -178,6 +183,10 @@ class LightcurveModel:
 
         for k in self.parameters.keys():
             if self.name in k:
+                warnings.warn(
+                    f"{self.name} in the parameter name: {k}. Please avoid having the model name in the "
+                    f"parameter name as it can get confusing!"
+                )
                 return
         self.parameters = add_string_before_each_dictionary_key(
             self.parameters, self.name
@@ -185,6 +194,8 @@ class LightcurveModel:
 
         for v in self.parameters.values():
             v.set_name(f"{self.name}_{v.name}")
+
+        self._original_parameters = self.parameters.copy()
 
     def get_parameter_shape(self, param):
         inputs = param.inputs
@@ -218,10 +229,11 @@ class LightcurveModel:
         """
         Remove the pymc3 prior model from every parameter not in exclude
         """
-        for k, v in self.parameters.items():
+        for k, v in self._original_parameters.copy().items():
             if k not in exclude:
                 if isinstance(v, Fitted):
                     v.clear_prior()
+                self.parameters[k] = v
 
     def extract_extra_class_inputs(self):
         """
@@ -254,7 +266,7 @@ class LightcurveModel:
         #     data = self.data_without_outliers
         # else:
         #     data = self.data
-        self.white_light = self.data.bin(nwavelengths=self.data.nwave)
+        self.white_light = self.data.bin(nwavelengths=self.data.nwave).trim()
 
     def choose_optimization_method(self, optimization_method="simultaneous"):
         """
@@ -318,7 +330,7 @@ class LightcurveModel:
             data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
         return data_copy
 
-    def get_data(self, i=0):
+    def get_data(self, i=None):
         """
         Extract the data to use for the optimization depending on the method chosen
         """
@@ -329,7 +341,13 @@ class LightcurveModel:
                 self.white_light_curve()
                 return self.white_light
             if self.optimization == "separate":
-                return self.separate_wavelengths(i)
+                if i is not None:
+                    return self.separate_wavelengths(i)
+                else:
+                    return self.data
+                    # return [
+                    #     self.separate_wavelengths(i) for i in range(self.data.nwave)
+                    # ]
         # if self.outlier_flag:
         #     return self.data_without_outliers
         # else:
@@ -386,32 +404,47 @@ class LightcurveModel:
 
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
+                uncertainties, flux = [], []
                 for i, w in enumerate(data.wavelength):
-                    k = f"wavelength_{j + i}"
+                    # k = f"wavelength_{j + i}"
 
                     if inflate_uncertainties:
-                        uncertainties = data.uncertainty[i, :] * eval_in_model(
-                            self.parameters["nsigma"].get_prior(j + i)
+                        uncertainties.append(
+                            data.uncertainty[i, :]
+                            * eval_in_model(self.parameters["nsigma"].get_prior(j + i))
                         )
                     else:
-                        uncertainties = data.uncertainty[i, :]
+                        uncertainties.append(data.uncertainty[i, :])
 
-                    try:
-                        # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
-                        if mask_outliers:
-                            flux = self.data_without_outliers.flux[i + j, :]
-                        else:
-                            flux = data.flux[i, :]
+                    # try:
+                    # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
+                    if mask_outliers:
+                        flux.append(self.data_without_outliers.flux[i + j, :])
+                    else:
+                        flux.append(data.flux[i, :])
 
-                        pm.Normal(
-                            f"{k}_data",
-                            mu=self.every_light_curve[k],
-                            sd=uncertainties,
-                            observed=flux,
-                        )
-                    except Exception as e:
-                        print(f"Setting up likelihood failed for wavelength {i}: {e}")
-                        self.bad_wavelengths.append(i)
+                try:
+                    # if self.optimization == "separate":
+                    #     data_name = f"data_w{j}"
+                    #     light_curve_name = f"wavelength_{j}"
+                    # else:
+                    data_name = f"data"  # _w{j}"
+                    light_curve_name = f"wavelength_{j}"
+
+                    pm.Normal(
+                        data_name,
+                        mu=self.every_light_curve[light_curve_name],
+                        sd=np.array(uncertainties),
+                        observed=np.array(flux),
+                    )
+                    # pm.Normal(f"{k}_data",
+                    #         mu=self.every_light_curve[k],
+                    #         sd=uncertainties,
+                    #         observed=flux,
+                    # )
+                except Exception as e:
+                    print(f"Setting up likelihood failed for wavelength {i}: {e}")
+                    self.bad_wavelengths.append(i)
 
     def sample_prior(self, ndraws=3):
         """
@@ -438,6 +471,9 @@ class LightcurveModel:
         if not hasattr(self, "trace"):
             print("Sampling has not been run yet! Running now with defaults...")
             self.sample()
+
+        if var_names is None:
+            var_names = {**self.trace[0], **{"data": []}}.keys()
 
         if self.optimization != "separate":
             with self._pymc3_model:
@@ -568,6 +604,8 @@ class LightcurveModel:
                 kw.pop("start")
 
             for i, mod in enumerate(self._pymc3_model):
+                if self.optimization == "separate":
+                    print(f"\nSampling for Wavelength: {i}")
                 with mod:
                     if len(starts) > 0:
                         start = starts[i]
@@ -575,7 +613,7 @@ class LightcurveModel:
                         start = mod.test_point
 
                     try:
-                        samp = sample(start=start, **kw)
+                        samp = sample(start=start, init="adapt_full", **kw)
                         if summarize_step_by_step:
                             self.summary.append(summary(samp, **summarize_kw))
                         else:
@@ -590,7 +628,7 @@ class LightcurveModel:
                     for m in self._chromatic_models.values():
                         m.summary = self.summary
 
-            # for mod in self.pymc3_model:
+            # for mod in self._pymc3_model:
             #     with mod:
             #         try:
             #             self.trace.append(sample(**kw))
@@ -599,7 +637,7 @@ class LightcurveModel:
             #             self.trace.append(None)
         else:
             with self._pymc3_model:
-                self.trace = sample(**kw)
+                self.trace = sample(init="adapt_full", **kw)
 
     def summarize(self, print_table=True, **kw):
         """
@@ -641,7 +679,13 @@ class LightcurveModel:
             uncertainty = [uncertainty, uncertainty]
 
         results = {}
-        for i, w in enumerate(self.data.wavelength):
+
+        if self.optimization == "white_light":
+            data = self.get_data()
+        else:
+            data = self.data
+
+        for i, w in enumerate(data.wavelength):
             params_mean = self.extract_from_posteriors(self.summary, i)
             params_lower_error = self.extract_from_posteriors(
                 self.summary, i, op=uncertainty[0]
@@ -662,7 +706,11 @@ class LightcurveModel:
                 (key + f"_{uncertainty[1]}", value)
                 for (key, value) in params_upper_error.items()
             )
-            params = params_mean | params_lower_error | params_upper_error
+            try:
+                params = params_mean | params_lower_error | params_upper_error
+            except TypeError:
+                # for Python < 3.9 add dictionaries using a different method
+                params = {**params_mean, **params_lower_error, **params_upper_error}
             ordered_params = collections.OrderedDict(sorted(params.items()))
             results[f"w{i}"] = ordered_params
             results[f"w{i}"]["wavelength"] = w
@@ -695,7 +743,7 @@ class LightcurveModel:
     #     self.data_outliers_removed = data_outliers_removed
     #     self.outlier_flag = True
 
-    def plot_priors(self, n=3):
+    def plot_priors(self, n=3, quantity="data", plot_all=True):
         """
         Plot n prior samples from the parameter distributions defined by the user
         :parameter n
@@ -713,24 +761,48 @@ class LightcurveModel:
             zip(datas, prior_predictive_traces)
         ):
             for i in range(n):
-                flux_for_this_sample = np.array(
-                    [
-                        prior_predictive_trace[f"wavelength_{w + nm}_data"][i]
-                        for w in range(data.nwave)
-                    ]
-                )
-                # model_for_this_sample = np.array(
-                #     [
-                #         prior_predictive_trace[f"{self.name}_model_w{w + nm}"][i]
-                #         for w in range(data.nwave)
-                #     ]
-                # )
-                # f"{name}model_w{i + j}"
-                data.fluxlike[f"prior-predictive-{i}"] = flux_for_this_sample
-                # data.fluxlike[f"prior-model-{i}"] = model_for_this_sample
-            data.imshow_quantities()
+                # if data.nwave == 1:
+                try:
+                    flux_for_this_sample = np.array(prior_predictive_trace[quantity][i])
+                except:
+                    warnings.warn(f"Couldn't generate prior for {quantity}!")
+                    return
 
-    def plot_posteriors(self, n=3):
+                if f"{self.name}_model" in prior_predictive_trace.keys():
+                    model_for_this_sample = np.array(
+                        prior_predictive_trace[f"{self.name}_model"][i]
+                    )
+                else:
+                    model_for_this_sample = []
+                    for w in range(data.nwave):
+                        i_dict = {}
+                        for k, v in prior_predictive_trace.items():
+                            if np.shape(v) == 1:
+                                i_dict = {**i_dict, **{k: v[i]}}
+                            elif np.shape(v)[1] == 1:
+                                i_dict = {**i_dict, **{k: v[i][0]}}
+                            else:
+                                i_dict = {**i_dict, **{k: v[i][w]}}
+                        model_for_this_sample.append(self.model(i_dict))
+                    model_for_this_sample = np.array(model_for_this_sample)
+
+                # add posterior model and draw from posterior distribution to the Rainbow quantities:
+                data.fluxlike[f"prior-model-{i}"] = model_for_this_sample
+                data.fluxlike[f"prior-predictive-{i}"] = flux_for_this_sample
+
+            if plot_all:
+                data.imshow_quantities()
+            else:
+                f, ax = plt.subplots(
+                    nrows=n, sharex=True, sharey=True, figsize=(6, 4 * n)
+                )
+                for i in range(n):
+                    if f"{self.name}_model" in prior_predictive_trace.keys():
+                        data.imshow(ax=ax[i], quantity=f"prior-model-{i}")
+                    else:
+                        data.imshow(ax=ax[i], quantity=f"prior-predictive-{i}")
+
+    def plot_posteriors(self, n=3, quantity="data", plot_all=True):
         """
         Plot n posterior samples from the parameter distributions defined by the user
         :parameter trace
@@ -751,46 +823,61 @@ class LightcurveModel:
             zip(datas, posterior_predictive_traces)
         ):
 
-            for w in range(data.nwave):
-                if f"wavelength_{w + nm}_data" in posterior_predictive_trace.keys():
-                    # generate a posterior model for every wavelength:
-                    if (
-                        f"{self.name}_model_w{w + nm}"
-                        in posterior_predictive_trace.keys()
-                    ):
-                        posterior_model[
-                            f"{self.name}_model_w{w + nm}"
-                        ] = self.sample_posterior(
-                            n, var_names=[f"{self.name}_model_w{w + nm}"]
-                        )[
-                            f"{self.name}_model_w{w + nm}"
-                        ]
+            # for w in range(data.nwave):
+            # if "data" in posterior_predictive_trace.keys():
+            #     # generate a posterior model for every wavelength:
+            #     if (
+            #         f"{self.name}_model"  # _w{w + nm}"
+            #         in posterior_predictive_trace.keys()
+            #     ):
+            #         posterior_model[f"{self.name}_model"] = posterior_predictive_trace[
+            #             f"{self.name}_model"
+            #         ]
 
-            for w in range(data.nwave):
-                for i in range(n):
-                    # for every posterior sample extract the posterior model and distribution draw for every wavelength:
+            # for w in range(data.nwave):
+            for i in range(n):
+                # for every posterior sample extract the posterior model and distribution draw:
+                try:
                     flux_for_this_sample = np.array(
-                        [
-                            posterior_predictive_trace[f"wavelength_{w + nm}_data"][i]
-                            for w in range(data.nwave)
-                        ]
+                        posterior_predictive_trace[quantity][i]
                     )
+                except:
+                    warnings.warn(f"Couldn't generate prior for {quantity}!")
+                    return
 
-                    if f"{self.name}_model_w{w + nm}" in posterior_model.keys():
-                        model_for_this_sample = np.array(
-                            [
-                                posterior_model[f"{self.name}_model_w{w + nm}"][i]
-                                for w in range(data.nwave)
-                            ]
-                        )
+                if f"{self.name}_model" in posterior_predictive_trace.keys():
+                    model_for_this_sample = np.array(
+                        posterior_predictive_trace[f"{self.name}_model"][i]
+                    )
+                else:
+                    model_for_this_sample = []
+                    for w in range(data.nwave):
+                        i_dict = {}
+                        for k, v in posterior_predictive_trace.items():
+                            if np.shape(v) == 1:
+                                i_dict = {**i_dict, **{k: v[i]}}
+                            elif np.shape(v)[1] == 1:
+                                i_dict = {**i_dict, **{k: v[i][0]}}
+                            else:
+                                i_dict = {**i_dict, **{k: v[i][w]}}
+                        model_for_this_sample.append(self.model(i_dict))
+                    model_for_this_sample = np.array(model_for_this_sample)
 
-                        # add posterior model and draw from posterior distribution to the Rainbow quantities:
-                        data.fluxlike[f"posterior-model-{i}"] = model_for_this_sample
-                        data.fluxlike[
-                            f"posterior-predictive-{i}"
-                        ] = flux_for_this_sample
-            # plot the rainbow quantities:
-            data.imshow_quantities()
+                # add posterior model and draw from posterior distribution to the Rainbow quantities:
+                data.fluxlike[f"posterior-model-{i}"] = model_for_this_sample
+                data.fluxlike[f"posterior-predictive-{i}"] = flux_for_this_sample
+
+            if plot_all:
+                data.imshow_quantities()
+            else:
+                f, ax = plt.subplots(
+                    nrows=n, sharex=True, sharey=True, figsize=(6, 4 * n)
+                )
+                for i in range(n):
+                    if f"{self.name}_model" in posterior_model.keys():
+                        data.imshow(ax=ax[i], quantity=f"posterior-model-{i}")
+                    else:
+                        data.imshow(ax=ax[i], quantity=f"posterior-predictive-{i}")
 
     def extract_deterministic_model(self):
         """
@@ -811,10 +898,17 @@ class LightcurveModel:
 
                 if f"w{w + nm}" not in model.keys():
                     model[f"w{w + nm}"] = []
-                for t in range(data.ntime):
-                    model[f"w{w + nm}"].append(
-                        summary["mean"][f"{self.name}_model_w{w + nm}[{t}]"]
-                    )
+
+                if f"{self.name}_model[{w}, 0]" in summary["mean"].keys():
+                    for t in range(data.ntime):
+                        model[f"w{w + nm}"].append(
+                            summary["mean"][f"{self.name}_model[{w}, {t}]"]
+                        )
+                elif f"{self.name}_model[0]" in summary["mean"].keys():
+                    for t in range(data.ntime):
+                        model[f"w{w + nm}"].append(
+                            summary["mean"][f"{self.name}_model[{t}]"]
+                        )
         return model
 
     def get_stored_model(self, as_dict=True, as_array=False):
@@ -871,13 +965,17 @@ class LightcurveModel:
                     model["total"][f"w{i}"] - (i * spacing),
                     color="k",
                 )
-        plt.show()
+
+        if "filename" not in kw.keys():
+            plt.show()
+        else:
+            plt.savefig(kw["filename"])
         plt.close()
 
         # if add_model and detrend:
 
     def extract_from_posteriors(self, summary, i, op="mean"):
-        # there"s definitely a sleeker way to do this
+        # there's definitely a sleeker way to do this
         if self.optimization == "separate":
             summary = summary[i]
 
@@ -892,31 +990,108 @@ class LightcurveModel:
         posterior_means = summary[op]
         fv = {}
         for k, v in self.parameters.items():
-            if k in posterior_means.index:
-                fv[k] = posterior_means[k]
-            elif f"{k}[0]" in posterior_means.index:
-                n = 0
-                fv[k] = []
-                while f"{k}[{n}]" in posterior_means.index:
-                    fv[k].append(posterior_means[f"{k}[{n}]"])
-                    n += 1
-            elif f"{k}_w{i}" in posterior_means.index:
-                fv[k] = posterior_means[f"{k}_w{i}"]
-            elif f"{k}_w{i}[0]" in posterior_means.index:
-                n = 0
-                fv[k] = []
-                while f"{k}_w{i}[{n}]" in posterior_means.index:
-                    fv[k].append(posterior_means[f"{k}_w{i}[{n}]"])
-                    n += 1
-            elif f"{k}_w{i}" in posterior_means.index:
-                fv[k] = posterior_means[f"{k}_w{i}"]
+            more_than_one_input = False
+            if isinstance(v, Fitted):
+                if type(v.inputs["shape"]) == int:
+                    if v.inputs["shape"] != 1:
+                        more_than_one_input = True
+                elif v.inputs["shape"] != (self.data.nwave, 1):
+                    more_than_one_input = True
+
+            if more_than_one_input:
+                if f"{k}[{i}]" in posterior_means.index and "limb_darkening" not in k:
+                    fv[k] = posterior_means[f"{k}[{i}]"]
+                elif f"{k}[0]" in posterior_means.index:
+                    n = 0
+                    fv[k] = []
+                    while f"{k}[{n}]" in posterior_means.index:
+                        fv[k].append(posterior_means[f"{k}[{n}]"])
+                        n += 1
+                    if n == 1:
+                        fv[k] = fv[k][0]
+                elif f"{k}[{i}, 0]" in posterior_means.index:
+                    n = 0
+                    fv[k] = []
+                    while f"{k}[{i}, {n}]" in posterior_means.index:
+                        fv[k].append(posterior_means[f"{k}[{i}, {n}]"])
+                        n += 1
+                    if n == 1:
+                        fv[k] = fv[k][0]
+                elif f"{k}[0, 0]" in posterior_means.index:
+                    n = 0
+                    fv[k] = []
+                    while f"{k}[0, {n}]" in posterior_means.index:
+                        fv[k].append(posterior_means[f"{k}[0, {n}]"])
+                        n += 1
+                    if n == 1:
+                        fv[k] = fv[k][0]
             else:
-                if isinstance(v, WavelikeFixed):
-                    fv[k] = v.values[0]
-                elif isinstance(v, Fixed):
-                    fv[k] = v.value
+                if k in posterior_means.index:
+                    fv[k] = posterior_means[k]
+                elif f"{k}[{i}]" in posterior_means.index:
+                    fv[k] = posterior_means[f"{k}[{i}]"]
+                elif f"{k}[0]" in posterior_means.index:
+                    fv[k] = posterior_means[f"{k}[0]"]
+                elif f"{k}[{i}, 0]" in posterior_means.index:
+                    fv[k] = posterior_means[f"{k}[{i}, 0]"]
+                    # n = 0
+                    # fv[k] = []
+                    # while f"{k}[{i}, {n}]" in posterior_means.index:
+                    #     fv[k].append(posterior_means[f"{k}[{i}, {n}]"])
+                    #     n += 1
+                    # if n == 1:
+                    #     fv[k] = fv[k][0]
+                # elif f"{k}_w{i}" in posterior_means.index:
+                #     fv[k] = posterior_means[f"{k}_w{i}"]
+                # elif f"{k}_w{i}[0]" in posterior_means.index:
+                #     n = 0
+                #     fv[k] = []
+                #     while f"{k}_w{i}[{n}]" in posterior_means.index:
+                #         fv[k].append(posterior_means[f"{k}_w{i}[{n}]"])
+                #         n += 1
+                # elif f"{k}_w{i}" in posterior_means.index:
+                #     fv[k] = posterior_means[f"{k}_w{i}"]
+                else:
+                    if isinstance(v, WavelikeFixed):
+                        fv[k] = v.values[0]
+                    elif isinstance(v, Fixed):
+                        fv[k] = v.value
 
         return fv
+
+    def corner_plot(self, **kw):
+        try:
+            import corner
+        except ImportError:
+            warnings.warn(
+                "corner is not installed, please install corner before trying this method!"
+            )
+            return
+
+        if not hasattr(self, "trace"):
+            print("Sampling has not been run yet! Running now with defaults...")
+            self.sample()
+
+        with self._pymc3_model:
+            _ = corner.corner(self.trace, **kw)
+
+    def check_and_fill_missing_parameters(self, params, i):
+        if all([f"{self.name}_" in rp for rp in self.required_parameters]):
+            name = ""
+        else:
+            name = f"{self.name}_"
+
+        for rp in self.required_parameters:
+            if f"{name}{rp}" not in params.keys():
+                if isinstance(self.parameters[f"{name}{rp}"], WavelikeFixed):
+                    params[f"{name}{rp}"] = self.parameters[f"{name}{rp}"].values[i]
+                elif isinstance(self.parameters[f"{name}{rp}"], Fixed):
+                    params[f"{name}{rp}"] = self.parameters[f"{name}{rp}"].value
+                else:
+                    warnings.warn(
+                        f"{name}{rp} is missing from the parameter dictionary!"
+                    )
+        return params
 
     def get_model(
         self,
@@ -941,11 +1116,12 @@ class LightcurveModel:
         """
 
         # if the optimization method is "separate" then loop over each wavelength's data
-        if self.optimization == "separate":
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            data = self.get_data()
-            datas = [data[i, :] for i in range(data.nwave)]
+        # if self.optimization == "separate":
+        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
+        # else:
+        #     # data = [self.get_data()]
+        #     data = self.get_data()
+        # datas = [data[i, :] for i in range(data.nwave)]
 
         if self.store_models:
             # if we decided to store the LC model extract this now
@@ -958,7 +1134,13 @@ class LightcurveModel:
             # if we decided not to store the LC model then generate the model
             model = {}
             # generate the transit model from the best fit parameters for each wavelength
-            for i, data in enumerate(datas):
+            # for j, data in enumerate(datas):
+            if self.optimization == "white_light":
+                data = self.get_data()
+            else:
+                data = self.data
+
+            for i, wave in enumerate(range(data.nwave)):
                 if params_dict is None:
                     if hasattr(self, "summary"):
                         params = self.extract_from_posteriors(self.summary, i)
@@ -976,14 +1158,6 @@ class LightcurveModel:
                         params = params_dict[f"w{i}"]
 
                 model_i = self.model(params, i)
-                # if is instance(self, TransitModel):
-                #     model_i = self.transit_model(params, i)
-                # elif isinstance(self, PolynomialModel):
-                #     model_i = self.polynomial_model(params, i)
-                # else:
-                #     warnings.warn(
-                #         f"{self} doesn't have a defined model in lightcurve.py"
-                #     )
                 model[f"w{i}"] = model_i
 
             if store:
@@ -1142,6 +1316,185 @@ class LightcurveModel:
             )
         else:
             plot_one_model(model, normalize=normalize, **kw)
+
+    def chi_squared(self, individual_wavelengths=False, **kw):
+        if hasattr(self, "data_with_model"):
+            if self.optimization == "simultaneous":
+                fit_params = len(self.summary)
+                degrees_of_freedom = (self.data.nwave * self.data.ntime) - fit_params
+                print("\nFor Entire Simultaneous Fit:")
+                print("Fitted Parameters:\n", ", ".join(self.summary.index))
+                print(
+                    f"\nDegrees of Freedom = n_waves ({self.data.nwave}) * n_times ({self.data.ntime}) - n_fitted_parameters ({fit_params}) = {degrees_of_freedom}"
+                )
+                chi_sq(
+                    data=self.data_with_model.flux,
+                    model=self.data_with_model.model,
+                    uncertainties=self.data_with_model.uncertainty,
+                    degrees_of_freedom=degrees_of_freedom,
+                    **kw,
+                )
+
+                if individual_wavelengths:
+                    count_wave_fit_params, count_nonwave_fit_params = 0, 0
+                    wave_fit_params, nonwave_fit_params = [], []
+                    for p in self.parameters.values():
+                        try:
+                            if type(p.inputs["shape"]) == int:
+                                if p.inputs["shape"] > 1:
+                                    count_wave_fit_params += 1
+                                    wave_fit_params.append(p.name)
+                                else:
+                                    count_nonwave_fit_params += 1
+                                    nonwave_fit_params.append(p.name)
+                            else:
+                                if p.inputs["shape"][0] > 1:
+                                    count_wave_fit_params += p.inputs["shape"][1]
+                                    for i in range(p.inputs["shape"][1]):
+                                        wave_fit_params.append(p.name + f"_{i}")
+                        except:
+                            pass
+                    fit_params = count_wave_fit_params + (
+                        count_nonwave_fit_params / self.data.nwave
+                    )
+                    degrees_of_freedom = self.data.ntime - fit_params
+
+                    for i in range(self.data.nwave):
+                        print(f"\nFor Wavelength {i}:")
+                        print(
+                            "Wavelength Fitted Parameters:\n",
+                            ", ".join(wave_fit_params),
+                        )
+                        print(
+                            "Non-Wavelength Fitted Parameters:\n",
+                            ", ".join(nonwave_fit_params),
+                        )
+                        print(
+                            f"\nDegrees of Freedom = n_times ({self.data.ntime}) - n_fitted_parameters ({fit_params}) = {degrees_of_freedom}"
+                        )
+                        chi_sq(
+                            data=self.data_with_model.flux[i],
+                            model=self.data_with_model.model[i],
+                            uncertainties=self.data_with_model.uncertainty[i],
+                            degrees_of_freedom=degrees_of_freedom,
+                            **kw,
+                        )
+
+            elif self.optimization == "separate":
+                for i in range(self.data.nwave):
+                    fit_params = len(self.summary[i])
+                    degrees_of_freedom = self.data.ntime - fit_params
+                    print(f"\nFor Wavelength {i}:")
+                    chi_sq(
+                        data=self.data_with_model.flux[i],
+                        model=self.data_with_model.model[i],
+                        uncertainties=self.data_with_model.uncertainty[i],
+                        degrees_of_freedom=degrees_of_freedom,
+                        **kw,
+                    )
+            elif self.optimization == "white_light":
+                fit_params = len(self.summary)
+                degrees_of_freedom = self.data.ntime - fit_params
+                chi_sq(
+                    data=self.data_with_model.flux,
+                    model=self.data_with_model.model,
+                    uncertainties=self.data_with_model.uncertainty,
+                    degrees_of_freedom=degrees_of_freedom,
+                    **kw,
+                )
+
+        else:
+            warnings.warn(
+                f"""Could not find .data_with_model in {self.name} model! 
+            Please run [self].add_model_to_rainbow() or one of the plotting methods
+            with models before rerunning this method."""
+            )
+
+    def plot_residuals_histogram(self, **kw):
+        if hasattr(self, "data_with_model"):
+            plt.figure(figsize=(8, 6))
+            for i in range(self.data.nwave):
+                plt.hist(
+                    self.data_with_model.residuals[i],
+                    alpha=0.5,
+                    label=f"Wavelength {i}",
+                    histtype="step",
+                    **kw,
+                )
+            plt.hist(
+                np.mean(self.data_with_model.residuals, axis=0),
+                color="k",
+                label=f"Mean Wavelength",
+                histtype="step",
+            )
+            plt.legend()
+            plt.show()
+            plt.close()
+        else:
+            warnings.warn(
+                f"""Could not find .data_with_model in {self.name} model! 
+                Please run [self].add_model_to_rainbow() or one of the plotting methods
+                with models before rerunning this method."""
+            )
+
+    def plot_residuals(self, **kw):
+        if hasattr(self, "data_with_model"):
+            plt.figure(figsize=(12, 6))
+            for i in range(self.data.nwave):
+                plt.plot(
+                    self.data_with_model.time,
+                    self.data_with_model.residuals[i],
+                    alpha=0.5,
+                    label=f"Wavelength {i}",
+                    **kw,
+                )
+            plt.plot(
+                self.data_with_model.time,
+                np.mean(self.data_with_model.residuals, axis=0),
+                color="k",
+                label=f"Mean Wavelength",
+            )
+            plt.legend()
+            plt.show()
+            plt.close()
+        else:
+            warnings.warn(
+                f"""Could not find .data_with_model in {self.name} model! 
+                Please run [self].add_model_to_rainbow() or one of the plotting methods
+                with models before rerunning this method."""
+            )
+
+    def residual_noise_calculator(self, **kw):
+        if hasattr(self, "data_with_model"):
+            print("For the Wavelength-Averaged Residuals...")
+            noise_calculator(np.mean(self.data_with_model.residuals, axis=0), **kw)
+            for i in range(self.data.nwave):
+                print(f"\nFor wavelength {i}")
+                noise_calculator(self.data_with_model.residuals[i], **kw)
+        else:
+            warnings.warn(
+                f"""Could not find .data_with_model in {self.name} model! 
+                Please run [self].add_model_to_rainbow() or one of the plotting methods
+                with models before rerunning this method."""
+            )
+
+    def plot_residuals_periodogram(self, **kw):
+        if hasattr(self, "data_with_model"):
+            plt.figure(figsize=(12, 6))
+            plt.title("Periodogram of Wavelength-Averaged Residuals")
+            generate_periodogram(
+                x=np.mean(self.data_with_model.residuals, axis=0),
+                fs=(
+                    1 / (self.data_with_model.time[1] - self.data_with_model.time[0])
+                ).to_value("1/d"),
+                **kw,
+            )
+        else:
+            warnings.warn(
+                f"""Could not find .data_with_model in {self.name} model! 
+                Please run [self].add_model_to_rainbow() or one of the plotting methods
+                with models before rerunning this method."""
+            )
 
 
 from .combined import *
