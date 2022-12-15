@@ -109,23 +109,22 @@ class tempModel(LightcurveModel):
             self.store_models = store_models
 
         # **MAKE SURE TO UPDATE THESE PARAMETERS!**
-        param_1, param_2 = [], []
+        parameters_to_loop_over = {
+            f"{name}param_1": [],
+            f"{name}param_2": [],
+        }
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j
 
             with mod:
                 # set-up the parameter prior distributions within the model
-                # **MAKE SURE TO UPDATE THESE PARAMETERS!**
-                param_1.append(self.parameters[f"{name}param_1"].get_prior_vector(**kw))
-                param_2.append(self.parameters[f"{name}param_2"].get_prior_vector(**kw))
+                for pname in parameters_to_loop_over.keys():
+                    parameters_to_loop_over[pname].append(
+                        self.parameters[pname].get_prior_vector(**kw)
+                    )
 
                 y_model = []
-                parameters_to_loop_over = {
-                    f"{name}param_1": param_1,
-                    f"{name}param_2": param_2,
-                }
-
                 for i, w in enumerate(data.wavelength):
                     param_i = {}
                     for param_name, param in parameters_to_loop_over.items():

@@ -92,21 +92,20 @@ class ExponentialModel(LightcurveModel):
         if store_models == True:
             self.store_models = store_models
 
-        A, decay_t, baseline = [], [], []
+        parameters_to_loop_over = {
+            f"{name}A": [],
+            f"{name}decay_time": [],
+            f"{name}baseline": [],
+        }
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j
 
             with mod:
-                # for every wavelength set up an exponential model
-
-                A.append(self.parameters[f"{name}A"].get_prior_vector(**kw))
-                decay_t.append(
-                    self.parameters[f"{name}decay_time"].get_prior_vector(**kw)
-                )
-                baseline.append(
-                    self.parameters[f"{name}baseline"].get_prior_vector(**kw)
-                )
+                for pname in parameters_to_loop_over.keys():
+                    parameters_to_loop_over[pname].append(
+                        self.parameters[pname].get_prior_vector(**kw)
+                    )
 
                 # get the independent variable from the Rainbow object:
                 x = data.get(self.independant_variable)
@@ -126,24 +125,19 @@ class ExponentialModel(LightcurveModel):
                     else:
                         xi = x
 
-                    if isinstance(self.parameters[f"{name}A"], WavelikeFitted):
-                        A_i = A[j][i]
-                    else:
-                        A_i = A[j]
-                    # if isinstance(self.parameters[f"{name}t0"], WavelikeFitted):
-                    #     t0_i = t0[j][i]
-                    # else:
-                    #     t0_i = t0[j]
-                    if isinstance(self.parameters[f"{name}decay_time"], WavelikeFitted):
-                        decay_t_i = decay_t[j][i]
-                    else:
-                        decay_t_i = decay_t[j]
-                    if isinstance(self.parameters[f"{name}baseline"], WavelikeFitted):
-                        baseline_i = baseline[j][i]
-                    else:
-                        baseline_i = baseline[j]
+                    for i, w in enumerate(data.wavelength):
+                        param_i = {}
+                        for pname, param in parameters_to_loop_over.items():
+                            if isinstance(self.parameters[pname], WavelikeFitted):
+                                param_i[pname] = param[j][i]
+                            else:
+                                param_i[pname] = param[j]
 
-                    exp.append(A_i * np.exp(-(xi - self.t0) / decay_t_i) + baseline_i)
+                    exp.append(
+                        param_i[f"{name}A"]
+                        * np.exp(-(xi - self.t0) / param_i[f"{name}decay_time"])
+                        + param_i[f"{name}baseline"]
+                    )
 
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:

@@ -78,82 +78,80 @@ class TrapezoidModel(LightcurveModel):
         if store_models == True:
             self.store_models = store_models
 
-        P, t0, tau, T, baseline, delta = [], [], [], [], [], []
+        # P, t0, tau, T, baseline, delta = [], [], [], [], [], []
+        parameters_to_loop_over = {
+            f"{name}P": [],
+            f"{name}t0": [],
+            f"{name}delta": [],
+            f"{name}tau": [],
+            f"{name}T": [],
+            f"{name}baseline": [],
+        }
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j
 
             with mod:
                 # for every wavelength set up a step model
-
-                t0.append(self.parameters[f"{name}t0"].get_prior_vector(**kw))
-                P.append(self.parameters[f"{name}P"].get_prior_vector(**kw))
-                delta.append(self.parameters[f"{name}delta"].get_prior_vector(**kw))
-                tau.append(self.parameters[f"{name}tau"].get_prior_vector(**kw))
-                T.append(self.parameters[f"{name}T"].get_prior_vector(**kw))
-                baseline.append(
-                    self.parameters[f"{name}baseline"].get_prior_vector(**kw)
-                )
+                for pname in parameters_to_loop_over.keys():
+                    parameters_to_loop_over[pname].append(
+                        self.parameters[pname].get_prior_vector(**kw)
+                    )
+                # t0.append(self.parameters[f"{name}t0"].get_prior_vector(**kw))
+                # P.append(self.parameters[f"{name}P"].get_prior_vector(**kw))
+                # delta.append(self.parameters[f"{name}delta"].get_prior_vector(**kw))
+                # tau.append(self.parameters[f"{name}tau"].get_prior_vector(**kw))
+                # T.append(self.parameters[f"{name}T"].get_prior_vector(**kw))
+                # baseline.append(
+                #     self.parameters[f"{name}baseline"].get_prior_vector(**kw)
+                # )
 
                 trap = []
                 for i, w in enumerate(data.wavelength):
-                    if isinstance(self.parameters[f"{name}t0"], WavelikeFitted):
-                        t0_i = t0[j][i]
-                    else:
-                        t0_i = t0[j]
-                    if isinstance(self.parameters[f"{name}tau"], WavelikeFitted):
-                        tau_i = tau[j][i]
-                    else:
-                        tau_i = tau[j]
-                    if isinstance(self.parameters[f"{name}baseline"], WavelikeFitted):
-                        baseline_i = baseline[j][i]
-                    else:
-                        baseline_i = baseline[j]
-                    if isinstance(self.parameters[f"{name}P"], WavelikeFitted):
-                        P_i = P[j][i]
-                    else:
-                        P_i = P[j]
-                    if isinstance(self.parameters[f"{name}T"], WavelikeFitted):
-                        T_i = T[j][i]
-                    else:
-                        T_i = T[j]
-                    if isinstance(self.parameters[f"{name}delta"], WavelikeFitted):
-                        delta_i = delta[j][i]
-                    else:
-                        delta_i = delta[j]
+                    param_i = {}
+                    for pname, param in parameters_to_loop_over.items():
+                        if isinstance(self.parameters[pname], WavelikeFitted):
+                            param_i[pname] = param[j][i]
+                        else:
+                            param_i[pname] = param[j]
 
                     # calculate a phase-folded time (still in units of days)
-                    x = (data.time.to_value(u.day) - t0_i + 0.5 * P_i) % P_i - 0.5 * P_i
+                    x = (
+                        data.time.to_value(u.day)
+                        - param_i[f"{name}t0"]
+                        + 0.5 * param_i[f"{name}P"]
+                    ) % param_i[f"{name}P"] - 0.5 * param_i[f"{name}P"]
 
                     # Compute the four points where the trapezoid changes slope
                     # x1 <= x2 <= x3 <= x4
-
-                    if eval_in_model(pm.math.gt(tau_i, T_i)):
-                        x1 = -tau_i
+                    if eval_in_model(
+                        pm.math.gt(param_i[f"{name}tau"], param_i[f"{name}T"])
+                    ):
+                        x1 = -param_i[f"{name}tau"]
                         x2 = 0
                         x3 = 0
-                        x4 = tau_i
+                        x4 = param_i[f"{name}tau"]
                     else:
-                        x1 = -(T_i + tau_i) / 2.0
-                        x2 = -(T_i - tau_i) / 2.0
-                        x3 = (T_i - tau_i) / 2.0
-                        x4 = (T_i + tau_i) / 2.0
+                        x1 = -(param_i[f"{name}T"] + param_i[f"{name}tau"]) / 2.0
+                        x2 = -(param_i[f"{name}T"] - param_i[f"{name}tau"]) / 2.0
+                        x3 = (param_i[f"{name}T"] - param_i[f"{name}tau"]) / 2.0
+                        x4 = (param_i[f"{name}T"] + param_i[f"{name}tau"]) / 2.0
 
                     # Compute model values in pieces between the change points
                     range_a = pm.math.and_(pm.math.ge(x, x1), pm.math.lt(x, x2))
                     range_b = pm.math.and_(pm.math.ge(x, x2), pm.math.lt(x, x3))
                     range_c = pm.math.and_(pm.math.ge(x, x3), pm.math.lt(x, x4))
 
-                    if tau_i == 0:
+                    if param_i[f"{name}tau"] == 0:
                         slope = pm.math.inf
                     else:
-                        slope = delta_i / tau_i
+                        slope = param_i[f"{name}delta"] / param_i[f"{name}tau"]
                     val_a = -slope * (x - x1)
-                    val_b = -delta_i
+                    val_b = -param_i[f"{name}delta"]
                     val_c = -slope * (x4 - x)
 
                     trap.append(
-                        baseline_i
+                        param_i[f"{name}baseline"]
                         * (
                             1
                             + (range_a * val_a)
