@@ -9,3 +9,4 @@ from .spectrum import *
 from .utils import *
 from .models import *
 from .diagnostics import *
+from .visuals import *

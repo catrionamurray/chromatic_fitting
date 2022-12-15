@@ -82,16 +82,24 @@ class StepModel(LightcurveModel):
             self.store_models = store_models
 
         df, t0, f0 = [], [], []
+        parameters_to_loop_over = {
+            f"{name}df": [],
+            f"{name}t0": [],
+            f"{name}f0": [],
+        }
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j
 
             with mod:
                 # for every wavelength set up a step model
-
-                df.append(self.parameters[f"{name}df"].get_prior_vector(**kw))
-                t0.append(self.parameters[f"{name}t0"].get_prior_vector(**kw))
-                f0.append(self.parameters[f"{name}f0"].get_prior_vector(**kw))
+                for pname in parameters_to_loop_over.keys():
+                    parameters_to_loop_over[pname].append(
+                        self.parameters[pname].get_prior_vector(**kw)
+                    )
+                # df.append(self.parameters[f"{name}df"].get_prior_vector(**kw))
+                # t0.append(self.parameters[f"{name}t0"].get_prior_vector(**kw))
+                # f0.append(self.parameters[f"{name}f0"].get_prior_vector(**kw))
 
                 # get the independent variable from the Rainbow object:
                 x = data.get(self.independant_variable)
@@ -111,21 +119,21 @@ class StepModel(LightcurveModel):
                     else:
                         xi = x
 
-                    if isinstance(self.parameters[f"{name}t0"], WavelikeFitted):
-                        t0_i = t0[j][i]
-                    else:
-                        t0_i = t0[j]
-                    if isinstance(self.parameters[f"{name}f0"], WavelikeFitted):
-                        f0_i = f0[j][i]
-                    else:
-                        f0_i = f0[j]
-                    if isinstance(self.parameters[f"{name}df"], WavelikeFitted):
-                        df_i = df[j][i]
-                    else:
-                        df_i = df[j]
+                    param_i = {}
+                    for pname, param in parameters_to_loop_over.items():
+                        if isinstance(self.parameters[pname], WavelikeFitted):
+                            param_i[pname] = param[j][i]
+                        else:
+                            param_i[pname] = param[j]
 
                     # print(xi, eval_in_model(t0_i), eval_in_model(pm.math.gt(xi, t0_i)))
-                    step.append(pm.math.switch(pm.math.gt(xi, t0_i), f0_i + df_i, f0_i))
+                    step.append(
+                        pm.math.switch(
+                            pm.math.gt(xi, param_i[f"{name}t0_i"]),
+                            param_i[f"{name}f0"] + param_i[f"{name}df"],
+                            param_i[f"{name}f0"],
+                        )
+                    )
 
                 # print(eval_in_model(pm.math.stack(step, axis=0)))
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
