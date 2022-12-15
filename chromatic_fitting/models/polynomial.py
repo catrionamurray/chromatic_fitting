@@ -137,13 +137,9 @@ class PolynomialModel(LightcurveModel):
                 for d in range(self.degree + 1):
                     p.append(self.parameters[f"{name}p_{d}"].get_prior_vector(**kw))
 
-                # for i, w in enumerate(data.wavelength):
-                poly = []
-
                 # get the independent variable from the Rainbow object:
                 x = data.get(self.independant_variable)
-                # if len(np.shape(x)) > 1:
-                #     x = x[i, :]
+
                 # if the independant variable is time, convert to days:
                 if self.independant_variable == "time":
                     x = x.to_value("day")
@@ -166,14 +162,16 @@ class PolynomialModel(LightcurveModel):
 
                 # compute the polynomial by looping over the coeffs for each degree:
 
-                # poly_wave = []
                 to_sub = 0
+                poly = []
                 for i, w in enumerate(data.wavelength):
                     coeff, variable = [], []
+
                     if len(np.shape(x)) > 1:
                         xi = x[i, :]
                     else:
                         xi = x
+
                     for d in range(self.degree + 1):
                         if type(p[d]) == float or type(p[d]) == int:
                             coeff.append(p[d])
@@ -185,12 +183,6 @@ class PolynomialModel(LightcurveModel):
                             coeff.append(p[d][i - to_sub])
                         variable.append(xi**d)
                     poly.append(pm.math.dot(coeff, variable))
-                # poly = pm.math.stack(poly_wave, axis=0)
-                # for d in range(self.degree + 1):
-                #     # for i, w in enumerate(data.wavelength):
-                #     # p = self.parameters[f"{name}p_{d}"].get_prior_vector(i + j)
-                #     # poly.append(np.array(p[d]) * np.array([x**d] * data.nwave))
-                #     poly.append(pm.math.dot([p[d]] * data.nwave, [x**d] * data.nwave))
 
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
