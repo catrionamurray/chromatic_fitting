@@ -1,1 +1,1 @@
-from animated_plots import *
+from .animated_plots import *
