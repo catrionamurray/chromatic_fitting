@@ -1320,10 +1320,16 @@ class LightcurveModel:
     def chi_squared(self, individual_wavelengths=False, **kw):
         if hasattr(self, "data_with_model"):
             if self.optimization == "simultaneous":
-                fit_params = len(self.summary)
+                if self.store_models:
+                    summary = self.summary.iloc[
+                        ~self.summary.index.str.contains(f"{self.name}_model")
+                    ]
+                else:
+                    summary = self.summary
+                fit_params = len(summary)
                 degrees_of_freedom = (self.data.nwave * self.data.ntime) - fit_params
                 print("\nFor Entire Simultaneous Fit:")
-                print("Fitted Parameters:\n", ", ".join(self.summary.index))
+                print("Fitted Parameters:\n", ", ".join(summary.index))
                 print(
                     f"\nDegrees of Freedom = n_waves ({self.data.nwave}) * n_times ({self.data.ntime}) - n_fitted_parameters ({fit_params}) = {degrees_of_freedom}"
                 )
@@ -1382,7 +1388,13 @@ class LightcurveModel:
 
             elif self.optimization == "separate":
                 for i in range(self.data.nwave):
-                    fit_params = len(self.summary[i])
+                    if self.store_models:
+                        summary = self.summary[i].iloc[
+                            ~self.summary.index.str.contains(f"{self.name}_model")
+                        ]
+                    else:
+                        summary = self.summary[i]
+                    fit_params = len(summary)
                     degrees_of_freedom = self.data.ntime - fit_params
                     print(f"\nFor Wavelength {i}:")
                     chi_sq(
@@ -1393,7 +1405,13 @@ class LightcurveModel:
                         **kw,
                     )
             elif self.optimization == "white_light":
-                fit_params = len(self.summary)
+                if self.store_models:
+                    summary = self.summary.iloc[
+                        ~self.summary.index.str.contains(f"{self.name}_model")
+                    ]
+                else:
+                    summary = self.summary
+                fit_params = len(summary)
                 degrees_of_freedom = self.data.ntime - fit_params
                 chi_sq(
                     data=self.data_with_model.flux,
