@@ -1464,13 +1464,14 @@ class LightcurveModel:
                 with models before rerunning this method."""
             )
 
-    def residual_noise_calculator(self, **kw):
+    def residual_noise_calculator(self, individual_wavelengths=False, **kw):
         if hasattr(self, "data_with_model"):
             print("For the Wavelength-Averaged Residuals...")
             noise_calculator(np.mean(self.data_with_model.residuals, axis=0), **kw)
-            for i in range(self.data.nwave):
-                print(f"\nFor wavelength {i}")
-                noise_calculator(self.data_with_model.residuals[i], **kw)
+            if individual_wavelengths:
+                for i in range(self.data.nwave):
+                    print(f"\nFor wavelength {i}")
+                    noise_calculator(self.data_with_model.residuals[i], **kw)
         else:
             warnings.warn(
                 f"""Could not find .data_with_model in {self.name} model! 

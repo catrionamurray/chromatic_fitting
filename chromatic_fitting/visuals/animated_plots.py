@@ -194,7 +194,6 @@ def setup_animate_transmission_spectrum(
         ]
 
         self._animate_lightcurves_components = []
-        print(ax)
 
         for i, ax_i in enumerate(ax):
             # keep track of the things needed for the animation
