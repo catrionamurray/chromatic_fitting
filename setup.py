@@ -84,6 +84,7 @@ setup(
         "corner",
         "exoplanet>=0.5.0",
         "tqdm",
+        "starry",
     ],
     # what version of Python is required?
     python_requires=">=3.8",  # f-strings are introduced in 3.6!
