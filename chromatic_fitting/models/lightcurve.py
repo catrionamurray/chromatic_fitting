@@ -646,7 +646,7 @@ class LightcurveModel:
 
         self.summarize(**summarize_kw)
 
-    def summarize(self, hdi_prob=0.68, print_table=True, **kw):
+    def summarize(self, hdi_prob=0.68, round_to=10, print_table=True, **kw):
         """
         Wrapper for arviz summary
         """
@@ -664,10 +664,14 @@ class LightcurveModel:
             self.summary = []
             for mod, trace in zip(self._pymc3_model, self.trace):
                 with mod:
-                    self.summary.append(summary(trace, hdi_prob=hdi_prob, **kw))
+                    self.summary.append(
+                        summary(trace, hdi_prob=hdi_prob, round_to=round_to, **kw)
+                    )
         else:
             with self._pymc3_model:
-                self.summary = summary(self.trace, hdi_prob=hdi_prob, **kw)
+                self.summary = summary(
+                    self.trace, hdi_prob=hdi_prob, round_to=round_to, **kw
+                )
 
         if print_table:
             print(self.summary)
