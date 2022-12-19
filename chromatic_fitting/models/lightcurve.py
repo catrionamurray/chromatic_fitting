@@ -592,7 +592,12 @@ class LightcurveModel:
                 print(f"Sampling failed for one of the models: {e}")
                 return None
 
-    def sample(self, summarize_step_by_step=False, summarize_kw={}, **kw):
+    def sample(
+        self,
+        summarize_step_by_step=False,
+        summarize_kw={"round_to": 7, "hdi_prob": 0.68, "fmt": "wide"},
+        **kw,
+    ):
         """
         Wrapper for PyMC3_ext sample
         """
@@ -639,7 +644,9 @@ class LightcurveModel:
             with self._pymc3_model:
                 self.trace = sample(init="adapt_full", **kw)
 
-    def summarize(self, print_table=True, **kw):
+        self.summarize(**summarize_kw)
+
+    def summarize(self, hdi_prob=0.68, print_table=True, **kw):
         """
         Wrapper for arviz summary
         """
@@ -657,10 +664,10 @@ class LightcurveModel:
             self.summary = []
             for mod, trace in zip(self._pymc3_model, self.trace):
                 with mod:
-                    self.summary.append(summary(trace, **kw))
+                    self.summary.append(summary(trace, hdi_prob=hdi_prob, **kw))
         else:
             with self._pymc3_model:
-                self.summary = summary(self.trace, **kw)
+                self.summary = summary(self.trace, hdi_prob=hdi_prob, **kw)
 
         if print_table:
             print(self.summary)
@@ -669,7 +676,7 @@ class LightcurveModel:
             for m in self._chromatic_models.values():
                 m.summary = self.summary
 
-    def get_results(self, as_df=True, uncertainty=["hdi_3%", "hdi_97%"]):
+    def get_results(self, as_df=True, uncertainty=["hdi_16%", "hdi_84%"]):
         """
         Extract mean results from summary
         """

@@ -1,4 +1,4 @@
-__version__ = "0.9.3"
+__version__ = "0.9.4"
 
 
 def version():
@@ -21,3 +21,4 @@ def version():
 # v 0.9.1 - made t0 a mandatory param of exponential model
 # v 0.9.2 - added axis argument to .plot_transmission_spectrum()
 # v 0.9.3 - added animated transmission spectrum plot
+# v 0.9.4 - summarize now runs automatically in sample, and default HDI range is 16-84

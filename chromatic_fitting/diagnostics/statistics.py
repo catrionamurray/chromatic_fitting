@@ -8,7 +8,7 @@ def chi_sq(data, model, uncertainties, degrees_of_freedom, plot=False):
     # fit_params = len(cmod.summary)
     # degrees_of_freedom = (cmod.data.nwave * cmod.data.ntime) - fit_params
 
-    chi_sq = np.sum(((data - model) / uncertainties) ** 2)
+    chi_sq = np.nansum(((data - model) / uncertainties) ** 2)
     red_chi_sq = chi_sq / degrees_of_freedom
     print(f"chi squared = {chi_sq}")
     print(f"Reduced chi squared = {red_chi_sq}")
