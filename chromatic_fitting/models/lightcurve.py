@@ -6,6 +6,7 @@ from pymc3 import (
     sample_posterior_predictive,
     Deterministic,
     Normal,
+    Uniform,
     TruncatedNormal,
     sample,
 )
@@ -366,7 +367,7 @@ class LightcurveModel:
         Connect the light curve model to the actual data it aims to explain.
         """
         # data = self.get_data()
-        self.bad_wavelengths = []
+        # self.bad_wavelengths = []
 
         if self.optimization == "separate":
             models = self._pymc3_model
@@ -398,53 +399,58 @@ class LightcurveModel:
 
         if inflate_uncertainties:
             self.parameters["nsigma"] = WavelikeFitted(
-                TruncatedNormal, mu=1, sd=0.1, lower=1
+                Uniform, lower=1.0, upper=3.0, testval=1.01
             )
             self.parameters["nsigma"].set_name("nsigma")
 
+        nsigma = []
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
-                uncertainties, flux = [], []
-                for i, w in enumerate(data.wavelength):
-                    # k = f"wavelength_{j + i}"
+                nsigma.append(
+                    self.parameters["nsigma"].get_prior_vector(
+                        i=j, shape=datas[0].nwave
+                    )
+                )
+                # uncertainties, flux = [], []
+                #             for i, w in enumerate(data.wavelength):
+                # k = f"wavelength_{j + i}"
 
-                    if inflate_uncertainties:
-                        uncertainties.append(
-                            data.uncertainty[i, :]
-                            * eval_in_model(self.parameters["nsigma"].get_prior(j + i))
-                        )
-                    else:
-                        uncertainties.append(data.uncertainty[i, :])
+                if inflate_uncertainties:
+                    uncertainty = [
+                        np.array(data.uncertainty[i, :]) * nsigma[j][i]
+                        for i in range(data.nwave)
+                    ]
+                    uncertainties = pm.math.stack(uncertainty)
+                else:
+                    uncertainties = np.array(data.uncertainty)
+                #                     uncertainties.append(data.uncertainty[i, :])
 
-                    # try:
-                    # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
-                    if mask_outliers:
-                        flux.append(self.data_without_outliers.flux[i + j, :])
-                    else:
-                        flux.append(data.flux[i, :])
+                # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
+                if mask_outliers:
+                    flux = np.array(
+                        [
+                            self.data_without_outliers.flux[i + j, :]
+                            for i in range(data.nwave)
+                        ]
+                    )
+                else:
+                    flux = np.array(data.flux)
 
                 try:
-                    # if self.optimization == "separate":
-                    #     data_name = f"data_w{j}"
-                    #     light_curve_name = f"wavelength_{j}"
-                    # else:
-                    data_name = f"data"  # _w{j}"
+                    data_name = f"data"
                     light_curve_name = f"wavelength_{j}"
 
                     pm.Normal(
                         data_name,
                         mu=self.every_light_curve[light_curve_name],
-                        sd=np.array(uncertainties),
-                        observed=np.array(flux),
+                        sd=uncertainties,
+                        observed=flux,
                     )
-                    # pm.Normal(f"{k}_data",
-                    #         mu=self.every_light_curve[k],
-                    #         sd=uncertainties,
-                    #         observed=flux,
-                    # )
                 except Exception as e:
-                    print(f"Setting up likelihood failed for wavelength {i}: {e}")
-                    self.bad_wavelengths.append(i)
+                    print(e)
+
+    #                 print(f"Setting up likelihood failed for wavelength {i}: {e}")
+    #                 self.bad_wavelengths.append(i)
 
     def sample_prior(self, ndraws=3):
         """

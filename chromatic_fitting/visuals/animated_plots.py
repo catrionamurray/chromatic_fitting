@@ -95,11 +95,20 @@ def setup_animated_scatter(
     this_speckw = dict(c=[], cmap=self.cmap)
     this_speckw.update(**speckw)
     spec = plt.scatter([], [], **this_speckw)
+    spec_errors = plt.errorbar([], [], [], **this_speckw)
 
     plt.title(self.get("title"))
 
     # return a dictionary with things that will be useful to hang onto
-    return dict(fi=fig, ax=ax, scatter=scatter, text=text, model=model, spec=spec)
+    return dict(
+        fi=fig,
+        ax=ax,
+        scatter=scatter,
+        text=text,
+        model=model,
+        spec=spec,
+        spec_errors=spec_errors,
+    )
 
 
 def setup_animate_transmission_spectrum(
@@ -157,7 +166,11 @@ def setup_animate_transmission_spectrum(
 
     with quantity_support():
 
-        rr = transmission_spectrum  # transmission_spectrum['transit_radius_ratio']
+        rr = transmission_spectrum["transit_radius_ratio"]
+        rr_err = [
+            transmission_spectrum["transit_radius_ratio_neg_error"],
+            transmission_spectrum["transit_radius_ratio_pos_error"],
+        ]
         wavelength = self.wavelength  # transmission_spectrum['wavelength']
         ax[2].plot(wavelength, rr, "k", alpha=0.3)
 
@@ -288,6 +301,11 @@ def setup_animate_transmission_spectrum(
                 )
             )
             self._animate_lightcurves_components[2]["spec"].set_array(c)
+            self._animate_lightcurves_components[3]["spec_errors"].set_data(
+                self.wavelength[: frame + 1].to("micron").value,
+                rr[: frame + 1],
+                rr_err[: frame + 1],
+            )
             #             print(c[frame], rr[frame])
 
             return [
