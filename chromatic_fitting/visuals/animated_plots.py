@@ -92,23 +92,16 @@ def setup_animated_scatter(
     this_modelkw.update(**modelkw)
     model = plt.plot([], [], linestyle="-", c="k", alpha=0.3, **this_modelkw)
 
-    this_speckw = dict(c=[], cmap=self.cmap)
+    this_speckw = dict()  # c=[], cmap=self.cmap)
     this_speckw.update(**speckw)
-    spec = plt.scatter([], [], **this_speckw)
-    spec_errors = plt.errorbar([], [], [], **this_speckw)
+    spec = plt.scatter([], [], c="k", **this_speckw)
+    #     _,_,(bottoms,tops) = plt.errorbar([],[],[])
+    #     spec_err = plt.plot([],[],linestyle='None', c='k',alpha=0)
 
     plt.title(self.get("title"))
 
     # return a dictionary with things that will be useful to hang onto
-    return dict(
-        fi=fig,
-        ax=ax,
-        scatter=scatter,
-        text=text,
-        model=model,
-        spec=spec,
-        spec_errors=spec_errors,
-    )
+    return dict(fi=fig, ax=ax, scatter=scatter, text=text, model=model, spec=spec)
 
 
 def setup_animate_transmission_spectrum(
@@ -116,6 +109,7 @@ def setup_animate_transmission_spectrum(
     transmission_spectrum,
     ax=None,
     quantity="flux",
+    orientation="vertical",
     xlim=[None, None],
     ylim=[None, None],
     cmap=None,
@@ -124,6 +118,8 @@ def setup_animate_transmission_spectrum(
     ylabel=None,
     scatterkw={},
     textkw={},
+    modelkw={},
+    speckw={},
 ):
     """
     Setup an animation to how the lightcurve changes
@@ -166,13 +162,17 @@ def setup_animate_transmission_spectrum(
 
     with quantity_support():
 
-        rr = transmission_spectrum["transit_radius_ratio"]
+        rr = transmission_spectrum["transit_radius_ratio"].values
         rr_err = [
-            transmission_spectrum["transit_radius_ratio_neg_error"],
-            transmission_spectrum["transit_radius_ratio_pos_error"],
+            [r_n, r_p]
+            for r_n, r_p in zip(
+                transmission_spectrum["transit_radius_ratio_neg_error"].values,
+                transmission_spectrum["transit_radius_ratio_pos_error"].values,
+            )
         ]
+        #         print(rr_err)
         wavelength = self.wavelength  # transmission_spectrum['wavelength']
-        ax[2].plot(wavelength, rr, "k", alpha=0.3)
+        ax[2].plot(wavelength, rr, "k", alpha=0.1)
 
         ylims = [
             [
@@ -183,13 +183,13 @@ def setup_animate_transmission_spectrum(
                 0.995 * np.nanmin(self.get(quantity)),
                 1.005 * np.nanmax(self.get(quantity)),
             ],
-            [0.95 * np.nanmin(rr), 1.05 * np.nanmax(rr)],
+            [0.99 * np.nanmin(rr), 1.01 * np.nanmax(rr)],
         ]
 
         xlims = [
             [np.nanmin(self.time), np.nanmax(self.time)],
             [np.nanmin(self.time), np.nanmax(self.time)],
-            [0.5 * np.nanmin(wavelength), 1.1 * np.nanmax(wavelength)],
+            [0.99 * np.nanmin(wavelength), 1.01 * np.nanmax(wavelength)],
         ]
 
         xlabels = [
@@ -212,10 +212,14 @@ def setup_animate_transmission_spectrum(
             # keep track of the things needed for the animation
             self._animate_lightcurves_components.append(
                 setup_animated_scatter(
-                    self, ax=ax_i, scatterkw=scatterkw, textkw=textkw, modelkw=scatterkw
+                    self,
+                    ax=ax_i,
+                    scatterkw=scatterkw,
+                    textkw=textkw,
+                    modelkw=modelkw,
+                    speckw=speckw,
                 )
             )
-
             #             print(self._animate_lightcurves_components)
 
             ax_i = self._animate_lightcurves_components[i]["ax"]
@@ -223,19 +227,10 @@ def setup_animate_transmission_spectrum(
             # set the plot limits
             ax_i.set_xlim(xlims[i][0], xlims[i][1])
             ax_i.set_ylim(ylims[i][0], ylims[i][1])
-            #             ax_i.set_xlim(xlim[0] or np.nanmin(self.time), xlim[1] or np.nanmax(self.time))
-            #             ax_i.set_ylim(
-            #                 ylim[0] or 0.995 * np.nanmin(self.get(quantity)),
-            #                 ylim[1] or 1.005 * np.nanmax(self.get(quantity)),
-            #             )
 
             # set the axis labels
             ax_i.set_xlabel(xlabels[i])
             ax_i.set_ylabel(ylabels[i])
-            #             ax_i.set_xlabel(
-            #                 f"{self._time_label} ({self.time.unit.to_string('latex_inline')})"
-            #             )
-            #             ax_i.set_ylabel(ylabel or quantity)
 
             ax_i.set_title(titles[i])
 
@@ -300,13 +295,18 @@ def setup_animate_transmission_spectrum(
                     [self.wavelength[: frame + 1].to("micron").value, rr[: frame + 1]]
                 )
             )
-            self._animate_lightcurves_components[2]["spec"].set_array(c)
-            self._animate_lightcurves_components[3]["spec_errors"].set_data(
-                self.wavelength[: frame + 1].to("micron").value,
-                rr[: frame + 1],
-                rr_err[: frame + 1],
-            )
+            #             c2 = self.wavelength[frame].to("micron").value #* np.ones(self.ntime)
+            #             self._animate_lightcurves_components[2]["spec"].set_array(self.wavelength[:frame+1].to("micron").value)#c)
+            #             self._animate_lightcurves_components[2]["spec"]
+            #             speckw['c'] = self.wavelength[frame].to("micron").value
+
             #             print(c[frame], rr[frame])
+            #             print(self._animate_lightcurves_components[2]["spec_err"])
+            #             print(frame, np.shape(rr_err))
+            #             self._animate_lightcurves_components[2]["spec_err"][0].set_data(
+            #                 [self.wavelength[frame].to("micron").value,self.wavelength[frame].to("micron").value],
+            #                 [rr[frame]-rr_err[frame][0],rr[frame]+rr_err[frame][1]],
+            #             )
 
             return [
                 (alc["text"], alc["scatter"], alc["model"], alc["spec"])
@@ -323,7 +323,7 @@ def animate_transmission_spectrum(
     self,
     transmission_spectrum,
     filename="animated-transmission-spectrum.gif",
-    fps=2,
+    fps=4,
     dpi=None,
     bitrate=None,
     **kwargs,
@@ -369,10 +369,7 @@ def animate_transmission_spectrum(
     """
     my_dpi = 96
     fig, axes = plt.subplots(
-        #                             ncols=2,
-        #                            nrows=2,
         facecolor="w",
-        #                            gridspec_kw={'width_ratios': [1,1,2]},
         figsize=(1920 / (1.7 * my_dpi), 1080 / (2.7 * my_dpi)),
         dpi=my_dpi,
     )
@@ -382,7 +379,37 @@ def animate_transmission_spectrum(
     ax2 = plt.subplot(2, 2, 2)
     ax4 = plt.subplot(2, 1, 2)
     ax = [ax1, ax2, ax4]
-    setup_animate_transmission_spectrum(self, transmission_spectrum, ax=ax, **kwargs)
+    rr = transmission_spectrum["transit_radius_ratio"].values
+    rr_err = [
+        transmission_spectrum["transit_radius_ratio_neg_error"].values,
+        transmission_spectrum["transit_radius_ratio_pos_error"].values,
+    ]
+    ax4.plot(self.wavelength.to_value("micron"), rr, "k.", linestyle="None", alpha=0.05)
+    ax4.errorbar(
+        self.wavelength.to_value("micron"),
+        rr,
+        yerr=rr_err,
+        c="k",
+        linestyle="None",
+        alpha=0.2,
+        capsize=2,
+        zorder=10,
+    )
+
+    setup_animate_transmission_spectrum(
+        self,
+        transmission_spectrum,
+        ax=ax,
+        scatterkw={"s": 3},
+        speckw={"s": 5, "zorder": 1},
+        **kwargs,
+    )
+    ax4.set_ylim(0.142, 0.149)
+    ax4.set_xlim(0.8, 2.9)
+
+    #     setup_animate_transmission_spectrum(self,
+    #         0, animation=False, orientation=orientation, transmission_spectrum, ax=ax, **kwargs,
+    #     )
 
     filename = self._label_plot_file(filename)
 
@@ -398,6 +425,9 @@ def animate_transmission_spectrum(
         with writer.saving(figure, filename, dpi or figure.get_dpi()):
             for j in tqdm(range(self.nwave), leave=False):
                 self._animate_lightcurves_components[i]["update"](j)
+                #                 setup_animate_transmission_spectrum(self,
+                #                     i, animation=True, orientation=orientation, transmission_spectrum, ax=ax, **kwargs,
+                #                 )
                 writer.grab_frame()
 
     # close the figure that was created
