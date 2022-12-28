@@ -406,16 +406,12 @@ class LightcurveModel:
         nsigma = []
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
-                nsigma.append(
-                    self.parameters["nsigma"].get_prior_vector(
-                        i=j, shape=datas[0].nwave
-                    )
-                )
-                # uncertainties, flux = [], []
-                #             for i, w in enumerate(data.wavelength):
-                # k = f"wavelength_{j + i}"
-
                 if inflate_uncertainties:
+                    nsigma.append(
+                        self.parameters["nsigma"].get_prior_vector(
+                            i=j, shape=datas[0].nwave
+                        )
+                    )
                     uncertainty = [
                         np.array(data.uncertainty[i, :]) * nsigma[j][i]
                         for i in range(data.nwave)
