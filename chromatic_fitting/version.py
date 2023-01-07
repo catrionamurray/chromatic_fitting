@@ -1,4 +1,4 @@
-__version__ = "0.9.5"
+__version__ = "0.9.6"
 
 
 def version():
@@ -22,4 +22,5 @@ def version():
 #    v 0.9.2 - added axis argument to .plot_transmission_spectrum()
 #    v 0.9.3 - added animated transmission spectrum plot
 #    v 0.9.4 - summarize now runs automatically in sample, and default HDI range is 16-84
-#    v.0.9.5 - vectorized nsigma parameter (for inflating uncertanties)
+#    v 0.9.5 - vectorized nsigma parameter (for inflating uncertanties)
+#    v 0.9.6 - added setup_lightcurves under setup_likelihood

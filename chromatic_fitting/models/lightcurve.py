@@ -361,13 +361,20 @@ class LightcurveModel:
         sigma_wavelength=5,
         data_mask=None,
         inflate_uncertainties=False,
+        setup_lightcurves_kw={},
         **kw,
     ):
         """
         Connect the light curve model to the actual data it aims to explain.
         """
-        # data = self.get_data()
-        # self.bad_wavelengths = []
+
+        if hasattr(self, "every_light_curve"):
+            if f"wavelength_0" not in self.every_light_curve.keys():
+                print(".setup_lightcurves() has not been run yet, running now...")
+                self.setup_lightcurves(**setup_lightcurves_kw)
+        else:
+            print(".setup_lightcurves() has not been run yet, running now...")
+            self.setup_lightcurves(**setup_lightcurves_kw)
 
         if self.optimization == "separate":
             models = self._pymc3_model
