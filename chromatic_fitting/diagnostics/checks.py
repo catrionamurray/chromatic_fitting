@@ -9,3 +9,13 @@ def check_rainbow(r):
             f"Try removing that step and running again!"
         )
     return
+
+
+def check_model(mod):
+    # include some model check
+    return
+
+
+def check_results(result):
+    # include some result check
+    return
