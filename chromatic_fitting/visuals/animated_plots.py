@@ -257,7 +257,11 @@ def setup_animate_transmission_spectrum(
             x_model = self.time
             y_model = self.fluxlike["model"][frame]
             y_model_planet = self.fluxlike["planet_model"][frame]
-            y_model_sys = self.fluxlike["systematics_model"][frame]
+            try:
+                y_model_sys = self.fluxlike["systematics_model"][frame]
+            except:
+                y_model_sys = np.ones(len(y))
+            # y_model_sys = self.fluxlike["systematics_model"][frame]
 
             # x = self.time
             # y = self.flux[frame]

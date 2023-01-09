@@ -18,7 +18,7 @@ from ..parameters import *
 from ..utils import *
 from chromatic import *
 import collections
-from ..diagnostics import chi_sq, generate_periodogram
+from ..diagnostics import chi_sq, generate_periodogram, check_rainbow
 
 
 #  - Q=sqrt(N)*depth/error (Winn 2010/ Carter 2008)
@@ -258,6 +258,7 @@ class LightcurveModel:
         Connect a `chromatic` Rainbow dataset to this object.
         """
         self.data = rainbow._create_copy()
+        check_rainbow(self.data)
 
     def white_light_curve(self):
         """
@@ -268,6 +269,7 @@ class LightcurveModel:
         # else:
         #     data = self.data
         self.white_light = self.data.bin(nwavelengths=self.data.nwave).trim()
+        check_rainbow(self.white_light)
 
     def choose_optimization_method(self, optimization_method="simultaneous"):
         """
