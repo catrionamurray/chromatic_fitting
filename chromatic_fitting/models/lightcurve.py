@@ -452,7 +452,7 @@ class LightcurveModel:
                         observed=flux,
                     )
                 except Exception as e:
-                    print(e)
+                    print(f"Setting up likelihood failed with error: {e}")
 
     #                 print(f"Setting up likelihood failed for wavelength {i}: {e}")
     #                 self.bad_wavelengths.append(i)
