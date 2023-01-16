@@ -7,10 +7,9 @@ from pymc3 import (
     Deterministic,
     Normal,
     TruncatedNormal,
-    sample,
 )
 from pymc3_ext import eval_in_model, optimize
-from pymc3_ext import sample as sample_ext
+from pymc3_ext import sample
 
 from arviz import summary
 from ..parameters import *
@@ -613,7 +612,7 @@ class LightcurveModel:
                         start = mod.test_point
 
                     try:
-                        samp = sample(start=start, init="adapt_full", **kw)
+                        samp = sample(start=start, **kw)
                         if summarize_step_by_step:
                             self.summary.append(summary(samp, **summarize_kw))
                         else:
