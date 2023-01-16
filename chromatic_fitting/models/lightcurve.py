@@ -6,6 +6,7 @@ from pymc3 import (
     sample_posterior_predictive,
     Deterministic,
     Normal,
+    Uniform,
     TruncatedNormal,
 )
 from pymc3_ext import eval_in_model, optimize
@@ -16,7 +17,7 @@ from ..parameters import *
 from ..utils import *
 from chromatic import *
 import collections
-from ..diagnostics import chi_sq, generate_periodogram
+from ..diagnostics import chi_sq, generate_periodogram, check_rainbow
 
 
 #  - Q=sqrt(N)*depth/error (Winn 2010/ Carter 2008)
@@ -256,6 +257,7 @@ class LightcurveModel:
         Connect a `chromatic` Rainbow dataset to this object.
         """
         self.data = rainbow._create_copy()
+        check_rainbow(self.data)
 
     def white_light_curve(self):
         """
@@ -266,6 +268,7 @@ class LightcurveModel:
         # else:
         #     data = self.data
         self.white_light = self.data.bin(nwavelengths=self.data.nwave).trim()
+        check_rainbow(self.white_light)
 
     def choose_optimization_method(self, optimization_method="simultaneous"):
         """
@@ -359,13 +362,20 @@ class LightcurveModel:
         sigma_wavelength=5,
         data_mask=None,
         inflate_uncertainties=False,
+        setup_lightcurves_kw={},
         **kw,
     ):
         """
         Connect the light curve model to the actual data it aims to explain.
         """
-        # data = self.get_data()
-        self.bad_wavelengths = []
+
+        if hasattr(self, "every_light_curve"):
+            if f"wavelength_0" not in self.every_light_curve.keys():
+                print(".setup_lightcurves() has not been run yet, running now...")
+                self.setup_lightcurves(**setup_lightcurves_kw)
+        else:
+            print(".setup_lightcurves() has not been run yet, running now...")
+            self.setup_lightcurves(**setup_lightcurves_kw)
 
         if self.optimization == "separate":
             models = self._pymc3_model
@@ -397,53 +407,54 @@ class LightcurveModel:
 
         if inflate_uncertainties:
             self.parameters["nsigma"] = WavelikeFitted(
-                TruncatedNormal, mu=1, sd=0.1, lower=1
+                Uniform, lower=1.0, upper=3.0, testval=1.01
             )
             self.parameters["nsigma"].set_name("nsigma")
 
+        nsigma = []
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
-                uncertainties, flux = [], []
-                for i, w in enumerate(data.wavelength):
-                    # k = f"wavelength_{j + i}"
-
-                    if inflate_uncertainties:
-                        uncertainties.append(
-                            data.uncertainty[i, :]
-                            * eval_in_model(self.parameters["nsigma"].get_prior(j + i))
+                if inflate_uncertainties:
+                    nsigma.append(
+                        self.parameters["nsigma"].get_prior_vector(
+                            i=j, shape=datas[0].nwave
                         )
-                    else:
-                        uncertainties.append(data.uncertainty[i, :])
+                    )
+                    uncertainty = [
+                        np.array(data.uncertainty[i, :]) * nsigma[j][i]
+                        for i in range(data.nwave)
+                    ]
+                    uncertainties = pm.math.stack(uncertainty)
+                else:
+                    uncertainties = np.array(data.uncertainty)
+                #                     uncertainties.append(data.uncertainty[i, :])
 
-                    # try:
-                    # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
-                    if mask_outliers:
-                        flux.append(self.data_without_outliers.flux[i + j, :])
-                    else:
-                        flux.append(data.flux[i, :])
+                # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
+                if mask_outliers:
+                    flux = np.array(
+                        [
+                            self.data_without_outliers.flux[i + j, :]
+                            for i in range(data.nwave)
+                        ]
+                    )
+                else:
+                    flux = np.array(data.flux)
 
                 try:
-                    # if self.optimization == "separate":
-                    #     data_name = f"data_w{j}"
-                    #     light_curve_name = f"wavelength_{j}"
-                    # else:
-                    data_name = f"data"  # _w{j}"
+                    data_name = f"data"
                     light_curve_name = f"wavelength_{j}"
 
                     pm.Normal(
                         data_name,
                         mu=self.every_light_curve[light_curve_name],
-                        sd=np.array(uncertainties),
-                        observed=np.array(flux),
+                        sd=uncertainties,
+                        observed=flux,
                     )
-                    # pm.Normal(f"{k}_data",
-                    #         mu=self.every_light_curve[k],
-                    #         sd=uncertainties,
-                    #         observed=flux,
-                    # )
                 except Exception as e:
-                    print(f"Setting up likelihood failed for wavelength {i}: {e}")
-                    self.bad_wavelengths.append(i)
+                    print(e)
+
+    #                 print(f"Setting up likelihood failed for wavelength {i}: {e}")
+    #                 self.bad_wavelengths.append(i)
 
     def sample_prior(self, ndraws=3):
         """
@@ -591,7 +602,12 @@ class LightcurveModel:
                 print(f"Sampling failed for one of the models: {e}")
                 return None
 
-    def sample(self, summarize_step_by_step=False, summarize_kw={}, **kw):
+    def sample(
+        self,
+        summarize_step_by_step=False,
+        summarize_kw={"round_to": 7, "hdi_prob": 0.68, "fmt": "wide"},
+        **kw,
+    ):
         """
         Wrapper for PyMC3_ext sample
         """
@@ -638,7 +654,9 @@ class LightcurveModel:
             with self._pymc3_model:
                 self.trace = sample(init="adapt_full", **kw)
 
-    def summarize(self, print_table=True, **kw):
+        self.summarize(**summarize_kw)
+
+    def summarize(self, hdi_prob=0.68, round_to=10, print_table=True, **kw):
         """
         Wrapper for arviz summary
         """
@@ -656,10 +674,14 @@ class LightcurveModel:
             self.summary = []
             for mod, trace in zip(self._pymc3_model, self.trace):
                 with mod:
-                    self.summary.append(summary(trace, **kw))
+                    self.summary.append(
+                        summary(trace, hdi_prob=hdi_prob, round_to=round_to, **kw)
+                    )
         else:
             with self._pymc3_model:
-                self.summary = summary(self.trace, **kw)
+                self.summary = summary(
+                    self.trace, hdi_prob=hdi_prob, round_to=round_to, **kw
+                )
 
         if print_table:
             print(self.summary)
@@ -668,7 +690,7 @@ class LightcurveModel:
             for m in self._chromatic_models.values():
                 m.summary = self.summary
 
-    def get_results(self, as_df=True, uncertainty=["hdi_3%", "hdi_97%"]):
+    def get_results(self, as_df=True, uncertainty=["hdi_16%", "hdi_84%"]):
         """
         Extract mean results from summary
         """
@@ -1319,10 +1341,16 @@ class LightcurveModel:
     def chi_squared(self, individual_wavelengths=False, **kw):
         if hasattr(self, "data_with_model"):
             if self.optimization == "simultaneous":
-                fit_params = len(self.summary)
+                if self.store_models:
+                    summary = self.summary.iloc[
+                        ~self.summary.index.str.contains(f"{self.name}_model")
+                    ]
+                else:
+                    summary = self.summary
+                fit_params = len(summary)
                 degrees_of_freedom = (self.data.nwave * self.data.ntime) - fit_params
                 print("\nFor Entire Simultaneous Fit:")
-                print("Fitted Parameters:\n", ", ".join(self.summary.index))
+                print("Fitted Parameters:\n", ", ".join(summary.index))
                 print(
                     f"\nDegrees of Freedom = n_waves ({self.data.nwave}) * n_times ({self.data.ntime}) - n_fitted_parameters ({fit_params}) = {degrees_of_freedom}"
                 )
@@ -1381,7 +1409,13 @@ class LightcurveModel:
 
             elif self.optimization == "separate":
                 for i in range(self.data.nwave):
-                    fit_params = len(self.summary[i])
+                    if self.store_models:
+                        summary = self.summary[i].iloc[
+                            ~self.summary.index.str.contains(f"{self.name}_model")
+                        ]
+                    else:
+                        summary = self.summary[i]
+                    fit_params = len(summary)
                     degrees_of_freedom = self.data.ntime - fit_params
                     print(f"\nFor Wavelength {i}:")
                     chi_sq(
@@ -1392,7 +1426,13 @@ class LightcurveModel:
                         **kw,
                     )
             elif self.optimization == "white_light":
-                fit_params = len(self.summary)
+                if self.store_models:
+                    summary = self.summary.iloc[
+                        ~self.summary.index.str.contains(f"{self.name}_model")
+                    ]
+                else:
+                    summary = self.summary
+                fit_params = len(summary)
                 degrees_of_freedom = self.data.ntime - fit_params
                 chi_sq(
                     data=self.data_with_model.flux,
@@ -1463,13 +1503,14 @@ class LightcurveModel:
                 with models before rerunning this method."""
             )
 
-    def residual_noise_calculator(self, **kw):
+    def residual_noise_calculator(self, individual_wavelengths=False, **kw):
         if hasattr(self, "data_with_model"):
             print("For the Wavelength-Averaged Residuals...")
             noise_calculator(np.mean(self.data_with_model.residuals, axis=0), **kw)
-            for i in range(self.data.nwave):
-                print(f"\nFor wavelength {i}")
-                noise_calculator(self.data_with_model.residuals[i], **kw)
+            if individual_wavelengths:
+                for i in range(self.data.nwave):
+                    print(f"\nFor wavelength {i}")
+                    noise_calculator(self.data_with_model.residuals[i], **kw)
         else:
             warnings.warn(
                 f"""Could not find .data_with_model in {self.name} model! 

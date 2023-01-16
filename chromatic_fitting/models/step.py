@@ -97,9 +97,6 @@ class StepModel(LightcurveModel):
                     parameters_to_loop_over[pname].append(
                         self.parameters[pname].get_prior_vector(**kw)
                     )
-                # df.append(self.parameters[f"{name}df"].get_prior_vector(**kw))
-                # t0.append(self.parameters[f"{name}t0"].get_prior_vector(**kw))
-                # f0.append(self.parameters[f"{name}f0"].get_prior_vector(**kw))
 
                 # get the independent variable from the Rainbow object:
                 x = data.get(self.independant_variable)
@@ -129,7 +126,7 @@ class StepModel(LightcurveModel):
                     # print(xi, eval_in_model(t0_i), eval_in_model(pm.math.gt(xi, t0_i)))
                     step.append(
                         pm.math.switch(
-                            pm.math.gt(xi, param_i[f"{name}t0_i"]),
+                            pm.math.gt(xi, param_i[f"{name}t0"]),
                             param_i[f"{name}f0"] + param_i[f"{name}df"],
                             param_i[f"{name}f0"],
                         )

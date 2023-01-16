@@ -392,7 +392,7 @@ class TransitModel(LightcurveModel):
                 plt.close()
 
     def make_transmission_spectrum_table(
-        self, uncertainty=["hdi_3%", "hdi_97%"], svname=None
+        self, uncertainty=["hdi_16%", "hdi_84%"], svname=None
     ):
         """
         Generate and return a transmission spectrum table
@@ -430,7 +430,7 @@ class TransitModel(LightcurveModel):
             return trans_table
 
     def plot_transmission_spectrum(
-        self, table=None, uncertainty=["hdi_3%", "hdi_97%"], ax=None, plotkw={}, **kw
+        self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
     ):
         if table is not None:
             transmission_spectrum = table
