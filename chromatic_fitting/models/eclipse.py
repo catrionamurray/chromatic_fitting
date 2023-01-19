@@ -4,7 +4,7 @@ from .lightcurve import *
 import warnings
 
 """
-Example of setting up a TransitModel:
+Example of setting up a EclipseModel:
 
 def create_new_transit_model():
     # create transit model:
@@ -76,6 +76,9 @@ class EclipseModel(LightcurveModel):
             "omega",
             "limbdark1",
             "limbdark2",
+            "planet_ydeg",
+            "planet_map_coeff",
+            "planet_map_offset",
         ]
 
         super().__init__(**kw)
@@ -109,7 +112,10 @@ class EclipseModel(LightcurveModel):
             eccentricity = 0.0,
             omega = 0.0,
             limbdark1 = 0.4,
-            limbdark2 = 0.2,)
+            limbdark2 = 0.2,
+            planet_ydeg = 0,
+            planet_map_coeff = [0.0],
+            planet_map_offset = 0.0)
 
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
@@ -167,6 +173,9 @@ class EclipseModel(LightcurveModel):
 					f"{name}omega":[],
 					f"{name}limbdark1":[],
 					f"{name}limbdark2":[],
+                                        f"{name}planet_ydeg":[],
+                                        f"{name}planet_map_coeff":[],
+                                        f"{name}planet_map_offset":[],
 }
 
 
@@ -200,7 +209,7 @@ class EclipseModel(LightcurveModel):
                                                    )
 
                     planet = starry.kepler.Secondary(
-                                                starry.Map(ydeg=0,udeg=0, amp=10 ** param_i[f"{name}planet_log_amplitude"], inc=90.0, obl=0.0),  # the surface map
+                                                starry.Map(ydeg=param_i[f"{name}planet_ydeg"],udeg=0, amp=10 ** param_i[f"{name}planet_log_amplitude"], inc=90.0, obl=0.0),  # the surface map
                                                 inc= param_i[f"{name}inclination"],
                                                 m=   param_i[f"{name}planet_mass"],  # mass in Jupiter masses
                                                 r=   param_i[f"{name}planet_radius"],  # radius in Jupiter radii
@@ -211,6 +220,9 @@ class EclipseModel(LightcurveModel):
                                                 t0=  param_i[f"{name}t0"],  # time of transit in days
                                                 length_unit=u.R_jup,mass_unit=u.M_jup,
                                                 )
+                    print (param_i[f"{name}planet_map_coeff"])
+                    planet.map[1:,:] = param_i[f"{name}planet_map_coeff"]
+                    planet.theta0 = 180.0 + param_i[f"{name}planet_map_offset"]
 
                     system = starry.System(star,planet)
                     flux_model = system.flux(data.time.to_value("day"))
@@ -299,7 +311,7 @@ class EclipseModel(LightcurveModel):
                                                    )
 
         planet = starry.kepler.Secondary(
-                                    starry.Map(ydeg=0,udeg=0, amp=10 ** eclipse_params[f"{name}planet_log_amplitude"], inc=90.0, obl=0.0),  # the surface map
+                                    starry.Map(ydeg=eclipse_params[f"{name}planet_ydeg"],udeg=0, amp=10 ** eclipse_params[f"{name}planet_log_amplitude"], inc=90.0, obl=0.0),  # the surface map
                                     inc=eclipse_params[f"{name}inclination"],
                                     m=eclipse_params[f"{name}planet_mass"],  # mass in Jupiter masses
                                     r=eclipse_params[f"{name}planet_radius"],  # radius in Jupiter radii
@@ -311,6 +323,8 @@ class EclipseModel(LightcurveModel):
                                     length_unit=u.R_jup,mass_unit=u.M_jup,
                                     )
 
+        planet.map[1:,:] = eclipse_params[f"{name}planet_map_coeff"]
+        planet.theta0 = 180.0 + eclipse_params[f"{name}planet_map_offset"]
         system = starry.System(star,planet)
         flux_model = system.flux(data.time).eval()
 
