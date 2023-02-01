@@ -3,6 +3,10 @@ import numpy as np
 
 import exoplanet as xo
 import starry
+import theano
+
+# this line is important to stop the outdated version of theano messing up starry:
+theano.config.gcc__cxxflags += " -fexceptions"
 
 # import theano
 # import pickle5 as pickle # needed for Python v3.7!

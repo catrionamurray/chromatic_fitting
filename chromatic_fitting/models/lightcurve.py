@@ -8,16 +8,22 @@ from pymc3 import (
     Normal,
     Uniform,
     TruncatedNormal,
+    sample,
 )
 from pymc3_ext import eval_in_model, optimize
-from pymc3_ext import sample
+from pymc3_ext import sample as sample_ext
 
 from arviz import summary
 from ..parameters import *
 from ..utils import *
 from chromatic import *
 import collections
-from ..diagnostics import chi_sq, generate_periodogram, check_rainbow
+from ..diagnostics import (
+    chi_sq,
+    generate_periodogram,
+    check_rainbow,
+    check_initial_guess,
+)
 
 
 #  - Q=sqrt(N)*depth/error (Winn 2010/ Carter 2008)
@@ -499,7 +505,7 @@ class LightcurveModel:
                     )
             return posteriors
 
-    def optimize(self, plot=True, plotkw={}, **kw):
+    def optimize(self, plot=False, plotkw={}, **kw):
         """
         Wrapper for PyMC3_ext sample
         """
@@ -509,77 +515,138 @@ class LightcurveModel:
                 start = kw["start"]
                 kw.pop("start")
                 for mod, opt in zip(self._pymc3_model, start):
+                    check_initial_guess(mod)
                     with mod:
                         opts.append(optimize(start=opt, **kw))
             else:
                 for mod in self._pymc3_model:
+                    check_initial_guess(mod)
                     with mod:
                         opts.append(optimize(**kw))
             if plot:
-                self.plot_optimization(opts, **plotkw)
+                self.plot_optimization_2(opts, **plotkw)
             return opts
         else:
+            check_initial_guess(self._pymc3_model)
             with self._pymc3_model:
                 opt = optimize(**kw)
             if plot:
-                self.plot_optimization(opt, **plotkw)
+                self.plot_optimization_2(opt, **plotkw)
             return opt
 
-    def plot_optimization(self, opt, offset=0.03, figsize=(6, 18)):
+    # def plot_optimization(self, opt, offset=0.03, figsize=(6, 18)):
+    #     if self.optimization == "separate":
+    #         opts = opt
+    #         datas = [self.get_data(i) for i in range(self.data.nwave)]
+    #     else:
+    #         opts = [opt]
+    #         datas = [self.get_data()]
+    #
+    #     plt.figure(figsize=figsize)
+    #     for j, (opt_sep, data) in enumerate(zip(opts, datas)):
+    #         for w in range(data.nwave):
+    #             try:
+    #                 if w == 0:
+    #                     plt.plot(
+    #                         data.time,
+    #                         ((w + j) * offset) + opt_sep[f"{self.name}_model_w{w + j}"],
+    #                         "k",
+    #                         label=self.name,
+    #                     )
+    #                 else:
+    #                     plt.plot(
+    #                         data.time,
+    #                         ((w + j) * offset) + opt_sep[f"{self.name}_model_w{w + j}"],
+    #                         "k",
+    #                     )
+    #
+    #                 if isinstance(self, CombinedModel):
+    #                     if w == 0:
+    #                         for mod in self._chromatic_models.values():
+    #                             plt.plot(
+    #                                 data.time,
+    #                                 ((w + j) * offset)
+    #                                 + opt_sep[f"{mod.name}_model_w{w + j}"],
+    #                                 label=mod.name,
+    #                             )
+    #                     else:
+    #                         for mod in self._chromatic_models.values():
+    #                             plt.plot(
+    #                                 data.time,
+    #                                 ((w + j) * offset)
+    #                                 + opt_sep[f"{mod.name}_model_w{w + j}"],
+    #                             )
+    #             except:
+    #                 pass
+    #             plt.plot(data.time, ((w + j) * offset) + data.flux[w, :], "k.")
+    #             plt.errorbar(
+    #                 data.time,
+    #                 ((w + j) * offset) + data.flux[w, :],
+    #                 data.uncertainty[w, :],
+    #                 color="k",
+    #                 linestyle="None",
+    #                 capsize=2,
+    #             )
+    #     plt.legend()
+    #     plt.show()
+
+    def plot_optimization_2(self, map_soln, figsize=(12, 5), **kw):
         if self.optimization == "separate":
-            opts = opt
+            opts = map_soln
             datas = [self.get_data(i) for i in range(self.data.nwave)]
+            models = self._pymc3_model
         else:
-            opts = [opt]
+            opts = [map_soln]
             datas = [self.get_data()]
+            models = [self._pymc3_model]
 
-        plt.figure(figsize=figsize)
-        for j, (opt_sep, data) in enumerate(zip(opts, datas)):
-            for w in range(data.nwave):
-                try:
-                    if w == 0:
-                        plt.plot(
-                            data.time,
-                            ((w + j) * offset) + opt_sep[f"{self.name}_model_w{w + j}"],
-                            "k",
-                            label=self.name,
-                        )
-                    else:
-                        plt.plot(
-                            data.time,
-                            ((w + j) * offset) + opt_sep[f"{self.name}_model_w{w + j}"],
-                            "k",
-                        )
-
-                    if isinstance(self, CombinedModel):
-                        if w == 0:
-                            for mod in self._chromatic_models.values():
-                                plt.plot(
-                                    data.time,
-                                    ((w + j) * offset)
-                                    + opt_sep[f"{mod.name}_model_w{w + j}"],
-                                    label=mod.name,
-                                )
-                        else:
-                            for mod in self._chromatic_models.values():
-                                plt.plot(
-                                    data.time,
-                                    ((w + j) * offset)
-                                    + opt_sep[f"{mod.name}_model_w{w + j}"],
-                                )
-                except:
-                    pass
-                plt.plot(data.time, ((w + j) * offset) + data.flux[w, :], "k.")
-                plt.errorbar(
-                    data.time,
-                    ((w + j) * offset) + data.flux[w, :],
-                    data.uncertainty[w, :],
-                    color="k",
-                    linestyle="None",
-                    capsize=2,
+        # plt.figure(figsize=figsize)
+        for i, (opt_sep, data, model) in enumerate(zip(opts, datas, models)):
+            for j in range(data.nwave):
+                # for i in range(self.data.nwave):
+                plt.figure(figsize=figsize)
+                plt.plot(
+                    self.data.time,
+                    self.data.flux[i + j],
+                    "k.",
+                    alpha=0.3,
+                    ms=3,
+                    label="data",
                 )
-        plt.legend()
-        plt.show()
+                plt.errorbar(
+                    self.data.time,
+                    self.data.flux[i + j],
+                    self.data.uncertainty[i + j],
+                    c="k",
+                    alpha=0.1,
+                    linestyle="None",
+                )
+
+                if hasattr(self, "initial_flux_model_guess"):
+                    plt.plot(
+                        self.data.time,
+                        self.initial_flux_model_guess[i + j],
+                        "C1--",
+                        lw=1,
+                        alpha=0.7,
+                        label="Initial",
+                    )
+                if hasattr(self, "every_light_curve"):
+                    if f"wavelength_{i}" in self.every_light_curve.keys():
+                        plt.plot(
+                            self.data.time,
+                            pmx.eval_in_model(
+                                self.every_light_curve[f"wavelength_{i}"],
+                                opt_sep,
+                                model=model,
+                            )[j],
+                            "C1-",
+                            label="MAP optimization",
+                            lw=2,
+                        )
+                plt.legend(fontsize=10, numpoints=5)
+                plt.xlabel("time [days]", fontsize=24)
+                plt.ylabel("relative flux", fontsize=24)
 
     def sample_individual(self, i, **kw):
         """
@@ -606,11 +673,14 @@ class LightcurveModel:
         self,
         summarize_step_by_step=False,
         summarize_kw={"round_to": 7, "hdi_prob": 0.68, "fmt": "wide"},
+        sampling_method=sample,
+        sampling_kw={"init": "adapt_full"},
         **kw,
     ):
         """
         Wrapper for PyMC3_ext sample
         """
+        print(f"Sampling model using the {sampling_method} method")
         if self.optimization == "separate":
             self.trace = []
             starts = []
@@ -621,6 +691,7 @@ class LightcurveModel:
             for i, mod in enumerate(self._pymc3_model):
                 if self.optimization == "separate":
                     print(f"\nSampling for Wavelength: {i}")
+                check_initial_guess(mod)
                 with mod:
                     if len(starts) > 0:
                         start = starts[i]
@@ -628,7 +699,7 @@ class LightcurveModel:
                         start = mod.test_point
 
                     try:
-                        samp = sample(start=start, **kw)
+                        samp = sampling_method(start=start, **sampling_kw, **kw)
                         if summarize_step_by_step:
                             self.summary.append(summary(samp, **summarize_kw))
                         else:
@@ -651,8 +722,9 @@ class LightcurveModel:
             #             print(f"Sampling failed for one of the models!: {e}")
             #             self.trace.append(None)
         else:
+            check_initial_guess(self._pymc3_model)
             with self._pymc3_model:
-                self.trace = sample(init="adapt_full", **kw)
+                self.trace = sampling_method(**sampling_kw, **kw)
 
         self.summarize(**summarize_kw)
 
@@ -983,7 +1055,7 @@ class LightcurveModel:
             for i in range(data.nwave):
                 ax.plot(
                     data.time.to_value(t_unit),
-                    model["total"][f"w{i}"] - (i * spacing),
+                    np.array(model["total"][f"w{i}"]) - (i * spacing),
                     color="k",
                 )
 

@@ -1,5 +1,6 @@
 import matplotlib.axes
 
+from .. import EclipseModel
 from ..imports import *
 
 # from .lightcurve import *
@@ -421,6 +422,18 @@ class CombinedModel(LightcurveModel):
                     Deterministic(
                         f"{self.name}_model", self.every_light_curve[f"wavelength_{i}"]
                     )
+
+    def sample(
+        self,
+        **kw,
+    ):
+        for m in self._chromatic_models.values():
+            if isinstance(m, EclipseModel):
+                EclipseModel.sample(self, **kw)
+                # "sampling_method" not in kw.keys():
+                # LightcurveModel.sample(self, sampling_method=sample_ext, **kw)
+            else:
+                LightcurveModel.sample(self, **kw)
 
     def get_results(self, **kw):
         """
