@@ -275,6 +275,7 @@ class EclipseModel(LightcurveModel):
             )
             LightcurveModel.sample(self, sampling_method=sample_ext, **kw)
         else:
+            warnings.warn("WARNING: Starry doesn't seem to support pymc3.sample()")
             LightcurveModel.sample(self, **kw)
 
     def add_model_to_rainbow(self):

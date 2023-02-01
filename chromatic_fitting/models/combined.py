@@ -1,6 +1,5 @@
 import matplotlib.axes
 
-from .. import EclipseModel
 from ..imports import *
 
 # from .lightcurve import *
@@ -8,6 +7,7 @@ from typing import Union
 
 from .transit import *
 from .polynomial import *
+from .eclipse import *
 
 """
 Example of setting up a CombinedModel:
