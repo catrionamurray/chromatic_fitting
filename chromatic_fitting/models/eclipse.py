@@ -152,6 +152,8 @@ class EclipseModel(LightcurveModel):
         # if the .every_light_curve attribute (final lc model) is not already present then create it now
         if not hasattr(self, "every_light_curve"):
             self.every_light_curve = {}
+        if not hasattr(self, "initial_guess"):
+            self.initial_guess = {}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -175,8 +177,6 @@ class EclipseModel(LightcurveModel):
             f"{name}limbdark2": [],
         }
 
-        self.initial_flux_model_guess = []
-
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j
@@ -188,6 +188,7 @@ class EclipseModel(LightcurveModel):
                     )
 
                 y_model = []
+                initial_guess = []
 
                 for i, w in enumerate(data.wavelength):
                     param_i = {}
@@ -244,7 +245,7 @@ class EclipseModel(LightcurveModel):
                     flux_model = system.flux(data.time.to_value("day"))
                     y_model.append(flux_model)
 
-                    self.initial_flux_model_guess.append(eval_in_model(flux_model))
+                    initial_guess.append(eval_in_model(flux_model))
 
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
@@ -260,6 +261,12 @@ class EclipseModel(LightcurveModel):
                     self.every_light_curve[f"wavelength_{j}"] += pm.math.stack(
                         y_model, axis=0
                     )
+
+                # add the initial guess to the model:
+                if f"wavelength_{j}" not in self.initial_guess.keys():
+                    self.initial_guess[f"wavelength_{j}"] = np.array(initial_guess)
+                else:
+                    self.initial_guess[f"wavelength_{j}"] += initial_guess
 
                 self.model_chromatic_eclipse_flux = [
                     self.every_light_curve[k] for k in tqdm(self.every_light_curve)

@@ -383,6 +383,7 @@ class CombinedModel(LightcurveModel):
         """
 
         self.every_light_curve = {}
+        self.initial_guess = {}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -400,10 +401,16 @@ class CombinedModel(LightcurveModel):
                 self.every_light_curve = add_dicts(
                     self.every_light_curve, mod.every_light_curve
                 )
+
+                self.initial_guess = add_dicts(self.initial_guess, mod.initial_guess)
             else:
                 self.every_light_curve = combination_options[
                     self.how_to_combine[i - 1]
                 ](self.every_light_curve, mod.every_light_curve)
+
+                self.initial_guess = combination_options[self.how_to_combine[i - 1]](
+                    self.initial_guess, mod.initial_guess
+                )
 
         if self.optimization == "separate":
             models = self._pymc3_model
@@ -427,13 +434,15 @@ class CombinedModel(LightcurveModel):
         self,
         **kw,
     ):
-        for m in self._chromatic_models.values():
-            if isinstance(m, EclipseModel):
-                EclipseModel.sample(self, **kw)
-                # "sampling_method" not in kw.keys():
-                # LightcurveModel.sample(self, sampling_method=sample_ext, **kw)
-            else:
-                LightcurveModel.sample(self, **kw)
+        if "sampling_method" not in kw.keys():
+            sampling_method = sample
+            for m in self._chromatic_models.values():
+                if isinstance(m, EclipseModel):
+                    sampling_method = sample_ext
+        else:
+            sampling_method = kw["sampling_method"]
+
+        LightcurveModel.sample(self, sampling_method=sampling_method, **kw)
 
     def get_results(self, **kw):
         """

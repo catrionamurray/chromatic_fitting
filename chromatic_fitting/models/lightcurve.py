@@ -606,31 +606,34 @@ class LightcurveModel:
                 # for i in range(self.data.nwave):
                 plt.figure(figsize=figsize)
                 plt.plot(
-                    self.data.time,
-                    self.data.flux[i + j],
+                    data.time,
+                    data.flux[i + j],
                     "k.",
                     alpha=0.3,
                     ms=3,
                     label="data",
                 )
                 plt.errorbar(
-                    self.data.time,
-                    self.data.flux[i + j],
-                    self.data.uncertainty[i + j],
+                    data.time,
+                    data.flux[i + j],
+                    data.uncertainty[i + j],
                     c="k",
                     alpha=0.1,
                     linestyle="None",
                 )
 
-                if hasattr(self, "initial_flux_model_guess"):
-                    plt.plot(
-                        self.data.time,
-                        self.initial_flux_model_guess[i + j],
-                        "C1--",
-                        lw=1,
-                        alpha=0.7,
-                        label="Initial",
-                    )
+                if hasattr(self, "initial_guess"):
+                    if f"wavelength_{i}" in self.initial_guess.keys():
+                        plt.plot(
+                            self.data.time,
+                            # pmx.eval_in_model(
+                            self.initial_guess[f"wavelength_{i}"][j],
+                            # )[j],
+                            "C1--",
+                            lw=1,
+                            alpha=0.7,
+                            label="Initial",
+                        )
                 if hasattr(self, "every_light_curve"):
                     if f"wavelength_{i}" in self.every_light_curve.keys():
                         plt.plot(
