@@ -607,7 +607,7 @@ class LightcurveModel:
                 plt.figure(figsize=figsize)
                 plt.plot(
                     data.time,
-                    data.flux[i + j],
+                    data.flux[j],
                     "k.",
                     alpha=0.3,
                     ms=3,
@@ -615,8 +615,8 @@ class LightcurveModel:
                 )
                 plt.errorbar(
                     data.time,
-                    data.flux[i + j],
-                    data.uncertainty[i + j],
+                    data.flux[j],
+                    data.uncertainty[j],
                     c="k",
                     alpha=0.1,
                     linestyle="None",
