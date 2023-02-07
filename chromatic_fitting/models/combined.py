@@ -412,12 +412,7 @@ class CombinedModel(LightcurveModel):
                     self.initial_guess, mod.initial_guess
                 )
 
-        if self.optimization == "separate":
-            models = self._pymc3_model
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            models = [self._pymc3_model]
-            datas = [self.get_data()]
+        datas, models = self.choose_model_based_on_optimization_method()
 
         # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
         # later:

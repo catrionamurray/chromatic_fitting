@@ -797,15 +797,6 @@ class LightcurveModel:
         self.sample(start=opt)
         self.summarize(round_to=7, fmt="wide")
 
-    # def remove_data_outliers(self, **kw):
-    #     """
-    #     Remove outliers from the data.
-    #     [Ideally to be replaced with some chromatic.flag_outliers() function]
-    #     """
-    #     data_outliers_removed = remove_data_outliers(self.data, **kw)
-    #     self.data_outliers_removed = data_outliers_removed
-    #     self.outlier_flag = True
-
     def plot_priors(self, n=3, quantity="data", plot_all=True):
         """
         Plot n prior samples from the parameter distributions defined by the user
@@ -813,12 +804,6 @@ class LightcurveModel:
         Number of priors to plot (default=3)
         """
         # setup the models, data and orbits in a format for looping
-        # if self.optimization == "separate":
-        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
-        #     prior_predictive_traces = self.sample_prior(ndraws=n)
-        # else:
-        #     datas = [self.get_data()]
-        #     prior_predictive_traces = [self.sample_prior(ndraws=n)]
         (
             datas,
             _,
@@ -879,12 +864,6 @@ class LightcurveModel:
         Number of posteriors to plot (default=3)
         """
         # if we have the separate wavelength optimization method chosen then repeat for every wavelength/model
-        # if self.optimization == "separate":
-        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
-        #     posterior_predictive_traces = self.sample_posterior(n)
-        # else:
-        #     datas = [self.get_data()]
-        #     posterior_predictive_traces = [self.sample_posterior(n)]
         (
             datas,
             _,
