@@ -57,12 +57,7 @@ class StepModel(LightcurveModel):
         """
 
         # if the optimization method is "separate" then loop over each wavelength's model/data
-        if self.optimization == "separate":
-            models = self._pymc3_model
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            models = [self._pymc3_model]
-            datas = [self.get_data()]
+        datas, models = self.choose_model_based_on_optimization_method()
         kw = {"shape": datas[0].nwave}
 
         # if the model has a name then add this to each parameter's name (needed to prevent overwriting parameter names

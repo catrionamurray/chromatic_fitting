@@ -382,6 +382,7 @@ class CombinedModel(LightcurveModel):
         """
 
         self.every_light_curve = {}
+        self.initial_guess = {}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -399,17 +400,17 @@ class CombinedModel(LightcurveModel):
                 self.every_light_curve = add_dicts(
                     self.every_light_curve, mod.every_light_curve
                 )
+                self.initial_guess = add_dicts(self.initial_guess, mod.initial_guess)
             else:
                 self.every_light_curve = combination_options[
                     self.how_to_combine[i - 1]
                 ](self.every_light_curve, mod.every_light_curve)
 
-        if self.optimization == "separate":
-            models = self._pymc3_model
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            models = [self._pymc3_model]
-            datas = [self.get_data()]
+                self.initial_guess = combination_options[self.how_to_combine[i - 1]](
+                    self.initial_guess, mod.initial_guess
+                )
+
+        datas, models = self.choose_model_based_on_optimization_method()
 
         # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
         # later:

@@ -103,12 +103,7 @@ class PolynomialModel(LightcurveModel):
         """
 
         # if the optimization method is "separate" then loop over each wavelength's model/data
-        if self.optimization == "separate":
-            models = self._pymc3_model
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            models = [self._pymc3_model]
-            datas = [self.get_data()]
+        datas, models = self.choose_model_based_on_optimization_method()
         kw = {"shape": datas[0].nwave}
 
         # if the model has a name then add this to each parameter's name (needed to prevent overwriting parameter names
@@ -121,6 +116,8 @@ class PolynomialModel(LightcurveModel):
         # if the .every_light_curve attribute (final lc model) is not already present then create it now
         if not hasattr(self, "every_light_curve"):
             self.every_light_curve = {}
+        if not hasattr(self, "initial_guess"):
+            self.initial_guess = {}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -163,7 +160,7 @@ class PolynomialModel(LightcurveModel):
                 # compute the polynomial by looping over the coeffs for each degree:
 
                 to_sub = 0
-                poly = []
+                poly, initial_guess = [], []
                 for i, w in enumerate(data.wavelength):
                     coeff, variable = [], []
 
@@ -184,6 +181,8 @@ class PolynomialModel(LightcurveModel):
                         variable.append(xi**d)
                     poly.append(pm.math.dot(coeff, variable))
 
+                    initial_guess.append(eval_in_model(poly[-1]))
+
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
                 if self.store_models:
@@ -200,6 +199,12 @@ class PolynomialModel(LightcurveModel):
                     self.every_light_curve[f"wavelength_{j}"] += pm.math.stack(
                         poly, axis=0
                     )  # pm.math.sum(poly, axis=0)
+
+                # add the initial guess to the model:
+                if f"wavelength_{j}" not in self.initial_guess.keys():
+                    self.initial_guess[f"wavelength_{j}"] = np.array(initial_guess)
+                else:
+                    self.initial_guess[f"wavelength_{j}"] += initial_guess
 
     def polynomial_model(self, poly_params: dict, i: int = 0) -> np.array:
         """

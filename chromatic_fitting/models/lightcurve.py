@@ -18,7 +18,12 @@ from ..parameters import *
 from ..utils import *
 from chromatic import *
 import collections
-from ..diagnostics import chi_sq, generate_periodogram, check_rainbow
+from ..diagnostics import (
+    chi_sq,
+    generate_periodogram,
+    check_rainbow,
+    check_initial_guess,
+)
 
 
 #  - Q=sqrt(N)*depth/error (Winn 2010/ Carter 2008)
@@ -333,6 +338,33 @@ class LightcurveModel:
             data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
         return data_copy
 
+    def choose_model_based_on_optimization_method(self, *extra_arrs):
+        """
+        Return the necessary format for the data, model and any extra arrays, according to the optimization method used.
+
+        Parameters
+        ----------
+        extra_arrs: Any extra arrays needed to reformat
+
+        Returns
+        ----------
+        datas: reformated data
+        models: reformated models
+        *extra_arrs: reformated arrays
+        """
+        extra_arrs_new = []
+        if self.optimization == "separate":
+            datas = [self.get_data(i) for i in range(self.data.nwave)]
+            models = self._pymc3_model
+            for arrs in extra_arrs:
+                extra_arrs_new.append(arrs)
+        else:
+            datas = [self.get_data()]
+            models = [self._pymc3_model]
+            for arrs in extra_arrs:
+                extra_arrs_new.append([arrs])
+        return datas, models, *extra_arrs_new
+
     def get_data(self, i=None):
         """
         Extract the data to use for the optimization depending on the method chosen
@@ -378,14 +410,7 @@ class LightcurveModel:
             print(".setup_lightcurves() has not been run yet, running now...")
             self.setup_lightcurves(**setup_lightcurves_kw)
 
-        if self.optimization == "separate":
-            models = self._pymc3_model
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-            data = self.data
-        else:
-            models = [self._pymc3_model]
-            data = self.get_data()
-            datas = [data]
+        datas, models = self.choose_model_based_on_optimization_method()
 
         # if the data has outliers, then mask them out
         if mask_outliers:
@@ -500,7 +525,7 @@ class LightcurveModel:
                     )
             return posteriors
 
-    def optimize(self, plot=True, plotkw={}, **kw):
+    def optimize(self, plot=False, plotkw={}, **kw):
         """
         Wrapper for PyMC3_ext sample
         """
@@ -510,77 +535,80 @@ class LightcurveModel:
                 start = kw["start"]
                 kw.pop("start")
                 for mod, opt in zip(self._pymc3_model, start):
+                    check_initial_guess(mod)
                     with mod:
                         opts.append(optimize(start=opt, **kw))
             else:
                 for mod in self._pymc3_model:
+                    check_initial_guess(mod)
                     with mod:
                         opts.append(optimize(**kw))
             if plot:
                 self.plot_optimization(opts, **plotkw)
             return opts
         else:
+            check_initial_guess(self._pymc3_model)
             with self._pymc3_model:
                 opt = optimize(**kw)
             if plot:
                 self.plot_optimization(opt, **plotkw)
             return opt
 
-    def plot_optimization(self, opt, offset=0.03, figsize=(6, 18)):
-        if self.optimization == "separate":
-            opts = opt
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            opts = [opt]
-            datas = [self.get_data()]
+    def plot_optimization(self, map_soln, figsize=(12, 5), **kw):
+        datas, models, opts = self.choose_model_based_on_optimization_method(map_soln)
 
-        plt.figure(figsize=figsize)
-        for j, (opt_sep, data) in enumerate(zip(opts, datas)):
-            for w in range(data.nwave):
-                try:
-                    if w == 0:
-                        plt.plot(
-                            data.time,
-                            ((w + j) * offset) + opt_sep[f"{self.name}_model_w{w + j}"],
-                            "k",
-                            label=self.name,
-                        )
-                    else:
-                        plt.plot(
-                            data.time,
-                            ((w + j) * offset) + opt_sep[f"{self.name}_model_w{w + j}"],
-                            "k",
-                        )
-
-                    if isinstance(self, CombinedModel):
-                        if w == 0:
-                            for mod in self._chromatic_models.values():
-                                plt.plot(
-                                    data.time,
-                                    ((w + j) * offset)
-                                    + opt_sep[f"{mod.name}_model_w{w + j}"],
-                                    label=mod.name,
-                                )
-                        else:
-                            for mod in self._chromatic_models.values():
-                                plt.plot(
-                                    data.time,
-                                    ((w + j) * offset)
-                                    + opt_sep[f"{mod.name}_model_w{w + j}"],
-                                )
-                except:
-                    pass
-                plt.plot(data.time, ((w + j) * offset) + data.flux[w, :], "k.")
+        for i, (opt_sep, data, model) in enumerate(zip(opts, datas, models)):
+            for j in range(data.nwave):
+                # create a new plot for each wavelength
+                plt.figure(figsize=figsize)
+                # plot the data and errors
+                plt.plot(
+                    data.time,
+                    data.flux[j],
+                    "k.",
+                    alpha=0.3,
+                    ms=3,
+                    label="data",
+                )
                 plt.errorbar(
                     data.time,
-                    ((w + j) * offset) + data.flux[w, :],
-                    data.uncertainty[w, :],
-                    color="k",
+                    data.flux[j],
+                    data.uncertainty[j],
+                    c="k",
+                    alpha=0.1,
                     linestyle="None",
-                    capsize=2,
                 )
-        plt.legend()
-        plt.show()
+
+                if hasattr(self, "initial_guess"):
+                    # plot the initial guess from priors
+                    if f"wavelength_{i}" in self.initial_guess.keys():
+                        plt.plot(
+                            self.data.time,
+                            # pmx.eval_in_model(
+                            self.initial_guess[f"wavelength_{i}"][j],
+                            # )[j],
+                            "C1--",
+                            lw=1,
+                            alpha=0.7,
+                            label="Initial",
+                        )
+                if hasattr(self, "every_light_curve"):
+                    # plot the final MAP-optimized solution (not sampled)
+                    if f"wavelength_{i}" in self.every_light_curve.keys():
+                        plt.plot(
+                            self.data.time,
+                            pmx.eval_in_model(
+                                self.every_light_curve[f"wavelength_{i}"],
+                                opt_sep,
+                                model=model,
+                            )[j],
+                            "C1-",
+                            label="MAP optimization",
+                            lw=2,
+                        )
+                plt.legend(fontsize=10, numpoints=5)
+                plt.xlabel("time [days]", fontsize=24)
+                plt.ylabel("relative flux", fontsize=24)
 
     def sample_individual(self, i, **kw):
         """
@@ -607,11 +635,14 @@ class LightcurveModel:
         self,
         summarize_step_by_step=False,
         summarize_kw={"round_to": 7, "hdi_prob": 0.68, "fmt": "wide"},
+        sampling_method=sample,
+        sampling_kw={"init": "adapt_full"},
         **kw,
     ):
         """
         Wrapper for PyMC3_ext sample
         """
+        print(f"Sampling model using the {sampling_method} method")
         if self.optimization == "separate":
             self.trace = []
             starts = []
@@ -622,6 +653,7 @@ class LightcurveModel:
             for i, mod in enumerate(self._pymc3_model):
                 if self.optimization == "separate":
                     print(f"\nSampling for Wavelength: {i}")
+                check_initial_guess(mod)
                 with mod:
                     if len(starts) > 0:
                         start = starts[i]
@@ -629,7 +661,7 @@ class LightcurveModel:
                         start = mod.test_point
 
                     try:
-                        samp = sample(start=start, init="adapt_full", **kw)
+                        samp = sampling_method(start=start, **sampling_kw, **kw)
                         if summarize_step_by_step:
                             self.summary.append(summary(samp, **summarize_kw))
                         else:
@@ -644,16 +676,10 @@ class LightcurveModel:
                     for m in self._chromatic_models.values():
                         m.summary = self.summary
 
-            # for mod in self._pymc3_model:
-            #     with mod:
-            #         try:
-            #             self.trace.append(sample(**kw))
-            #         except Exception as e:
-            #             print(f"Sampling failed for one of the models!: {e}")
-            #             self.trace.append(None)
         else:
+            check_initial_guess(self._pymc3_model)
             with self._pymc3_model:
-                self.trace = sample(init="adapt_full", **kw)
+                self.trace = sampling_method(**sampling_kw, **kw)
 
         self.summarize(**summarize_kw)
 
@@ -756,15 +782,6 @@ class LightcurveModel:
         self.sample(start=opt)
         self.summarize(round_to=7, fmt="wide")
 
-    # def remove_data_outliers(self, **kw):
-    #     """
-    #     Remove outliers from the data.
-    #     [Ideally to be replaced with some chromatic.flag_outliers() function]
-    #     """
-    #     data_outliers_removed = remove_data_outliers(self.data, **kw)
-    #     self.data_outliers_removed = data_outliers_removed
-    #     self.outlier_flag = True
-
     def plot_priors(self, n=3, quantity="data", plot_all=True):
         """
         Plot n prior samples from the parameter distributions defined by the user
@@ -772,12 +789,11 @@ class LightcurveModel:
         Number of priors to plot (default=3)
         """
         # setup the models, data and orbits in a format for looping
-        if self.optimization == "separate":
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-            prior_predictive_traces = self.sample_prior(ndraws=n)
-        else:
-            datas = [self.get_data()]
-            prior_predictive_traces = [self.sample_prior(ndraws=n)]
+        (
+            datas,
+            _,
+            prior_predictive_traces,
+        ) = self.choose_model_based_on_optimization_method(self.sample_prior(ndraws=n))
 
         for nm, (data, prior_predictive_trace) in enumerate(
             zip(datas, prior_predictive_traces)
@@ -833,30 +849,16 @@ class LightcurveModel:
         Number of posteriors to plot (default=3)
         """
         # if we have the separate wavelength optimization method chosen then repeat for every wavelength/model
-        if self.optimization == "separate":
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-            posterior_predictive_traces = self.sample_posterior(n)
-        else:
-            datas = [self.get_data()]
-            posterior_predictive_traces = [self.sample_posterior(n)]
+        (
+            datas,
+            _,
+            posterior_predictive_traces,
+        ) = self.choose_model_based_on_optimization_method(self.sample_posterior(n))
 
         posterior_model = {}
         for nm, (data, posterior_predictive_trace) in enumerate(
             zip(datas, posterior_predictive_traces)
         ):
-
-            # for w in range(data.nwave):
-            # if "data" in posterior_predictive_trace.keys():
-            #     # generate a posterior model for every wavelength:
-            #     if (
-            #         f"{self.name}_model"  # _w{w + nm}"
-            #         in posterior_predictive_trace.keys()
-            #     ):
-            #         posterior_model[f"{self.name}_model"] = posterior_predictive_trace[
-            #             f"{self.name}_model"
-            #         ]
-
-            # for w in range(data.nwave):
             for i in range(n):
                 # for every posterior sample extract the posterior model and distribution draw:
                 try:
@@ -905,10 +907,7 @@ class LightcurveModel:
         """
         Extract the deterministic model from the summary statistics
         """
-        if self.optimization == "separate":
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            datas = [self.get_data()]
+        datas, _ = self.choose_model_based_on_optimization_method()
 
         model = {}
         for nm, data in enumerate(datas):
@@ -984,7 +983,7 @@ class LightcurveModel:
             for i in range(data.nwave):
                 ax.plot(
                     data.time.to_value(t_unit),
-                    model["total"][f"w{i}"] - (i * spacing),
+                    np.array(model["total"][f"w{i}"]) - (i * spacing),
                     color="k",
                 )
 
