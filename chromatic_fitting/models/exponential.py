@@ -127,13 +127,12 @@ class ExponentialModel(LightcurveModel):
                     else:
                         xi = x
 
-                    for i, w in enumerate(data.wavelength):
-                        param_i = {}
-                        for pname, param in parameters_to_loop_over.items():
-                            if isinstance(self.parameters[pname], WavelikeFitted):
-                                param_i[pname] = param[j][i]
-                            else:
-                                param_i[pname] = param[j]
+                    param_i = {}
+                    for pname, param in parameters_to_loop_over.items():
+                        if isinstance(self.parameters[pname], WavelikeFitted):
+                            param_i[pname] = param[j][i]
+                        else:
+                            param_i[pname] = param[j]
 
                     exp.append(
                         param_i[f"{name}A"]

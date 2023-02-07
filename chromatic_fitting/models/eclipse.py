@@ -140,12 +140,13 @@ class EclipseModel(LightcurveModel):
             print("No name set for the model.")
 
         # set up the models, data and orbits in a format for looping
-        if self.optimization == "separate":
-            models = self._pymc3_model
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            models = [self._pymc3_model]
-            datas = [self.get_data()]
+        # if self.optimization == "separate":
+        #     models = self._pymc3_model
+        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
+        # else:
+        #     models = [self._pymc3_model]
+        #     datas = [self.get_data()]
+        datas, models = self.choose_model_based_on_optimization_method()
 
         kw = {"shape": datas[0].nwave}
 
@@ -335,7 +336,7 @@ class EclipseModel(LightcurveModel):
             name = ""
 
         if time is None:
-            time = list(self.data.time.to_value("day"))
+            time = list(data.time.to_value("day"))
 
         self.check_and_fill_missing_parameters(eclipse_params, i)
 
@@ -374,7 +375,7 @@ class EclipseModel(LightcurveModel):
         )
 
         system = starry.System(star, planet)
-        flux_model = system.flux(data.time).eval()
+        flux_model = system.flux(time).eval()
 
         return flux_model
 
