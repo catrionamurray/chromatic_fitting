@@ -2,6 +2,7 @@
 chromatic
 chromatic_fitting/pymc
 JWST_data
+notebooks
 *.pyc
 .ipynb_checkpoints
 .idea
