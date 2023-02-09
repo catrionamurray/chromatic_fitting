@@ -1594,10 +1594,163 @@ class LightcurveModel:
 
 
 class LightcurveModels:
-    def __init__(self, wavelengths, **models):
-        assert len(wavelengths) == len(models)
-        self.models = models
+    def __init__(self, wavelengths, model):
         self.wavelengths = wavelengths
+        self.nwave = len(wavelengths)
+        self.models = {}
+        self.optimization = "simultaneous"
+        self.name = model.name
+        self.outlier_flag = False
+        for w in range(self.nwave):
+            self.models[f"w{w}"] = model.copy()
+            self.models[f"w{w}"]._pymc3_model = pm.Model()
+            self.models[f"w{w}"].name = model.name  # + f"_w{w}"
+
+    def __repr__(self):
+        """
+        Print the model
+        """
+        return f'<chromatic models ({self.nwave} separate wavelengths) "{self.name}" 🌈>'
+
+    def apply_operation_to_constituent_models(
+        self, operation: str, *args: object, **kwargs: object
+    ) -> object:
+        """
+        Apply an operation to all models within LightcurveModels
+
+        Parameters
+        ----------
+        operation: string name of the operation to carry out
+        args: arguments to pass to the operation
+        kwargs: keywords to pass to the operation
+
+        Returns
+        -------
+        object
+        """
+        results = []
+        # for each constituent model apply the chosen operation
+        for name, model in self.models.items():
+            #             try:
+            print(name)
+            op = getattr(model, operation)
+            result = op(*args, **kwargs)
+            if result is not None:
+                results.append(result)
+        #             except Exception as e:
+        #                 print(f"Error applying {operation} to {model}: {e}")
+
+        # if there are returned value(s) from the operation then return these, otherwise return None
+        if len(results) == 0:
+            return None
+        else:
+            return results
+
+    def separate_wavelengths(self, i):
+        data_copy = self.data._create_copy()
+        for k, v in data_copy.fluxlike.items():
+            data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
+        for k, v in data_copy.wavelike.items():
+            data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
+        return data_copy
+
+    def attach_data(self, r: chromatic.Rainbow):
+        """
+        Connect a `chromatic` Rainbow dataset to this object and the constituent models.
+
+        Parameters
+        ----------
+        r: Rainbow object with the light curve data
+
+        """
+        self.data = r._create_copy()
+
+        for i in range(self.nwave):
+            data_copy = self.separate_wavelengths(i)
+            self.models[f"w{i}"].data = data_copy
+
+    def setup_lightcurves(self, store_models=False, **kw):
+        """
+        Set-up lightcurves
+        """
+        self.store_models = store_models
+        self.apply_operation_to_constituent_models(
+            "setup_lightcurves", store_models=store_models, **kw
+        )
+
+    def optimize(self, **kw):
+        """
+        Optimize parameters for best-fit
+        """
+        opt = self.apply_operation_to_constituent_models("optimize", **kw)
+        return opt
+
+    def get_data(self, **kw):
+        return LightcurveModel.get_data(self, **kw)
+
+    def plot_lightcurves(self, **kw):
+        return LightcurveModel.plot_lightcurves(self, **kw)
+
+    def plot_model(self, **kw):
+        return LightcurveModel.plot_model(lcm, **kw)
+
+    def get_model(self, **kw):
+        if hasattr(self, "_fit_models") and "as_array" not in kw.keys():
+            return self._fit_models
+        else:
+            models_list = self.apply_operation_to_constituent_models("get_model", **kw)
+            if "as_array" in kw.keys():
+                if kw["as_array"] == True:
+                    models_array = np.array([m[0] for m in models_list])
+                    self._fit_models = models_array
+                    return models_array
+            models_dict = {}
+            for i, (name, model) in enumerate(self.models.items()):
+                models_dict[name] = model._fit_models["w0"]
+                model._fit_models = {name: model._fit_models["w0"]}
+            self._fit_models = models_dict
+            return models_dict
+
+    def sample(self, **kw):
+        """
+        Sample parameters using NUTS MCMC
+        """
+        self.apply_operation_to_constituent_models("sample", **kw)
+        self.recombine_summaries()
+
+    def setup_likelihood(self, **kw):
+        """
+        Setup Likelihood
+        """
+        self.apply_operation_to_constituent_models("setup_likelihood", **kw)
+
+    def add_model_to_rainbow(self):
+        self.apply_operation_to_constituent_models("add_model_to_rainbow")
+
+    def recombine_summaries(self, **kw):
+        """ """
+        for i, (name, model) in enumerate(self.models.items()):
+            if name == "w0":
+                summaries = model.summary.copy()
+            else:
+                summary = model.summary.copy()
+                summary.index = [s.replace("0", f"{i}") for s in summary.index.values]
+                summaries = pd.concat([summaries, summary])
+        self.summary = summaries
+
+    def get_results(self, **kw):
+        """
+        Get results from summaries
+        """
+        for name, model in self.models.items():
+            if name == "w0":
+                a = model.get_results()
+            else:
+                b = model.get_results()
+                b.index = [name]
+                a = pd.concat([a, b])
+
+        return a
 
 
 from .combined import *
