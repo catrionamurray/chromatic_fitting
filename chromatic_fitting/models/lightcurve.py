@@ -1649,9 +1649,17 @@ class LightcurveModels:
     def separate_wavelengths(self, i):
         data_copy = self.data._create_copy()
         for k, v in data_copy.fluxlike.items():
-            data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
+            try:
+                assert v.unit
+                data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]]) * v.unit
+            except AttributeError:
+                data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
         for k, v in data_copy.wavelike.items():
-            data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
+            try:
+                assert v.unit
+                data_copy.wavelike[k] = [data_copy.wavelike[k][i]] * v.unit
+            except AttributeError:
+                data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
         return data_copy
 
     def attach_data(self, r: chromatic.Rainbow):
