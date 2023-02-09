@@ -249,34 +249,36 @@ class CombinedModel(LightcurveModel):
             # check that the models passed to this function are LightcurveModels
             if isinstance(model, LightcurveModel):
                 # make a "copy" of each model:
-                class_inputs = model.extract_extra_class_inputs()
-                new_model = model.__class__(**class_inputs)
-                # link the pymc3 model for this constituent model to the overall ChromaticModel (avoids weird
-                # inheritance issues):
+                new_model = model.copy()
                 new_model._pymc3_model = self._pymc3_model
-                model_params = {}
-
-                # for every parameter in the separate models redefine them in the separate models within CombinedModel
-                # and the new CombinedModel
-                for k, v in model.parameters.items():
-                    if isinstance(v, WavelikeFixed):
-                        # parameter is WavelikeFixed
-                        model_params[k] = v.__class__(v.values)
-                    elif isinstance(v, Fixed):
-                        # parameter is Fixed
-                        model_params[k] = v.__class__(v.value)
-                    else:
-                        # parameter is Fitted or WavelikeFitted
-                        model_params[k] = v.__class__(v.distribution, **v.inputs)
-
-                # set up parameters in new models
-                new_model.defaults = add_string_before_each_dictionary_key(
-                    new_model.defaults, new_model.name
-                )
-                new_model.required_parameters = [
-                    f"{new_model.name}_{a}" for a in new_model.required_parameters
-                ]
-                new_model.setup_parameters(**model_params)
+                # class_inputs = model.extract_extra_class_inputs()
+                # new_model = model.__class__(**class_inputs)
+                # # link the pymc3 model for this constituent model to the overall ChromaticModel (avoids weird
+                # # inheritance issues):
+                # new_model._pymc3_model = self._pymc3_model
+                # model_params = {}
+                #
+                # # for every parameter in the separate models redefine them in the separate models within CombinedModel
+                # # and the new CombinedModel
+                # for k, v in model.parameters.items():
+                #     if isinstance(v, WavelikeFixed):
+                #         # parameter is WavelikeFixed
+                #         model_params[k] = v.__class__(v.values)
+                #     elif isinstance(v, Fixed):
+                #         # parameter is Fixed
+                #         model_params[k] = v.__class__(v.value)
+                #     else:
+                #         # parameter is Fitted or WavelikeFitted
+                #         model_params[k] = v.__class__(v.distribution, **v.inputs)
+                #
+                # # set up parameters in new models
+                # new_model.defaults = add_string_before_each_dictionary_key(
+                #     new_model.defaults, new_model.name
+                # )
+                # new_model.required_parameters = [
+                #     f"{new_model.name}_{a}" for a in new_model.required_parameters
+                # ]
+                # new_model.setup_parameters(**model_params)
                 new_models[name] = new_model
             else:
                 print(
@@ -349,7 +351,7 @@ class CombinedModel(LightcurveModel):
         optimization_method: the method of optimization, options are 'simultaneous', 'separate' or 'white_light'
         (default='simultaneous')
         """
-        LightcurveModel.choose_optimization_method(self, optimization_method)
+        super().choose_optimization_method(self, optimization_method)
         for m in self._chromatic_models.values():
             m.optimization = optimization_method
 

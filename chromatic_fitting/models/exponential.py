@@ -68,8 +68,10 @@ class ExponentialModel(LightcurveModel):
         """
 
         # if the optimization method is "separate" then loop over each wavelength's model/data
-        datas, models = self.choose_model_based_on_optimization_method()
-        kw = {"shape": datas[0].nwave}
+        # datas, models = self.choose_model_based_on_optimization_method()
+        data = self.get_data()
+        mod = self._pymc3_model
+        kw = {"shape": data.nwave}
 
         # if the model has a name then add this to each parameter's name (needed to prevent overwriting parameter names
         # if you combine >1 polynomial model)
@@ -79,10 +81,10 @@ class ExponentialModel(LightcurveModel):
             name = ""
 
         # if the .every_light_curve attribute (final lc model) is not already present then create it now
-        if not hasattr(self, "every_light_curve"):
-            self.every_light_curve = {}
-        if not hasattr(self, "initial_guess"):
-            self.initial_guess = {}
+        # if not hasattr(self, "every_light_curve"):
+        #     self.every_light_curve = {}
+        # if not hasattr(self, "initial_guess"):
+        #     self.initial_guess = {}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -94,71 +96,75 @@ class ExponentialModel(LightcurveModel):
             f"{name}decay_time": [],
             f"{name}baseline": [],
         }
-        for j, (mod, data) in enumerate(zip(models, datas)):
-            if self.optimization == "separate":
-                kw["i"] = j
+        # for j, (mod, data) in enumerate(zip(models, datas)):
+        #     if self.optimization == "separate":
+        #         kw["i"] = j
+        # j = 0
 
-            with mod:
-                for pname in parameters_to_loop_over.keys():
-                    parameters_to_loop_over[pname].append(
-                        self.parameters[pname].get_prior_vector(**kw)
-                    )
+        with mod:
+            for pname in parameters_to_loop_over.keys():
+                parameters_to_loop_over[pname] = self.parameters[
+                    pname
+                ].get_prior_vector(**kw)
 
-                # get the independent variable from the Rainbow object:
-                x = data.get(self.independant_variable)
-                # if the independant variable is time, convert to days:
-                if self.independant_variable == "time":
-                    x = x.to_value("day")
+            # get the independent variable from the Rainbow object:
+            x = data.get(self.independant_variable)
+            # if the independant variable is time, convert to days:
+            if self.independant_variable == "time":
+                x = x.to_value("day")
+            else:
+                try:
+                    x = x.to_value()
+                except AttributeError:
+                    pass
+
+            exp, initial_guess = [], []
+            for i, w in enumerate(data.wavelength):
+                if len(np.shape(x)) > 1:
+                    xi = x[i, :]
                 else:
-                    try:
-                        x = x.to_value()
-                    except AttributeError:
-                        pass
+                    xi = x
 
-                exp, initial_guess = [], []
-                for i, w in enumerate(data.wavelength):
-                    if len(np.shape(x)) > 1:
-                        xi = x[i, :]
+                param_i = {}
+                for pname, param in parameters_to_loop_over.items():
+                    if isinstance(self.parameters[pname], WavelikeFitted):
+                        param_i[pname] = param[i]
                     else:
-                        xi = x
+                        param_i[pname] = param
 
-                    param_i = {}
-                    for pname, param in parameters_to_loop_over.items():
-                        if isinstance(self.parameters[pname], WavelikeFitted):
-                            param_i[pname] = param[j][i]
-                        else:
-                            param_i[pname] = param[j]
+                exp.append(
+                    param_i[f"{name}A"]
+                    * np.exp(-(xi - self.t0) / param_i[f"{name}decay_time"])
+                    + param_i[f"{name}baseline"]
+                )
 
-                    exp.append(
-                        param_i[f"{name}A"]
-                        * np.exp(-(xi - self.t0) / param_i[f"{name}decay_time"])
-                        + param_i[f"{name}baseline"]
-                    )
+                initial_guess.append(eval_in_model(exp[-1]))
 
-                    initial_guess.append(eval_in_model(exp[-1]))
+            # if data.nwave == 1:
+            #     exp = exp[0]
+            #     initial_guess = initial_guess[0]
 
-                # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
-                # later:
-                if self.store_models:
-                    Deterministic(
-                        f"{name}model", pm.math.stack(exp, axis=0)
-                    )  # pm.math.sum(poly, axis=0))
+            # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
+            # later:
+            if self.store_models:
+                Deterministic(f"{name}model", exp)
 
-                # add the exponential model to the overall lightcurve:
-                if f"wavelength_{j}" not in self.every_light_curve.keys():
-                    self.every_light_curve[f"wavelength_{j}"] = pm.math.stack(
-                        exp, axis=0
-                    )
-                else:
-                    self.every_light_curve[f"wavelength_{j}"] += pm.math.stack(
-                        exp, axis=0
-                    )
+            # add the exponential model to the overall lightcurve:
+            # if f"wavelength_model" not in self.every_light_curve.keys():
+            if not hasattr(self, "every_light_curve"):
+                self.every_light_curve = pm.math.stack(exp)
+            else:
+                print("ERROR: WHEN WOULD THIS HAPPEN?")
+            #     self.every_light_curve[f"wavelength_{j}"] += exp
 
-                # add the initial guess to the model:
-                if f"wavelength_{j}" not in self.initial_guess.keys():
-                    self.initial_guess[f"wavelength_{j}"] = np.array(initial_guess)
-                else:
-                    self.initial_guess[f"wavelength_{j}"] += initial_guess
+            # add the initial guess to the model:
+            # if f"wavelength_model" not in self.initial_guess.keys():
+            if not hasattr(self, "initial_guess"):
+                self.initial_guess = np.array(initial_guess)
+            else:
+                print("ERROR: WHEN WOULD THIS HAPPEN?")
+            # else:
+            #     self.initial_guess[f"wavelength_{j}"] += initial_guess
 
     def exponential_model(self, exponential_params: dict, i: int = 0) -> np.array:
         """
@@ -173,13 +179,13 @@ class ExponentialModel(LightcurveModel):
         -------
         np.array: exponential model with the given parameters
         """
-        exponential = []
+        # exponential = []
 
         # if the optimization method is "separate" then extract wavelength {i}'s data
-        if self.optimization == "separate":
-            data = self.get_data(i)
-        else:
-            data = self.get_data()
+        # if self.optimization == "separate":
+        #     data = self.get_data(i)
+        # else:
+        data = self.get_data()
 
         x = data.get(self.independant_variable)
         # if the independant variable is time, convert to days:
