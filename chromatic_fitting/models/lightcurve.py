@@ -321,6 +321,8 @@ class LightcurveModel:
             if self.optimization == "separate":
                 try:
                     og_model = self.copy()
+                    if hasattr(self, "data"):
+                        og_model.data = self.data
                     self.__class__ = LightcurveModels
                     self.__init__(model=og_model)
                 except Exception as e:
@@ -477,7 +479,7 @@ class LightcurveModel:
     #                 print(f"Setting up likelihood failed for wavelength {i}: {e}")
     #                 self.bad_wavelengths.append(i)
 
-    def sample_prior(self, ndraws=3):
+    def sample_priors(self, ndraws=3):
         """
         Draw samples from the prior distribution.
         :parameter n
@@ -493,7 +495,7 @@ class LightcurveModel:
         #             priors.append(sample_prior_predictive(ndraws))
         #     return priors
 
-    def sample_posterior(self, ndraws=3, var_names=None):
+    def sample_posteriors(self, ndraws=3, var_names=None):
         """
         Draw samples from the posterior distribution.
         :parameter n
@@ -1491,7 +1493,6 @@ class LightcurveModel:
 class LightcurveModels(LightcurveModel):
     def __init__(self, model):
         self.models = {}
-        # self.optimization = "simultaneous"
         self.optimization = "separate"
         self.name = model.name
         self._og_model = model
@@ -1602,11 +1603,33 @@ class LightcurveModels(LightcurveModel):
         opt = self.apply_operation_to_constituent_models("optimize", **kw)
         return opt
 
-    def sample_prior(self, **kw):
+    def sample_priors(self, **kw):
         """
         Sample the prior distributions
         """
-        self.apply_operation_to_constituent_models("sample_prior", **kw)
+        priors = self.apply_operation_to_constituent_models("sample_priors", **kw)
+        return priors
+
+    def sample_posteriors(self, **kw):
+        """
+        Sample the posterior distributions
+        """
+        posteriors = self.apply_operation_to_constituent_models(
+            "sample_posteriors", **kw
+        )
+        return posteriors
+
+    def plot_priors(self, **kw):
+        """
+        Sample and plot the prior distributions
+        """
+        self.apply_operation_to_constituent_models("plot_priors", **kw)
+
+    def plot_posteriors(self, **kw):
+        """
+        Sample and plot the posteriors distributions
+        """
+        self.apply_operation_to_constituent_models("plot_posteriors", **kw)
 
     def get_model(self, **kw):
         if hasattr(self, "_fit_models") and "as_array" not in kw.keys():
