@@ -314,10 +314,12 @@ class LightcurveModel:
             self.optimization = optimization_method
             if self.optimization == "separate":
                 try:
-                    self.create_multiple_models()
-                    self.change_all_priors_to_Wavelike()
-                except:
-                    pass
+                    self = LightcurveModels(self)
+                # try:
+                #     self.create_multiple_models()
+                #     self.change_all_priors_to_Wavelike()
+                # except:
+                #     pass
         else:
             print(
                 "Unrecognised optimization method, please select one of: "
@@ -1192,14 +1194,6 @@ class LightcurveModel:
         object: model for each wavelength (either a dict or array)
         """
 
-        # if the optimization method is "separate" then loop over each wavelength's data
-        # if self.optimization == "separate":
-        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
-        # else:
-        #     # data = [self.get_data()]
-        #     data = self.get_data()
-        # datas = [data[i, :] for i in range(data.nwave)]
-
         if self.store_models:
             # if we decided to store the LC model extract this now
             if store:
@@ -1211,7 +1205,6 @@ class LightcurveModel:
             # if we decided not to store the LC model then generate the model
             model = {}
             # generate the transit model from the best fit parameters for each wavelength
-            # for j, data in enumerate(datas):
             if self.optimization == "white_light":
                 data = self.get_data()
             else:
@@ -1396,7 +1389,7 @@ class LightcurveModel:
 
     def chi_squared(self, individual_wavelengths=False, **kw):
         if hasattr(self, "data_with_model"):
-            if self.optimization == "simultaneous":
+            if self.optimization != "white_light":
                 if self.store_models:
                     summary = self.summary.iloc[
                         ~self.summary.index.str.contains(f"{self.name}_model")
@@ -1462,26 +1455,7 @@ class LightcurveModel:
                             degrees_of_freedom=degrees_of_freedom,
                             **kw,
                         )
-
-            elif self.optimization == "separate":
-                for i in range(self.data.nwave):
-                    if self.store_models:
-                        summary = self.summary[i].iloc[
-                            ~self.summary.index.str.contains(f"{self.name}_model")
-                        ]
-                    else:
-                        summary = self.summary[i]
-                    fit_params = len(summary)
-                    degrees_of_freedom = self.data.ntime - fit_params
-                    print(f"\nFor Wavelength {i}:")
-                    chi_sq(
-                        data=self.data_with_model.flux[i],
-                        model=self.data_with_model.model[i],
-                        uncertainties=self.data_with_model.uncertainty[i],
-                        degrees_of_freedom=degrees_of_freedom,
-                        **kw,
-                    )
-            elif self.optimization == "white_light":
+            else:
                 if self.store_models:
                     summary = self.summary.iloc[
                         ~self.summary.index.str.contains(f"{self.name}_model")
@@ -1594,17 +1568,22 @@ class LightcurveModel:
 
 
 class LightcurveModels:
+
     def __init__(self, wavelengths, model):
-        self.wavelengths = wavelengths
-        self.nwave = len(wavelengths)
         self.models = {}
         self.optimization = "simultaneous"
         self.name = model.name
         self.outlier_flag = False
+        self.parameters = model.parameters
+        self.setup_separate_structure()
+
+    def setup_separate_structure(self):
+        self.wavelengths = wavelengths
+        self.nwave = len(wavelengths)
         for w in range(self.nwave):
-            self.models[f"w{w}"] = model.copy()
-            self.models[f"w{w}"]._pymc3_model = pm.Model()
-            self.models[f"w{w}"].name = model.name  # + f"_w{w}"
+            self.models[f'w{w}'] = model.copy()
+            self.models[f'w{w}']._pymc3_model = pm.Model()
+            self.models[f'w{w}'].name = model.name
 
     def __repr__(self):
         """
@@ -1613,7 +1592,7 @@ class LightcurveModels:
         return f'<chromatic models ({self.nwave} separate wavelengths) "{self.name}" 🌈>'
 
     def apply_operation_to_constituent_models(
-        self, operation: str, *args: object, **kwargs: object
+            self, operation: str, *args: object, **kwargs: object
     ) -> object:
         """
         Apply an operation to all models within LightcurveModels
@@ -1631,14 +1610,13 @@ class LightcurveModels:
         results = []
         # for each constituent model apply the chosen operation
         for name, model in self.models.items():
-            #             try:
-            print(name)
-            op = getattr(model, operation)
-            result = op(*args, **kwargs)
-            if result is not None:
-                results.append(result)
-        #             except Exception as e:
-        #                 print(f"Error applying {operation} to {model}: {e}")
+            try:
+                op = getattr(model, operation)
+                result = op(*args, **kwargs)
+                if result is not None:
+                    results.append(result)
+            except Exception as e:
+                print(f"Error applying {operation} to {model}: {e}")
 
         # if there are returned value(s) from the operation then return these, otherwise return None
         if len(results) == 0:
@@ -1651,7 +1629,7 @@ class LightcurveModels:
         for k, v in data_copy.fluxlike.items():
             try:
                 assert v.unit
-                data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]]) * v.unit
+                data_copy.fluxlike[k] = [data_copy.fluxlike[k][i, :]] * v.unit
             except AttributeError:
                 data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
         for k, v in data_copy.wavelike.items():
@@ -1659,7 +1637,7 @@ class LightcurveModels:
                 assert v.unit
                 data_copy.wavelike[k] = [data_copy.wavelike[k][i]] * v.unit
             except AttributeError:
-                data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
+                data_copy.wavelike[k] = np.array([data_copy.wavelike[k][i]])
         return data_copy
 
     def attach_data(self, r: chromatic.Rainbow):
@@ -1675,16 +1653,14 @@ class LightcurveModels:
 
         for i in range(self.nwave):
             data_copy = self.separate_wavelengths(i)
-            self.models[f"w{i}"].data = data_copy
+            self.models[f'w{i}'].data = data_copy
 
     def setup_lightcurves(self, store_models=False, **kw):
         """
         Set-up lightcurves
         """
         self.store_models = store_models
-        self.apply_operation_to_constituent_models(
-            "setup_lightcurves", store_models=store_models, **kw
-        )
+        self.apply_operation_to_constituent_models("setup_lightcurves", store_models=store_models, **kw)
 
     def optimize(self, **kw):
         """
@@ -1703,19 +1679,19 @@ class LightcurveModels:
         return LightcurveModel.plot_model(lcm, **kw)
 
     def get_model(self, **kw):
-        if hasattr(self, "_fit_models") and "as_array" not in kw.keys():
+        if hasattr(self, "_fit_models") and 'as_array' not in kw.keys():
             return self._fit_models
         else:
             models_list = self.apply_operation_to_constituent_models("get_model", **kw)
-            if "as_array" in kw.keys():
-                if kw["as_array"] == True:
+            if 'as_array' in kw.keys():
+                if kw['as_array'] == True:
                     models_array = np.array([m[0] for m in models_list])
                     self._fit_models = models_array
                     return models_array
             models_dict = {}
             for i, (name, model) in enumerate(self.models.items()):
-                models_dict[name] = model._fit_models["w0"]
-                model._fit_models = {name: model._fit_models["w0"]}
+                models_dict[name] = model._fit_models['w0']
+                model._fit_models = {name: model._fit_models['w0']}
             self._fit_models = models_dict
             return models_dict
 
@@ -1732,11 +1708,10 @@ class LightcurveModels:
         """
         self.apply_operation_to_constituent_models("setup_likelihood", **kw)
 
-    def add_model_to_rainbow(self):
-        self.apply_operation_to_constituent_models("add_model_to_rainbow")
-
     def recombine_summaries(self, **kw):
-        """ """
+        """
+
+        """
         for i, (name, model) in enumerate(self.models.items()):
             if name == "w0":
                 summaries = model.summary.copy()
@@ -1760,5 +1735,42 @@ class LightcurveModels:
 
         return a
 
+    def plot_with_model_and_residuals(self, **kw):
+        return LightcurveModel.plot_with_model_and_residuals(self, **kw)
+
+    def imshow_with_models(self, **kw):
+        return LightcurveModel.imshow_with_models(self, **kw)
+
+    def residual_noise_calculator(self, **kw):
+        return LightcurveModel.residual_noise_calculator(self, **kw)
+
+    def chi_squared(self, **kw):
+        return LightcurveModel.chi_squared(self, **kw)
+
+    def add_model_to_rainbow(self):
+        self.apply_operation_to_constituent_models("add_model_to_rainbow")
+
+        total_model, systematics, planet = [], [], []
+        for name, model in self.models.items():
+            if hasattr(model, 'data_with_model'):
+                total_model.append(model.data_with_model.fluxlike['model'][0])
+                if 'systematics_model' in model.data_with_model.fluxlike.keys():
+                    systematics.append(model.data_with_model.fluxlike['systematics_model'][0])
+                if 'planet_model' in model.data_with_model.fluxlike.keys():
+                    planet.append(model.data_with_model.fluxlike['planet_model'][0])
+
+        if len(total_model) > 0:
+            if len(systematics) > 0 and len(planet) > 0:
+                self.data_with_model = self.data.attach_model(model=np.array(total_model),
+                                                              systematics_model=np.array(systematics),
+                                                              planet_model=np.array(planet))
+            elif len(systematics) > 0:
+                self.data_with_model = self.data.attach_model(model=np.array(total_model),
+                                                              systematics_model=np.array(systematics))
+            elif len(planet) > 0:
+                self.data_with_model = self.data.attach_model(model=np.array(total_model),
+                                                              planet_model=np.array(planet))
+            else:
+                warnings.warn("WARNING: No models to attach!")
 
 from .combined import *
