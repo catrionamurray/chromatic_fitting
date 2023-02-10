@@ -1479,14 +1479,6 @@ class LightcurveModels(LightcurveModel):
         if hasattr(model, "data"):
             self.attach_data(model.data)
 
-    def setup_separate_structure(self, wavelengths):
-        self.wavelengths = wavelengths
-        self.nwave = len(wavelengths)
-        for w in range(self.nwave):
-            self.models[f"w{w}"] = self._og_model.copy()
-            self.models[f"w{w}"]._pymc3_model = pm.Model()
-            self.models[f"w{w}"].name = self.name
-
     def __repr__(self):
         """
         Print the model
@@ -1495,6 +1487,14 @@ class LightcurveModels(LightcurveModel):
             return f'<chromatic models ({self.nwave} separate wavelengths) "{self.name}" 🌈>'
         else:
             return f'<chromatic models (unknown number of separate wavelengths) "{self.name}" 🌈>'
+
+    def setup_separate_structure(self, wavelengths):
+        self.wavelengths = wavelengths
+        self.nwave = len(wavelengths)
+        for w in range(self.nwave):
+            self.models[f"w{w}"] = self._og_model.copy()
+            self.models[f"w{w}"]._pymc3_model = pm.Model()
+            self.models[f"w{w}"].name = self.name
 
     def apply_operation_to_constituent_models(
         self, operation: str, *args: object, **kwargs: object
@@ -1664,6 +1664,24 @@ class LightcurveModels(LightcurveModel):
         Setup Likelihood
         """
         self.apply_operation_to_constituent_models("setup_likelihood", **kw)
+
+    def make_transmission_spectrum_table(self, **kw):
+        if isinstance(self._og_model, TransitModel):
+            return TransitModel.make_transmission_spectrum_table(self, **kw)
+        else:
+            warnings.warn(
+                f"You cannot make a transmission spectrum table for a non-transit model!"
+                f" Your model is: {self._og_model}"
+            )
+
+    def plot_transmission_spectrum(self, **kw):
+        if isinstance(self._og_model, TransitModel):
+            return TransitModel.plot_transmission_spectrum(self, **kw)
+        else:
+            warnings.warn(
+                f"You cannot plot a transmission spectrum table for a non-transit model!"
+                f" Your model is: {self._og_model}"
+            )
 
     def recombine_summaries(self, **kw):
         """ """
