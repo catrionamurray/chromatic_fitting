@@ -1474,6 +1474,7 @@ class LightcurveModels(LightcurveModel):
         self._og_model = model
         self.outlier_flag = False
         self.parameters = model.parameters
+        self.type_of_model = model.type_of_model
 
         if hasattr(model, "data"):
             self.attach_data(model.data)
@@ -1554,12 +1555,25 @@ class LightcurveModels(LightcurveModel):
 
         """
         self.setup_separate_structure(r.wavelength)
-
         self.data = r._create_copy()
 
         for i in range(self.nwave):
             data_copy = self.separate_wavelengths(i)
             self.models[f"w{i}"].data = data_copy
+
+    def setup_orbit(self, **kw):
+        """
+        Set-up orbit
+        """
+        if isinstance(self._og_model, TransitModel):
+            self.apply_operation_to_constituent_models("setup_orbit", **kw)
+        else:
+            warnings.warn(
+                f"You cannot set up an orbit for a non-transit model!"
+                f" Your model is: {self._og_model}"
+            )
+
+        return
 
     def setup_lightcurves(self, store_models=False, **kw):
         """
