@@ -94,9 +94,10 @@ class PolynomialModel(LightcurveModel):
 
         """
 
-        data = self.get_data()
-        mod = self._pymc3_model
-        kw = {"shape": data.nwave}
+        # ensure that attach data has been run before setup_lightcurves
+        if not hasattr(self, "data"):
+            print("You need to attach some data to this chromatic model!")
+            return
 
         # if the model has a name then add this to each parameter's name (needed to prevent overwriting parameter names
         # if you combine >1 polynomial model)
@@ -104,6 +105,10 @@ class PolynomialModel(LightcurveModel):
             name = self.name + "_"
         else:
             name = ""
+
+        data = self.get_data()
+        mod = self._pymc3_model
+        kw = {"shape": data.nwave}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)

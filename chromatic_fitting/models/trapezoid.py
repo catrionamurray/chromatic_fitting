@@ -52,10 +52,10 @@ class TrapezoidModel(LightcurveModel):
         store_models: boolean to determine whether to store the lightcurve model during the MCMC fit
 
         """
-
-        # if the optimization method is "separate" then loop over each wavelength's model/data
-        datas, models = self.choose_model_based_on_optimization_method()
-        kw = {"shape": datas[0].nwave}
+        # ensure that attach data has been run before setup_lightcurves
+        if not hasattr(self, "data"):
+            print("You need to attach some data to this chromatic model!")
+            return
 
         # if the model has a name then add this to each parameter's name (needed to prevent overwriting parameter names
         # if you combine >1 polynomial model)
@@ -64,9 +64,9 @@ class TrapezoidModel(LightcurveModel):
         else:
             name = ""
 
-        # if the .every_light_curve attribute (final lc model) is not already present then create it now
-        if not hasattr(self, "every_light_curve"):
-            self.every_light_curve = {}
+        # if the optimization method is "separate" then loop over each wavelength's model/data
+        data = self.get_data()
+        kw = {"shape": data.nwave}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -82,93 +82,81 @@ class TrapezoidModel(LightcurveModel):
             f"{name}T": [],
             f"{name}baseline": [],
         }
-        for j, (mod, data) in enumerate(zip(models, datas)):
-            if self.optimization == "separate":
-                kw["i"] = j
 
-            with mod:
-                # for every wavelength set up a step model
-                for pname in parameters_to_loop_over.keys():
-                    parameters_to_loop_over[pname].append(
-                        self.parameters[pname].get_prior_vector(**kw)
-                    )
-                # t0.append(self.parameters[f"{name}t0"].get_prior_vector(**kw))
-                # P.append(self.parameters[f"{name}P"].get_prior_vector(**kw))
-                # delta.append(self.parameters[f"{name}delta"].get_prior_vector(**kw))
-                # tau.append(self.parameters[f"{name}tau"].get_prior_vector(**kw))
-                # T.append(self.parameters[f"{name}T"].get_prior_vector(**kw))
-                # baseline.append(
-                #     self.parameters[f"{name}baseline"].get_prior_vector(**kw)
-                # )
+        with mod:
+            # for every wavelength set up a step model
+            for pname in parameters_to_loop_over.keys():
+                parameters_to_loop_over[pname].append(
+                    self.parameters[pname].get_prior_vector(**kw)
+                )
 
-                trap = []
-                for i, w in enumerate(data.wavelength):
-                    param_i = {}
-                    for pname, param in parameters_to_loop_over.items():
-                        if isinstance(self.parameters[pname], WavelikeFitted):
-                            param_i[pname] = param[j][i]
-                        else:
-                            param_i[pname] = param[j]
-
-                    # calculate a phase-folded time (still in units of days)
-                    x = (
-                        data.time.to_value(u.day)
-                        - param_i[f"{name}t0"]
-                        + 0.5 * param_i[f"{name}P"]
-                    ) % param_i[f"{name}P"] - 0.5 * param_i[f"{name}P"]
-
-                    # Compute the four points where the trapezoid changes slope
-                    # x1 <= x2 <= x3 <= x4
-                    if eval_in_model(
-                        pm.math.gt(param_i[f"{name}tau"], param_i[f"{name}T"])
-                    ):
-                        x1 = -param_i[f"{name}tau"]
-                        x2 = 0
-                        x3 = 0
-                        x4 = param_i[f"{name}tau"]
+            trap, initial_guess = [], []
+            for i, w in enumerate(data.wavelength):
+                param_i = {}
+                for pname, param in parameters_to_loop_over.items():
+                    if isinstance(self.parameters[pname], WavelikeFitted):
+                        param_i[pname] = param[i]
                     else:
-                        x1 = -(param_i[f"{name}T"] + param_i[f"{name}tau"]) / 2.0
-                        x2 = -(param_i[f"{name}T"] - param_i[f"{name}tau"]) / 2.0
-                        x3 = (param_i[f"{name}T"] - param_i[f"{name}tau"]) / 2.0
-                        x4 = (param_i[f"{name}T"] + param_i[f"{name}tau"]) / 2.0
+                        param_i[pname] = param
 
-                    # Compute model values in pieces between the change points
-                    range_a = pm.math.and_(pm.math.ge(x, x1), pm.math.lt(x, x2))
-                    range_b = pm.math.and_(pm.math.ge(x, x2), pm.math.lt(x, x3))
-                    range_c = pm.math.and_(pm.math.ge(x, x3), pm.math.lt(x, x4))
+                # calculate a phase-folded time (still in units of days)
+                x = (
+                    data.time.to_value(u.day)
+                    - param_i[f"{name}t0"]
+                    + 0.5 * param_i[f"{name}P"]
+                ) % param_i[f"{name}P"] - 0.5 * param_i[f"{name}P"]
 
-                    if param_i[f"{name}tau"] == 0:
-                        slope = pm.math.inf
-                    else:
-                        slope = param_i[f"{name}delta"] / param_i[f"{name}tau"]
-                    val_a = -slope * (x - x1)
-                    val_b = -param_i[f"{name}delta"]
-                    val_c = -slope * (x4 - x)
-
-                    trap.append(
-                        param_i[f"{name}baseline"]
-                        * (
-                            1
-                            + (range_a * val_a)
-                            + (range_b * val_b)
-                            + (range_c * val_c)
-                        )
-                    )
-
-                # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
-                # later:
-                if self.store_models:
-                    Deterministic(f"{name}model", pm.math.stack(trap, axis=0))
-
-                # add the step model to the overall lightcurve:
-                if f"wavelength_{j}" not in self.every_light_curve.keys():
-                    self.every_light_curve[f"wavelength_{j}"] = pm.math.stack(
-                        trap, axis=0
-                    )
+                # Compute the four points where the trapezoid changes slope
+                # x1 <= x2 <= x3 <= x4
+                if eval_in_model(
+                    pm.math.gt(param_i[f"{name}tau"], param_i[f"{name}T"])
+                ):
+                    x1 = -param_i[f"{name}tau"]
+                    x2 = 0
+                    x3 = 0
+                    x4 = param_i[f"{name}tau"]
                 else:
-                    self.every_light_curve[f"wavelength_{j}"] += pm.math.stack(
-                        trap, axis=0
-                    )
+                    x1 = -(param_i[f"{name}T"] + param_i[f"{name}tau"]) / 2.0
+                    x2 = -(param_i[f"{name}T"] - param_i[f"{name}tau"]) / 2.0
+                    x3 = (param_i[f"{name}T"] - param_i[f"{name}tau"]) / 2.0
+                    x4 = (param_i[f"{name}T"] + param_i[f"{name}tau"]) / 2.0
+
+                # Compute model values in pieces between the change points
+                range_a = pm.math.and_(pm.math.ge(x, x1), pm.math.lt(x, x2))
+                range_b = pm.math.and_(pm.math.ge(x, x2), pm.math.lt(x, x3))
+                range_c = pm.math.and_(pm.math.ge(x, x3), pm.math.lt(x, x4))
+
+                if param_i[f"{name}tau"] == 0:
+                    slope = pm.math.inf
+                else:
+                    slope = param_i[f"{name}delta"] / param_i[f"{name}tau"]
+                val_a = -slope * (x - x1)
+                val_b = -param_i[f"{name}delta"]
+                val_c = -slope * (x4 - x)
+
+                trap.append(
+                    param_i[f"{name}baseline"]
+                    * (1 + (range_a * val_a) + (range_b * val_b) + (range_c * val_c))
+                )
+
+                initial_guess.append(eval_in_model(trap[-1]))
+
+            # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
+            # later:
+            if self.store_models:
+                Deterministic(f"{name}model", pm.math.stack(trap, axis=0))
+
+            # add the step model to the overall lightcurve:
+            if not hasattr(self, "every_light_curve"):
+                self.every_light_curve = pm.math.stack(trap, axis=0)
+            else:
+                print("?")
+
+            # add the initial_guess to the overall lightcurve:
+            if not hasattr(self, "initial_guess"):
+                self.initial_guess = pm.math.stack(initial_guess, axis=0)
+            else:
+                print("?")
 
     def trapezoid_model(self, trap_params: dict, i: int = 0) -> np.array:
         """
@@ -185,10 +173,7 @@ class TrapezoidModel(LightcurveModel):
         """
 
         # if the optimization method is "separate" then extract wavelength {i}'s data
-        if self.optimization == "separate":
-            data = self.get_data(i)
-        else:
-            data = self.get_data()
+        data = self.get_data()
 
         self.check_and_fill_missing_parameters(trap_params, i)
 

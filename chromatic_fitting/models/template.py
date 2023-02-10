@@ -82,10 +82,10 @@ class tempModel(LightcurveModel):
         store_models: boolean to determine whether to store the lightcurve model during the MCMC fit
 
         """
-
-        # if the optimization method is "separate" then loop over each wavelength's model/data
-        datas, models = self.choose_model_based_on_optimization_method()
-        kw = {"shape": datas[0].nwave}
+        # ensure that attach data has been run before setup_lightcurves
+        if not hasattr(self, "data"):
+            print("You need to attach some data to this chromatic model!")
+            return
 
         # if the model has a name then add this to each parameter's name (needed to prevent overwriting parameter names
         # if you combine >1 polynomial model)
@@ -93,10 +93,6 @@ class tempModel(LightcurveModel):
             name = self.name + "_"
         else:
             name = ""
-
-        # if the .every_light_curve attribute (final lc model) is not already present then create it now
-        if not hasattr(self, "every_light_curve"):
-            self.every_light_curve = {}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -108,44 +104,48 @@ class tempModel(LightcurveModel):
             f"{name}param_1": [],
             f"{name}param_2": [],
         }
-        for j, (mod, data) in enumerate(zip(models, datas)):
-            if self.optimization == "separate":
-                kw["i"] = j
 
-            with mod:
-                # set-up the parameter prior distributions within the model
-                for pname in parameters_to_loop_over.keys():
-                    parameters_to_loop_over[pname].append(
-                        self.parameters[pname].get_prior_vector(**kw)
-                    )
+        kw = {"shape": self.get_data().nwave}
 
-                y_model = []
-                for i, w in enumerate(data.wavelength):
-                    param_i = {}
-                    for param_name, param in parameters_to_loop_over.items():
-                        if isinstance(self.parameters[param_name], WavelikeFitted):
-                            param_i[param_name] = param[j][i]
-                        else:
-                            param_i[param_name] = param[j]
+        with self._pymc3_model:
+            # set-up the parameter prior distributions within the model
+            for pname in parameters_to_loop_over.keys():
+                parameters_to_loop_over[pname].append(
+                    self.parameters[pname].get_prior_vector(**kw)
+                )
 
-                    # **FUNCTION TO MODEL - MAKE SURE IT MATCHES self.temp_model()!**
-                    function_of_param_i = some_function_of_parameters(param_i)
-                    y_model.append(function_of_param_i)
+            y_model, initial_guess = [], []
+            for i, w in enumerate(self.get_data().wavelength):
+                param_i = {}
+                for param_name, param in parameters_to_loop_over.items():
+                    if isinstance(self.parameters[param_name], WavelikeFitted):
+                        param_i[param_name] = param[i]
+                    else:
+                        param_i[param_name] = param
 
-                # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
-                # later:
-                if self.store_models:
-                    Deterministic(f"{name}model", pm.math.stack(y_model, axis=0))
+                # **FUNCTION TO MODEL - MAKE SURE IT MATCHES self.temp_model()!**
+                function_of_param_i = some_function_of_parameters(param_i)
+                # store the function at wavelength i
+                y_model.append(function_of_param_i)
+                # store the initial guess for plotting
+                initial_guess.append(eval_in_model(y_model[-1]))
 
-                # add the model to the overall lightcurve:
-                if f"wavelength_{j}" not in self.every_light_curve.keys():
-                    self.every_light_curve[f"wavelength_{j}"] = pm.math.stack(
-                        y_model, axis=0
-                    )
-                else:
-                    self.every_light_curve[f"wavelength_{j}"] += pm.math.stack(
-                        y_model, axis=0
-                    )
+            # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
+            # later:
+            if self.store_models:
+                Deterministic(f"{name}model", pm.math.stack(y_model, axis=0))
+
+            # add the model to the overall lightcurve:
+            if not hasattr(self, "every_light_curve"):
+                self.every_light_curve = pm.math.stack(y_model, axis=0)
+            else:
+                print("?")
+
+            # store the initial guess:
+            if not hasattr(self, "initial_guess"):
+                self.initial_guess = pm.math.stack(initial_guess, axis=0)
+            else:
+                print("?")
 
     def temp_model(self, temp_params: dict, i: int = 0) -> np.array:
         """
@@ -160,18 +160,12 @@ class tempModel(LightcurveModel):
         -------
         np.array: temp model with the given parameters
         """
-        temp = []
-
-        # if the optimization method is "separate" then extract wavelength {i}'s data
-        if self.optimization == "separate":
-            data = self.get_data(i)
-        else:
-            data = self.get_data()
+        data = self.get_data()
 
         self.check_and_fill_missing_parameters(temp_params, i)
 
         # **FUNCTION TO MODEL - MAKE SURE IT MATCHES self.setup_lightcurves()!**
-        temp = some_function_of_parameters(temp_params)
+        temp = some_function_of_parameters(temp_params, data)
 
         return temp
 
