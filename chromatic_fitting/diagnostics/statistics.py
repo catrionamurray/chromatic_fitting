@@ -64,10 +64,10 @@ def chi_sq(data, model, uncertainties, degrees_of_freedom, plot=False):
     return chi_sq, red_chi_sq
 
 
-def generate_periodogram(x, fs):
+def generate_periodogram(x, fs, **kw):
     from scipy.signal import periodogram
 
-    freq, power = periodogram(x=x, fs=fs)
+    freq, power = periodogram(x=x, fs=fs, **kw)
     plt.semilogx(1 / freq, power)
     plt.ylabel("Power")
     plt.xlabel("Time (d)")

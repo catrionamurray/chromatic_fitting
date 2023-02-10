@@ -246,7 +246,13 @@ class LightcurveModel:
         Extract any additional keywords passed to the LightcurveModel
         """
         class_inputs = {}
-        varnames_to_remove = ["defaults", "optimization", "pymc3_model", "parameters"]
+        varnames_to_remove = [
+            "defaults",
+            "optimization",
+            "pymc3_model",
+            "parameters",
+            "required_parameters",
+        ]
         for k, v in self.__dict__.items():
             if k not in varnames_to_remove:
                 class_inputs[k] = v
@@ -314,12 +320,11 @@ class LightcurveModel:
             self.optimization = optimization_method
             if self.optimization == "separate":
                 try:
-                    self = LightcurveModels(self)
-                # try:
-                #     self.create_multiple_models()
-                #     self.change_all_priors_to_Wavelike()
-                # except:
-                #     pass
+                    og_model = self.copy()
+                    self.__class__ = LightcurveModels
+                    self.__init__(model=og_model)
+                except Exception as e:
+                    print(e)
         else:
             print(
                 "Unrecognised optimization method, please select one of: "
@@ -369,33 +374,6 @@ class LightcurveModel:
             data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
         return data_copy
 
-    def choose_model_based_on_optimization_method(self, *extra_arrs):
-        """
-        Return the necessary format for the data, model and any extra arrays, according to the optimization method used.
-
-        Parameters
-        ----------
-        extra_arrs: Any extra arrays needed to reformat
-
-        Returns
-        ----------
-        datas: reformated data
-        models: reformated models
-        *extra_arrs: reformated arrays
-        """
-        extra_arrs_new = []
-        if self.optimization == "separate":
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-            models = self._pymc3_model
-            for arrs in extra_arrs:
-                extra_arrs_new.append(arrs)
-        else:
-            datas = [self.get_data()]
-            models = [self._pymc3_model]
-            for arrs in extra_arrs:
-                extra_arrs_new.append([arrs])
-        return datas, models, *extra_arrs_new
-
     def get_data(self, i=None):
         """
         Extract the data to use for the optimization depending on the method chosen
@@ -411,17 +389,7 @@ class LightcurveModel:
                     return self.separate_wavelengths(i)
                 else:
                     return self.data
-            # if self.optimization == "separate":
-            #     if i is not None:
-            #         return self.separate_wavelengths(i)
-            #     else:
-            #         return self.data
-            # return [
-            #     self.separate_wavelengths(i) for i in range(self.data.nwave)
-            # ]
-        # if self.outlier_flag:
-        #     return self.data_without_outliers
-        # else:
+
         return self.data
 
     def setup_likelihood(
@@ -515,15 +483,15 @@ class LightcurveModel:
         :parameter n
         Number of priors to sample
         """
-        try:
-            with self._pymc3_model:
-                return sample_prior_predictive(ndraws)
-        except:
-            priors = []
-            for mod in self._pymc3_model:
-                with mod:
-                    priors.append(sample_prior_predictive(ndraws))
-            return priors
+        # try:
+        with self._pymc3_model:
+            return sample_prior_predictive(ndraws)
+        # except:
+        #     priors = []
+        #     for mod in self._pymc3_model:
+        #         with mod:
+        #             priors.append(sample_prior_predictive(ndraws))
+        #     return priors
 
     def sample_posterior(self, ndraws=3, var_names=None):
         """
@@ -538,42 +506,13 @@ class LightcurveModel:
         if var_names is None:
             var_names = {**self.trace[0], **{"data": []}}.keys()
 
-        if self.optimization != "separate":
-            with self._pymc3_model:
-                return sample_posterior_predictive(
-                    self.trace, ndraws, var_names=var_names
-                )
-        else:
-            posteriors = []
-            for mod, trace in zip(self._pymc3_model, self.trace):
-                with mod:
-                    posteriors.append(
-                        sample_posterior_predictive(trace, ndraws, var_names=var_names)
-                    )
-            return posteriors
+        with self._pymc3_model:
+            return sample_posterior_predictive(self.trace, ndraws, var_names=var_names)
 
     def optimize(self, plot=False, plotkw={}, **kw):
         """
         Wrapper for PyMC3_ext sample
         """
-        # if self.optimization == "separate":
-        #     opts = []
-        #     if "start" in kw:
-        #         start = kw["start"]
-        #         kw.pop("start")
-        #         for mod, opt in zip(self._pymc3_model, start):
-        #             check_initial_guess(mod)
-        #             with mod:
-        #                 opts.append(optimize(start=opt, **kw))
-        #     else:
-        #         for mod in self._pymc3_model:
-        #             check_initial_guess(mod)
-        #             with mod:
-        #                 opts.append(optimize(**kw))
-        #     if plot:
-        #         self.plot_optimization(opts, **plotkw)
-        #     return opts
-        # else:
         check_initial_guess(self._pymc3_model)
         with self._pymc3_model:
             opt = optimize(**kw)
@@ -681,40 +620,6 @@ class LightcurveModel:
         Wrapper for PyMC3_ext sample
         """
         print(f"Sampling model using the {sampling_method} method")
-        # if self.optimization == "separate":
-        #     self.trace = []
-        #     starts = []
-        #     if "start" in kw:
-        #         starts = kw["start"]
-        #         kw.pop("start")
-        #
-        #     for i, mod in enumerate(self._pymc3_model):
-        #         if self.optimization == "separate":
-        #             print(f"\nSampling for Wavelength: {i}")
-        #         check_initial_guess(mod)
-        #         with mod:
-        #             if len(starts) > 0:
-        #                 start = starts[i]
-        #             else:
-        #                 start = mod.test_point
-        #
-        #             try:
-        #                 samp = sampling_method(start=start, **sampling_kw, **kw)
-        #                 if summarize_step_by_step:
-        #                     self.summary.append(summary(samp, **summarize_kw))
-        #                 else:
-        #                     self.trace.append(samp)
-        #
-        #             except Exception as e:
-        #                 print(f"Sampling failed for one of the models: {e}")
-        #                 self.trace.append(None)
-        #
-        #     if summarize_step_by_step:
-        #         if isinstance(self, CombinedModel):
-        #             for m in self._chromatic_models.values():
-        #                 m.summary = self.summary
-        #
-        # else:
         check_initial_guess(self._pymc3_model)
 
         if use_optimized_start_point:
@@ -748,14 +653,6 @@ class LightcurveModel:
                 print(self.summary)
             return
 
-        # if self.optimization == "separate":
-        #     self.summary = []
-        #     for mod, trace in zip(self._pymc3_model, self.trace):
-        #         with mod:
-        #             self.summary.append(
-        #                 summary(trace, hdi_prob=hdi_prob, round_to=round_to, **kw)
-        #             )
-        # else:
         with self._pymc3_model:
             self.summary = summary(
                 self.trace, hdi_prob=hdi_prob, round_to=round_to, **kw
@@ -846,57 +743,47 @@ class LightcurveModel:
         :parameter n
         Number of priors to plot (default=3)
         """
-        # setup the models, data and orbits in a format for looping
-        (
-            datas,
-            _,
-            prior_predictive_traces,
-        ) = self.choose_model_based_on_optimization_method(self.sample_prior(ndraws=n))
+        data = self.get_data()
+        prior_predictive_trace = self.sample_prior(ndraws=n)
 
-        for nm, (data, prior_predictive_trace) in enumerate(
-            zip(datas, prior_predictive_traces)
-        ):
-            for i in range(n):
-                # if data.nwave == 1:
-                try:
-                    flux_for_this_sample = np.array(prior_predictive_trace[quantity][i])
-                except:
-                    warnings.warn(f"Couldn't generate prior for {quantity}!")
-                    return
+        for i in range(n):
+            try:
+                flux_for_this_sample = np.array(prior_predictive_trace[quantity][i])
+            except:
+                warnings.warn(f"Couldn't generate prior for {quantity}!")
+                return
 
-                if f"{self.name}_model" in prior_predictive_trace.keys():
-                    model_for_this_sample = np.array(
-                        prior_predictive_trace[f"{self.name}_model"][i]
-                    )
-                else:
-                    model_for_this_sample = []
-                    for w in range(data.nwave):
-                        i_dict = {}
-                        for k, v in prior_predictive_trace.items():
-                            if np.shape(v) == 1:
-                                i_dict = {**i_dict, **{k: v[i]}}
-                            elif np.shape(v)[1] == 1:
-                                i_dict = {**i_dict, **{k: v[i][0]}}
-                            else:
-                                i_dict = {**i_dict, **{k: v[i][w]}}
-                        model_for_this_sample.append(self.model(i_dict))
-                    model_for_this_sample = np.array(model_for_this_sample)
-
-                # add posterior model and draw from posterior distribution to the Rainbow quantities:
-                data.fluxlike[f"prior-model-{i}"] = model_for_this_sample
-                data.fluxlike[f"prior-predictive-{i}"] = flux_for_this_sample
-
-            if plot_all:
-                data.imshow_quantities()
-            else:
-                f, ax = plt.subplots(
-                    nrows=n, sharex=True, sharey=True, figsize=(6, 4 * n)
+            if f"{self.name}_model" in prior_predictive_trace.keys():
+                model_for_this_sample = np.array(
+                    prior_predictive_trace[f"{self.name}_model"][i]
                 )
-                for i in range(n):
-                    if f"{self.name}_model" in prior_predictive_trace.keys():
-                        data.imshow(ax=ax[i], quantity=f"prior-model-{i}")
-                    else:
-                        data.imshow(ax=ax[i], quantity=f"prior-predictive-{i}")
+            else:
+                model_for_this_sample = []
+                for w in range(data.nwave):
+                    i_dict = {}
+                    for k, v in prior_predictive_trace.items():
+                        if np.shape(v) == 1:
+                            i_dict = {**i_dict, **{k: v[i]}}
+                        elif np.shape(v)[1] == 1:
+                            i_dict = {**i_dict, **{k: v[i][0]}}
+                        else:
+                            i_dict = {**i_dict, **{k: v[i][w]}}
+                    model_for_this_sample.append(self.model(i_dict))
+                model_for_this_sample = np.array(model_for_this_sample)
+
+            # add posterior model and draw from posterior distribution to the Rainbow quantities:
+            data.fluxlike[f"prior-model-{i}"] = model_for_this_sample
+            data.fluxlike[f"prior-predictive-{i}"] = flux_for_this_sample
+
+        if plot_all:
+            data.imshow_quantities()
+        else:
+            f, ax = plt.subplots(nrows=n, sharex=True, sharey=True, figsize=(6, 4 * n))
+            for i in range(n):
+                if f"{self.name}_model" in prior_predictive_trace.keys():
+                    data.imshow(ax=ax[i], quantity=f"prior-model-{i}")
+                else:
+                    data.imshow(ax=ax[i], quantity=f"prior-predictive-{i}")
 
     def plot_posteriors(self, n=3, quantity="data", plot_all=True):
         """
@@ -906,88 +793,74 @@ class LightcurveModel:
         :parameter n
         Number of posteriors to plot (default=3)
         """
-        # if we have the separate wavelength optimization method chosen then repeat for every wavelength/model
-        (
-            datas,
-            _,
-            posterior_predictive_traces,
-        ) = self.choose_model_based_on_optimization_method(self.sample_posterior(n))
+        data = self.get_data()
+        posterior_predictive_trace = self.sample_posterior(n)
 
         posterior_model = {}
-        for nm, (data, posterior_predictive_trace) in enumerate(
-            zip(datas, posterior_predictive_traces)
-        ):
-            for i in range(n):
-                # for every posterior sample extract the posterior model and distribution draw:
-                try:
-                    flux_for_this_sample = np.array(
-                        posterior_predictive_trace[quantity][i]
-                    )
-                except:
-                    warnings.warn(f"Couldn't generate prior for {quantity}!")
-                    return
+        for i in range(n):
+            # for every posterior sample extract the posterior model and distribution draw:
+            try:
+                flux_for_this_sample = np.array(posterior_predictive_trace[quantity][i])
+            except:
+                warnings.warn(f"Couldn't generate prior for {quantity}!")
+                return
 
-                if f"{self.name}_model" in posterior_predictive_trace.keys():
-                    model_for_this_sample = np.array(
-                        posterior_predictive_trace[f"{self.name}_model"][i]
-                    )
-                else:
-                    model_for_this_sample = []
-                    for w in range(data.nwave):
-                        i_dict = {}
-                        for k, v in posterior_predictive_trace.items():
-                            if np.shape(v) == 1:
-                                i_dict = {**i_dict, **{k: v[i]}}
-                            elif np.shape(v)[1] == 1:
-                                i_dict = {**i_dict, **{k: v[i][0]}}
-                            else:
-                                i_dict = {**i_dict, **{k: v[i][w]}}
-                        model_for_this_sample.append(self.model(i_dict))
-                    model_for_this_sample = np.array(model_for_this_sample)
-
-                # add posterior model and draw from posterior distribution to the Rainbow quantities:
-                data.fluxlike[f"posterior-model-{i}"] = model_for_this_sample
-                data.fluxlike[f"posterior-predictive-{i}"] = flux_for_this_sample
-
-            if plot_all:
-                data.imshow_quantities()
-            else:
-                f, ax = plt.subplots(
-                    nrows=n, sharex=True, sharey=True, figsize=(6, 4 * n)
+            if f"{self.name}_model" in posterior_predictive_trace.keys():
+                model_for_this_sample = np.array(
+                    posterior_predictive_trace[f"{self.name}_model"][i]
                 )
-                for i in range(n):
-                    if f"{self.name}_model" in posterior_model.keys():
-                        data.imshow(ax=ax[i], quantity=f"posterior-model-{i}")
-                    else:
-                        data.imshow(ax=ax[i], quantity=f"posterior-predictive-{i}")
+            else:
+                model_for_this_sample = []
+                for w in range(data.nwave):
+                    i_dict = {}
+                    for k, v in posterior_predictive_trace.items():
+                        if np.shape(v) == 1:
+                            i_dict = {**i_dict, **{k: v[i]}}
+                        elif np.shape(v)[1] == 1:
+                            i_dict = {**i_dict, **{k: v[i][0]}}
+                        else:
+                            i_dict = {**i_dict, **{k: v[i][w]}}
+                    model_for_this_sample.append(self.model(i_dict))
+                model_for_this_sample = np.array(model_for_this_sample)
+
+            # add posterior model and draw from posterior distribution to the Rainbow quantities:
+            data.fluxlike[f"posterior-model-{i}"] = model_for_this_sample
+            data.fluxlike[f"posterior-predictive-{i}"] = flux_for_this_sample
+
+        if plot_all:
+            data.imshow_quantities()
+        else:
+            f, ax = plt.subplots(nrows=n, sharex=True, sharey=True, figsize=(6, 4 * n))
+            for i in range(n):
+                if f"{self.name}_model" in posterior_model.keys():
+                    data.imshow(ax=ax[i], quantity=f"posterior-model-{i}")
+                else:
+                    data.imshow(ax=ax[i], quantity=f"posterior-predictive-{i}")
 
     def extract_deterministic_model(self):
         """
         Extract the deterministic model from the summary statistics
         """
-        datas, _ = self.choose_model_based_on_optimization_method()
+        data = self.get_data()
 
         model = {}
-        for nm, data in enumerate(datas):
-            for w in range(data.nwave):
-                if self.optimization == "separate":
-                    summary = self.summary[w + nm]
-                else:
-                    summary = self.summary
+        summary = self.summary
 
-                if f"w{w + nm}" not in model.keys():
-                    model[f"w{w + nm}"] = []
+        for w in range(data.nwave):
+            # if self.optimization == "separate":
+            #     summary = self.summary[w]
+            # else:
+            if f"w{w}" not in model.keys():
+                model[f"w{w}"] = []
 
-                if f"{self.name}_model[{w}, 0]" in summary["mean"].keys():
-                    for t in range(data.ntime):
-                        model[f"w{w + nm}"].append(
-                            summary["mean"][f"{self.name}_model[{w}, {t}]"]
-                        )
-                elif f"{self.name}_model[0]" in summary["mean"].keys():
-                    for t in range(data.ntime):
-                        model[f"w{w + nm}"].append(
-                            summary["mean"][f"{self.name}_model[{t}]"]
-                        )
+            if f"{self.name}_model[{w}, 0]" in summary["mean"].keys():
+                for t in range(data.ntime):
+                    model[f"w{w}"].append(
+                        summary["mean"][f"{self.name}_model[{w}, {t}]"]
+                    )
+            elif f"{self.name}_model[0]" in summary["mean"].keys():
+                for t in range(data.ntime):
+                    model[f"w{w}"].append(summary["mean"][f"{self.name}_model[{t}]"])
         return model
 
     def get_stored_model(self, as_dict=True, as_array=False):
@@ -1019,14 +892,7 @@ class LightcurveModel:
             ax = plt.subplot()
         plt.sca(ax)
 
-        # if self.optimization == "separate":
-        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
-        # else:
-        #     datas = [self.get_data()]
-        # if self.optimization != "separate":
         data = self.get_data()
-        # else:
-        # data = self.data
 
         if self.outlier_flag:
             data.plot(ax=ax, cmap="Reds", **kw)
@@ -1051,13 +917,7 @@ class LightcurveModel:
             plt.savefig(kw["filename"])
         plt.close()
 
-        # if add_model and detrend:
-
     def extract_from_posteriors(self, summary, i, op="mean"):
-        # there's definitely a sleeker way to do this
-        # if self.optimization == "separate":
-        #     summary = summary[i]
-
         # ensure that the specified operation is in the summary table!
         if op not in summary:
             print(
@@ -1113,23 +973,6 @@ class LightcurveModel:
                     fv[k] = posterior_means[f"{k}[0]"]
                 elif f"{k}[{i}, 0]" in posterior_means.index:
                     fv[k] = posterior_means[f"{k}[{i}, 0]"]
-                    # n = 0
-                    # fv[k] = []
-                    # while f"{k}[{i}, {n}]" in posterior_means.index:
-                    #     fv[k].append(posterior_means[f"{k}[{i}, {n}]"])
-                    #     n += 1
-                    # if n == 1:
-                    #     fv[k] = fv[k][0]
-                # elif f"{k}_w{i}" in posterior_means.index:
-                #     fv[k] = posterior_means[f"{k}_w{i}"]
-                # elif f"{k}_w{i}[0]" in posterior_means.index:
-                #     n = 0
-                #     fv[k] = []
-                #     while f"{k}_w{i}[{n}]" in posterior_means.index:
-                #         fv[k].append(posterior_means[f"{k}_w{i}[{n}]"])
-                #         n += 1
-                # elif f"{k}_w{i}" in posterior_means.index:
-                #     fv[k] = posterior_means[f"{k}_w{i}"]
                 else:
                     if isinstance(v, WavelikeFixed):
                         fv[k] = v.values[0]
@@ -1298,6 +1141,14 @@ class LightcurveModel:
         """
         Plot the lightcurves with the best-fit models (if they exist) and residuals.
         [Wrapper for chromatic]
+
+        Parameters
+        ----------
+        kw: Any additional keywords to pass to Rainbow.data_with_model.plot_with_model_and_residuals
+
+        Returns
+        -------
+
         """
         if not hasattr(self, "data_with_model"):
             print(
@@ -1308,6 +1159,18 @@ class LightcurveModel:
         self.data_with_model.plot_with_model_and_residuals(**kw)
 
     def plot_model(self, normalize=True, plot_data=True, **kw):
+        """
+
+        Parameters
+        ----------
+        normalize: Boolean to normalize all models to mean~1, some models will have default mean~0 (default=True)
+        plot_data: Boolean to add real data on top of model plots (default=True)
+        kw: Any additional keywords to pass to plot_one_model(), e.g. wavelength, ax
+
+        Returns
+        -------
+
+        """
         model = self.get_model()
 
         def plot_one_model(model, normalize, name_label=None, **kw):
@@ -1388,6 +1251,18 @@ class LightcurveModel:
             plot_one_model(model, normalize=normalize, **kw)
 
     def chi_squared(self, individual_wavelengths=False, **kw):
+        """
+        Calculate the chi-square and reduced chi-square of the model fits (a useful "goodness-of-fit" parameter)
+
+        Parameters
+        ----------
+        individual_wavelengths: Boolean for whether to consider each wavelength individually or all at once
+        kw: Any additional keywords to pass to statistics.chi_sq()
+
+        Returns
+        -------
+
+        """
         if hasattr(self, "data_with_model"):
             if self.optimization != "white_light":
                 if self.store_models:
@@ -1480,6 +1355,17 @@ class LightcurveModel:
             )
 
     def plot_residuals_histogram(self, **kw):
+        """
+        Plot histogram of the residuals
+
+        Parameters
+        ----------
+        kw: Any additional keywords to pass to matplotlib.pyplot.hist
+
+        Returns
+        -------
+
+        """
         if hasattr(self, "data_with_model"):
             plt.figure(figsize=(8, 6))
             for i in range(self.data.nwave):
@@ -1507,6 +1393,17 @@ class LightcurveModel:
             )
 
     def plot_residuals(self, **kw):
+        """
+        Plot the residuals from the model fits
+
+        Parameters
+        ----------
+        kw: Any additional keywords to pass to matplotlib.pyplot.plot
+
+        Returns
+        -------
+
+        """
         if hasattr(self, "data_with_model"):
             plt.figure(figsize=(12, 6))
             for i in range(self.data.nwave):
@@ -1534,6 +1431,19 @@ class LightcurveModel:
             )
 
     def residual_noise_calculator(self, individual_wavelengths=False, **kw):
+        """
+        Wrapper for utils.noise_calculator: Hannah Wakeford's code to calculate the noise parameters of the data by
+        using the residuals of the fit
+
+        Parameters
+        ----------
+        individual_wavelengths: Boolean for whether to consider each wavelength individually or just the overall noise
+        kw: Any additional keywords to pass to the noise_calculator function (e.g. maxnbins, binstep, figname)
+
+        Returns
+        -------
+
+        """
         if hasattr(self, "data_with_model"):
             print("For the Wavelength-Averaged Residuals...")
             noise_calculator(np.mean(self.data_with_model.residuals, axis=0), **kw)
@@ -1549,6 +1459,17 @@ class LightcurveModel:
             )
 
     def plot_residuals_periodogram(self, **kw):
+        """
+        Plot a periodogram of the residuals using scipy.signal.periodogram
+
+        Parameters
+        ----------
+        kw: any additional keywords to pass to scipy.signal.periodogram
+
+        Returns
+        -------
+
+        """
         if hasattr(self, "data_with_model"):
             plt.figure(figsize=(12, 6))
             plt.title("Periodogram of Wavelength-Averaged Residuals")
@@ -1567,32 +1488,38 @@ class LightcurveModel:
             )
 
 
-class LightcurveModels:
-
-    def __init__(self, wavelengths, model):
+class LightcurveModels(LightcurveModel):
+    def __init__(self, model):
         self.models = {}
-        self.optimization = "simultaneous"
+        # self.optimization = "simultaneous"
+        self.optimization = "separate"
         self.name = model.name
+        self._og_model = model
         self.outlier_flag = False
         self.parameters = model.parameters
-        self.setup_separate_structure()
 
-    def setup_separate_structure(self):
+        if hasattr(model, "data"):
+            self.attach_data(model.data)
+
+    def setup_separate_structure(self, wavelengths):
         self.wavelengths = wavelengths
         self.nwave = len(wavelengths)
         for w in range(self.nwave):
-            self.models[f'w{w}'] = model.copy()
-            self.models[f'w{w}']._pymc3_model = pm.Model()
-            self.models[f'w{w}'].name = model.name
+            self.models[f"w{w}"] = self._og_model.copy()
+            self.models[f"w{w}"]._pymc3_model = pm.Model()
+            self.models[f"w{w}"].name = self.name
 
     def __repr__(self):
         """
         Print the model
         """
-        return f'<chromatic models ({self.nwave} separate wavelengths) "{self.name}" 🌈>'
+        if hasattr(self, "nwave"):
+            return f'<chromatic models ({self.nwave} separate wavelengths) "{self.name}" 🌈>'
+        else:
+            return f'<chromatic models (unknown number of separate wavelengths) "{self.name}" 🌈>'
 
     def apply_operation_to_constituent_models(
-            self, operation: str, *args: object, **kwargs: object
+        self, operation: str, *args: object, **kwargs: object
     ) -> object:
         """
         Apply an operation to all models within LightcurveModels
@@ -1649,18 +1576,24 @@ class LightcurveModels:
         r: Rainbow object with the light curve data
 
         """
+        self.setup_separate_structure(r.wavelength)
+
         self.data = r._create_copy()
 
         for i in range(self.nwave):
             data_copy = self.separate_wavelengths(i)
-            self.models[f'w{i}'].data = data_copy
+            self.models[f"w{i}"].data = data_copy
 
     def setup_lightcurves(self, store_models=False, **kw):
         """
         Set-up lightcurves
         """
+        if not hasattr(self, "nwave"):
+            self.setup_separate_structure(self.data.wavelength)
         self.store_models = store_models
-        self.apply_operation_to_constituent_models("setup_lightcurves", store_models=store_models, **kw)
+        self.apply_operation_to_constituent_models(
+            "setup_lightcurves", store_models=store_models, **kw
+        )
 
     def optimize(self, **kw):
         """
@@ -1669,29 +1602,26 @@ class LightcurveModels:
         opt = self.apply_operation_to_constituent_models("optimize", **kw)
         return opt
 
-    def get_data(self, **kw):
-        return LightcurveModel.get_data(self, **kw)
-
-    def plot_lightcurves(self, **kw):
-        return LightcurveModel.plot_lightcurves(self, **kw)
-
-    def plot_model(self, **kw):
-        return LightcurveModel.plot_model(lcm, **kw)
+    def sample_prior(self, **kw):
+        """
+        Sample the prior distributions
+        """
+        self.apply_operation_to_constituent_models("sample_prior", **kw)
 
     def get_model(self, **kw):
-        if hasattr(self, "_fit_models") and 'as_array' not in kw.keys():
+        if hasattr(self, "_fit_models") and "as_array" not in kw.keys():
             return self._fit_models
         else:
             models_list = self.apply_operation_to_constituent_models("get_model", **kw)
-            if 'as_array' in kw.keys():
-                if kw['as_array'] == True:
+            if "as_array" in kw.keys():
+                if kw["as_array"] == True:
                     models_array = np.array([m[0] for m in models_list])
                     self._fit_models = models_array
                     return models_array
             models_dict = {}
             for i, (name, model) in enumerate(self.models.items()):
-                models_dict[name] = model._fit_models['w0']
-                model._fit_models = {name: model._fit_models['w0']}
+                models_dict[name] = model._fit_models["w0"]
+                model._fit_models = {name: model._fit_models["w0"]}
             self._fit_models = models_dict
             return models_dict
 
@@ -1709,9 +1639,7 @@ class LightcurveModels:
         self.apply_operation_to_constituent_models("setup_likelihood", **kw)
 
     def recombine_summaries(self, **kw):
-        """
-
-        """
+        """ """
         for i, (name, model) in enumerate(self.models.items()):
             if name == "w0":
                 summaries = model.summary.copy()
@@ -1735,42 +1663,37 @@ class LightcurveModels:
 
         return a
 
-    def plot_with_model_and_residuals(self, **kw):
-        return LightcurveModel.plot_with_model_and_residuals(self, **kw)
-
-    def imshow_with_models(self, **kw):
-        return LightcurveModel.imshow_with_models(self, **kw)
-
-    def residual_noise_calculator(self, **kw):
-        return LightcurveModel.residual_noise_calculator(self, **kw)
-
-    def chi_squared(self, **kw):
-        return LightcurveModel.chi_squared(self, **kw)
-
     def add_model_to_rainbow(self):
         self.apply_operation_to_constituent_models("add_model_to_rainbow")
 
         total_model, systematics, planet = [], [], []
         for name, model in self.models.items():
-            if hasattr(model, 'data_with_model'):
-                total_model.append(model.data_with_model.fluxlike['model'][0])
-                if 'systematics_model' in model.data_with_model.fluxlike.keys():
-                    systematics.append(model.data_with_model.fluxlike['systematics_model'][0])
-                if 'planet_model' in model.data_with_model.fluxlike.keys():
-                    planet.append(model.data_with_model.fluxlike['planet_model'][0])
+            if hasattr(model, "data_with_model"):
+                total_model.append(model.data_with_model.fluxlike["model"][0])
+                if "systematics_model" in model.data_with_model.fluxlike.keys():
+                    systematics.append(
+                        model.data_with_model.fluxlike["systematics_model"][0]
+                    )
+                if "planet_model" in model.data_with_model.fluxlike.keys():
+                    planet.append(model.data_with_model.fluxlike["planet_model"][0])
 
         if len(total_model) > 0:
             if len(systematics) > 0 and len(planet) > 0:
-                self.data_with_model = self.data.attach_model(model=np.array(total_model),
-                                                              systematics_model=np.array(systematics),
-                                                              planet_model=np.array(planet))
+                self.data_with_model = self.data.attach_model(
+                    model=np.array(total_model),
+                    systematics_model=np.array(systematics),
+                    planet_model=np.array(planet),
+                )
             elif len(systematics) > 0:
-                self.data_with_model = self.data.attach_model(model=np.array(total_model),
-                                                              systematics_model=np.array(systematics))
+                self.data_with_model = self.data.attach_model(
+                    model=np.array(total_model), systematics_model=np.array(systematics)
+                )
             elif len(planet) > 0:
-                self.data_with_model = self.data.attach_model(model=np.array(total_model),
-                                                              planet_model=np.array(planet))
+                self.data_with_model = self.data.attach_model(
+                    model=np.array(total_model), planet_model=np.array(planet)
+                )
             else:
                 warnings.warn("WARNING: No models to attach!")
+
 
 from .combined import *
