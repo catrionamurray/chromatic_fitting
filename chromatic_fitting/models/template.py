@@ -37,6 +37,7 @@ class tempModel(LightcurveModel):
         self,
         # **ADD ANY EXTRA KEYWORDS THAT YOU WANT TO BE PASSED TO THE MODEL HERE**
         name: str = "temp",
+        type_of_model: str = "systematic",  # ** WHAT TYPE OF MODEL IS THIS - PLANET OR SYSTEMATIC? **
         **kw: object,
     ) -> None:
         """
@@ -58,6 +59,12 @@ class tempModel(LightcurveModel):
         self.set_name(name)
         self.metadata = {}
         self.model = self.temp_model  # **MAKE SURE TO UPDATE THIS FUNCTION!**
+        if type_of_model in allowed_types_of_models:
+            self.type_of_model = type_of_model
+        else:
+            warnings.warn(
+                f"{type_of_model} is not a valid type of model. Please select one of: {allowed_types_of_models}"
+            )
 
     def __repr__(self):
         """

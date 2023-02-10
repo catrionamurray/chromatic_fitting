@@ -25,33 +25,7 @@ from ..diagnostics import (
     check_initial_guess,
 )
 
-
-#  - Q=sqrt(N)*depth/error (Winn 2010/ Carter 2008)
-#  - chi-sq
-
-# chi_sq = []
-# nparams = 15
-# for i in range(cmod.data.nwave-1):
-#     chi_sq.append(np.sum((cmod.data_with_model.residuals[i,:]/cmod.data.uncertainty[i,:])**2)/(cmod.data.ntime-numparams-1))
-#     if chi_sq[-1] > 2:
-#         print(cmod.data.wavelength[i], chi_sq[-1])
-# chi_sq
-
-# nparams = 0
-# for k, v in self._chromatic_models.items():
-#     for pname, p in v.parameters.items():
-#         if isinstance(p, Fixed) or isinstance(p, WavelikeFixed):
-#             pass
-#         elif isinstance(p, WavelikeFitted):
-#             nparams += cmod.data.nwave
-#
-#             if "limb_darkening" in pname:
-#                 nparams += 1
-#         else:
-#
-#             if "limb_darkening" in pname:
-#                 nparams += 1
-#             nparams += 1
+allowed_types_of_models = ["planet", "systematic"]
 
 
 class LightcurveModel:
@@ -365,15 +339,31 @@ class LightcurveModel:
                 self.parameters[k].set_name(k)
 
     def separate_wavelengths(self, i):
-        # if self.outlier_flag:
-        #     data_copy = self.data_without_outliers._create_copy()
-        # else:
-        data_copy = self.data._create_copy()
+        """
+        Extracts a single-wavelength Rainbow object from the attached Rainbow
 
+        Parameters
+        ----------
+        i: the index of the wavelength to extract
+
+        Returns
+        -------
+        Rainbow object for one wavelength of the original data
+
+        """
+        data_copy = self.data._create_copy()
         for k, v in data_copy.fluxlike.items():
-            data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
+            try:
+                assert v.unit
+                data_copy.fluxlike[k] = [data_copy.fluxlike[k][i, :]] * v.unit
+            except AttributeError:
+                data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
         for k, v in data_copy.wavelike.items():
-            data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
+            try:
+                assert v.unit
+                data_copy.wavelike[k] = [data_copy.wavelike[k][i]] * v.unit
+            except AttributeError:
+                data_copy.wavelike[k] = np.array([data_copy.wavelike[k][i]])
         return data_copy
 
     def get_data(self, i=None):

@@ -12,7 +12,7 @@ from .polynomial import *
 Example of setting up a CombinedModel:
 
 def create_new_combined_model(models):
-    # e.g. if there was a transit model and 2 polynomial models:
+    # e.g. if there was a transit model and 2 polynomial models in the dictionary 'models':
     t = models['transit']
     p1 = models['p1']
     p2 = models['p2']
@@ -31,9 +31,6 @@ def create_new_combined_model(models):
     
     # MCMC (NUTS) sample the parameters:
     cm.sample(tune=2000, draws=2000, chains=4, cores=4)
-    
-    # summarize the results:
-    cm.summarize(round_to=7, fmt='wide')
     
     return cm
 
@@ -516,8 +513,8 @@ class CombinedModel(LightcurveModel):
         transit_model, systematics_model, total_model = {}, {}, {}
         i_transit, i_sys = 0, 0
         for i, mod in enumerate(self._chromatic_models.values()):
-            # if there's a transit model in the CombinedModel then separate this out to add to Rainbow
-            if isinstance(mod, TransitModel):
+            # if there's a planet model in the CombinedModel then separate this out to add to Rainbow
+            if mod.type_of_model == "planet":  # isinstance(mod, TransitModel):
                 if i_transit == 0:
                     transit_model = mod.get_model()
                 else:

@@ -15,6 +15,7 @@ class ExponentialModel(LightcurveModel):
         t0: int,
         independant_variable: str = "time",
         name: str = "exponential",
+        type_of_model: str = "systematic",
         **kw: object,
     ) -> None:
         """
@@ -32,6 +33,11 @@ class ExponentialModel(LightcurveModel):
 
         super().__init__(**kw)
         self.independant_variable = independant_variable
+        self.set_defaults()
+        self.set_name(name)
+        self.metadata = {}
+        self.model = self.exponential_model
+
         if (
             type(t0) == astropy.units.quantity.Quantity
             and independant_variable == "time"
@@ -39,10 +45,13 @@ class ExponentialModel(LightcurveModel):
             self.t0 = t0.to_value("day")
         else:
             self.t0 = t0
-        self.set_defaults()
-        self.set_name(name)
-        self.metadata = {}
-        self.model = self.exponential_model
+
+        if type_of_model in allowed_types_of_models:
+            self.type_of_model = type_of_model
+        else:
+            warnings.warn(
+                f"{type_of_model} is not a valid type of model. Please select one of: {allowed_types_of_models}"
+            )
 
     def __repr__(self):
         """

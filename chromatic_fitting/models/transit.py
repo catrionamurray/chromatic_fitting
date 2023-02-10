@@ -47,7 +47,9 @@ class TransitModel(LightcurveModel):
     A transit model for the lightcurve.
     """
 
-    def __init__(self, name: str = "transit", **kw: object) -> None:
+    def __init__(
+        self, name: str = "transit", type_of_model: str = "planet", **kw: object
+    ) -> None:
         """
         Initialise the transit model.
 
@@ -73,6 +75,12 @@ class TransitModel(LightcurveModel):
         self.set_defaults()
         self.set_name(name)
         self.model = self.transit_model
+        if type_of_model in allowed_types_of_models:
+            self.type_of_model = type_of_model
+        else:
+            warnings.warn(
+                f"{type_of_model} is not a valid type of model. Please select one of: {allowed_types_of_models}"
+            )
 
     def __repr__(self):
         """
@@ -200,14 +208,22 @@ class TransitModel(LightcurveModel):
             for i, w in enumerate(self.get_data().wavelength):
                 param_i = {}
                 for pname, param in parameters_to_loop_over.items():
-                    if isinstance(self.parameters[pname], WavelikeFitted):
-                        param_i[pname] = param[i]
+                    if pname == f"{name}planet_radius":
+                        try:
+                            param_i[pname] = param[i]
+                        except:
+                            param_i[pname] = param
                     else:
-                        param_i[pname] = param
+                        if isinstance(self.parameters[pname], WavelikeFitted):
+                            param_i[pname] = param[i]
+                        else:
+                            param_i[pname] = param
 
                 # extract light curve from Exoplanet model at given times
                 light_curves.append(
-                    xo.LimbDarkLightCurve(f"{name}limb_darkening").get_light_curve(
+                    xo.LimbDarkLightCurve(
+                        param_i[f"{name}limb_darkening"]
+                    ).get_light_curve(
                         orbit=self.orbit,
                         r=param_i[f"{name}planet_radius"],
                         t=list(data.time.to_value("day")),
