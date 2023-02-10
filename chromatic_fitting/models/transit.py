@@ -231,25 +231,18 @@ class TransitModel(LightcurveModel):
                     + param_i[f"{name}baseline"]
                 )
 
-                initial_guess.append(eval_in_model(light_curves[-1]))
-
-            ## calculate the transit + flux (out-of-transit) baseline model
-            # if isinstance(self.parameters[name + "baseline"], WavelikeFitted):
-            #     lc = [light_curves[i] + baseline[j][i] for i in range(data.nwave)]
-            # else:
-            #     lc = light_curves + baseline[j]
-
-            # mu = pm.math.sum(lc, axis=-1)
-            # mu = pm.math.sum(np.array(light_curves), axis=-1) + baseline[j]  # [i]
+                initial_guess.append(
+                    eval_in_model(pm.math.sum(light_curves, axis=-1)[-1])
+                )
 
             # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
             # later:
             if self.store_models:
-                Deterministic(f"{name}model", pm.math.stack(light_curves))
+                Deterministic(f"{name}model", pm.math.sum(light_curves, axis=-1))
 
             # add the transit to the final light curve
             if not hasattr(self, "every_light_curve"):
-                self.every_light_curve = pm.math.stack(light_curves)
+                self.every_light_curve = pm.math.sum(light_curves, axis=-1)
             else:
                 print("WHEN?")
 

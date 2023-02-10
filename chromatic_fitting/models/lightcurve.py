@@ -1575,6 +1575,20 @@ class LightcurveModels(LightcurveModel):
 
         return
 
+    def plot_orbit(self, **kw):
+        """
+        Plot orbit
+        """
+        if isinstance(self._og_model, TransitModel):
+            self.apply_operation_to_constituent_models("plot_orbit", **kw)
+        else:
+            warnings.warn(
+                f"You cannot plot an orbit for a non-transit model!"
+                f" Your model is: {self._og_model}"
+            )
+
+        return
+
     def setup_lightcurves(self, store_models=False, **kw):
         """
         Set-up lightcurves
