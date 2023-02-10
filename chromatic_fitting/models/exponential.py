@@ -66,9 +66,6 @@ class ExponentialModel(LightcurveModel):
         store_models: boolean to determine whether to store the lightcurve model during the MCMC fit
 
         """
-
-        # if the optimization method is "separate" then loop over each wavelength's model/data
-        # datas, models = self.choose_model_based_on_optimization_method()
         data = self.get_data()
         mod = self._pymc3_model
         kw = {"shape": data.nwave}
@@ -96,10 +93,6 @@ class ExponentialModel(LightcurveModel):
             f"{name}decay_time": [],
             f"{name}baseline": [],
         }
-        # for j, (mod, data) in enumerate(zip(models, datas)):
-        #     if self.optimization == "separate":
-        #         kw["i"] = j
-        # j = 0
 
         with mod:
             for pname in parameters_to_loop_over.keys():
@@ -179,12 +172,6 @@ class ExponentialModel(LightcurveModel):
         -------
         np.array: exponential model with the given parameters
         """
-        # exponential = []
-
-        # if the optimization method is "separate" then extract wavelength {i}'s data
-        # if self.optimization == "separate":
-        #     data = self.get_data(i)
-        # else:
         data = self.get_data()
 
         x = data.get(self.independant_variable)

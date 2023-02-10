@@ -94,8 +94,6 @@ class PolynomialModel(LightcurveModel):
 
         """
 
-        # if the optimization method is "separate" then loop over each wavelength's model/data
-        # datas, models = self.choose_model_based_on_optimization_method()
         data = self.get_data()
         mod = self._pymc3_model
         kw = {"shape": data.nwave}
@@ -202,8 +200,6 @@ class PolynomialModel(LightcurveModel):
         np.array: polynomial model with the given parameters
         """
         poly = []
-
-        # if the optimization method is "separate" then extract wavelength {i}'s data
         data = self.get_data()
 
         # for speed extract the variable used during the fit:

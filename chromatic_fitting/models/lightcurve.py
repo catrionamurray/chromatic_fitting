@@ -453,7 +453,6 @@ class LightcurveModel:
                 uncertainties = pm.math.stack(uncertainty)
             else:
                 uncertainties = np.array(data.uncertainty)
-            #                     uncertainties.append(data.uncertainty[i, :])
 
             # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
             if mask_outliers:
@@ -464,20 +463,14 @@ class LightcurveModel:
                 flux = np.array(data.flux)
 
             try:
-                data_name = f"data"
-                # light_curve_name = f"wavelength_model"
-
                 pm.Normal(
-                    data_name,
-                    mu=self.every_light_curve,  # [light_curve_name],
+                    "data",
+                    mu=self.every_light_curve,
                     sd=uncertainties,
                     observed=flux,
                 )
             except Exception as e:
                 print(e)
-
-    #                 print(f"Setting up likelihood failed for wavelength {i}: {e}")
-    #                 self.bad_wavelengths.append(i)
 
     def sample_priors(self, ndraws=3):
         """
@@ -485,15 +478,8 @@ class LightcurveModel:
         :parameter n
         Number of priors to sample
         """
-        # try:
         with self._pymc3_model:
             return sample_prior_predictive(ndraws)
-        # except:
-        #     priors = []
-        #     for mod in self._pymc3_model:
-        #         with mod:
-        #             priors.append(sample_prior_predictive(ndraws))
-        #     return priors
 
     def sample_posteriors(self, ndraws=3, var_names=None):
         """
@@ -746,7 +732,7 @@ class LightcurveModel:
         Number of priors to plot (default=3)
         """
         data = self.get_data()
-        prior_predictive_trace = self.sample_prior(ndraws=n)
+        prior_predictive_trace = self.sample_priors(ndraws=n)
 
         for i in range(n):
             try:
@@ -796,7 +782,7 @@ class LightcurveModel:
         Number of posteriors to plot (default=3)
         """
         data = self.get_data()
-        posterior_predictive_trace = self.sample_posterior(n)
+        posterior_predictive_trace = self.sample_posteriors(n)
 
         posterior_model = {}
         for i in range(n):
