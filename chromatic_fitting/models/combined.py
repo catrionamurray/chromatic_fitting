@@ -352,23 +352,31 @@ class CombinedModel(LightcurveModel):
         for m in self._chromatic_models.values():
             m.optimization = optimization_method
 
-        if optimization_method == "separate":
-            # if we chose to optimize each wavelength independently then we need to change all the parameters types
-            # to WaveLike (have a different value for each wavelength)
-            self.apply_operation_to_constituent_models("change_all_priors_to_Wavelike")
+        if self.optimization == "separate":
+            try:
+                og_model = self.copy()
+                if hasattr(self, "data"):
+                    og_model.data = self.data
+                self.__class__ = LightcurveModels
+                self.__init__(model=og_model)
+            except Exception as e:
+                print(e)
 
+    @to_loop_for_separate_wavelength_fitting
     def setup_orbit(self):
         """
         Create an `exoplanet` orbit model, given the stored parameters.
         """
         self.apply_operation_to_constituent_models("setup_orbit")
 
+    @to_loop_for_separate_wavelength_fitting
     def plot_orbit(self):
         """
         Plot an `exoplanet` orbit model, given the stored parameters.
         """
         self.apply_operation_to_constituent_models("plot_orbit")
 
+    @to_loop_for_separate_wavelength_fitting
     def setup_lightcurves(self, store_models: bool = False, **kw):
         """
         Set-up lightcurves in combined model : for each consituent model set-up the lightcurves according to their
@@ -491,6 +499,7 @@ class CombinedModel(LightcurveModel):
                 "all the necessary parameters"
             )
 
+    @to_loop_for_separate_wavelength_fitting
     def combined_model(self, **kw):
         all_models, total_model = {}, []
         # for each constituent model get its 'best-fit' model:
@@ -505,6 +514,7 @@ class CombinedModel(LightcurveModel):
 
         return total_model
 
+    @to_loop_for_separate_wavelength_fitting
     def add_model_to_rainbow(self):
         """
         Add the 'best-fit' model(s) to the `rainbow` object.
@@ -514,7 +524,7 @@ class CombinedModel(LightcurveModel):
         i_transit, i_sys = 0, 0
         for i, mod in enumerate(self._chromatic_models.values()):
             # if there's a planet model in the CombinedModel then separate this out to add to Rainbow
-            if mod.type_of_model == "planet":  # isinstance(mod, TransitModel):
+            if mod.type_of_model == "planet":
                 if i_transit == 0:
                     transit_model = mod.get_model()
                 else:
@@ -591,47 +601,3 @@ class CombinedModel(LightcurveModel):
         object
         """
         self.apply_operation_to_constituent_models("plot_transmission_spectrum", **kw)
-
-    # def plot_all_models(
-    #     self,
-    #     wavelength=None,
-    #     ax: matplotlib.axes.Axes = None,
-    #     show_data=True,
-    #     **kw: object,
-    # ):
-    #     if ax is None:
-    #         ax = []
-    #         if wavelength is None:
-    #             for i in range(self.data.nwave):
-    #                 # make sure ax is set up
-    #                 fi = plt.figure(
-    #                     figsize=(8, 4),
-    #                     # plt.matplotlib.rcParams["figure.figsize"][::-1],
-    #                     constrained_layout=True,
-    #                 )
-    #                 ax.append(plt.subplot())
-    #             # plt.sca(ax)
-    #         else:
-    #             kw["wavelength"] = wavelength
-    #             # make sure ax is set up
-    #             fi = plt.figure(
-    #                 figsize=(8, 4),
-    #                 # plt.matplotlib.rcParams["figure.figsize"][::-1],
-    #                 constrained_layout=True,
-    #             )
-    #             ax.append(plt.subplot())
-    #
-    #     kw["ax"] = ax
-    #     self.apply_operation_to_constituent_models("plot_model", **kw)
-    #
-    #     if hasattr(self, "_fit_models"):
-    #         all_models = self._fit_models
-    #     else:
-    #         all_models = self.get_model()
-    #     if wavelength is None:
-    #         for i in range(self.data.nwave):
-    #             ax[i].plot(self.data.time, all_models["total"][f"w{i}"], label="total")
-    #     else:
-    #         ax[0].plot(
-    #             self.data.time, all_models["total"][f"w{wavelength}"], label="total"
-    #         )

@@ -88,6 +88,7 @@ class PolynomialModel(LightcurveModel):
                 # for Python < 3.9 add dictionaries using a different method
                 self.defaults = {**self.defaults, **{f"p_{d}": 0.0}}
 
+    @to_loop_for_separate_wavelength_fitting
     def setup_lightcurves(
         self, store_models: bool = False, normalize: bool = True, **kwargs
     ):
@@ -185,19 +186,11 @@ class PolynomialModel(LightcurveModel):
                 )  # pm.math.sum(poly, axis=0))
 
             # add the polynomial model to the overall lightcurve:
-            if not hasattr(self, "every_light_curve"):
-                self.every_light_curve = pm.math.stack(poly, axis=0)
-            else:
-                # I think this will happen if the user tries to rerun setup_lightcurves
-                print("WHEN DOES THIS HAPPEN?")
-                # self.every_light_curve += pm.math.stack(poly, axis=0)
-
+            self.every_light_curve = pm.math.stack(poly, axis=0)
             # add the initial guess to the model:
-            if not hasattr(self, "initial_guess"):
-                self.initial_guess = np.array(initial_guess)
-            else:
-                print("WHEN DOES THIS HAPPEN?")
+            self.initial_guess = np.array(initial_guess)
 
+    @to_loop_for_separate_wavelength_fitting
     def polynomial_model(self, poly_params: dict, i: int = 0) -> np.array:
         """
         Return a polynomial model, given a dictionary of parameters.
@@ -241,6 +234,7 @@ class PolynomialModel(LightcurveModel):
                 poly.append(poly_params[f"{self.name}_p_{d}_w0"] * (x**d))
             return np.sum(poly, axis=0)
 
+    @to_loop_for_separate_wavelength_fitting
     def add_model_to_rainbow(self):
         """
         Add the polynomial model to the Rainbow object.

@@ -107,29 +107,20 @@ class tempModel(LightcurveModel):
             self.store_models = store_models
 
         # **MAKE SURE TO UPDATE THESE PARAMETERS!**
-        parameters_to_loop_over = {
+        parameters = {
             f"{name}param_1": [],
-            f"{name}param_2": [],
+            f"{name}param_2": [],  # ...
         }
 
         kw = {"shape": self.get_data().nwave}
 
         with self._pymc3_model:
             # set-up the parameter prior distributions within the model
-            for pname in parameters_to_loop_over.keys():
-                parameters_to_loop_over[pname].append(
-                    self.parameters[pname].get_prior_vector(**kw)
-                )
+            parameters = self.setup_priors(parameters, **kw)
 
             y_model, initial_guess = [], []
             for i, w in enumerate(self.get_data().wavelength):
-                param_i = {}
-                for param_name, param in parameters_to_loop_over.items():
-                    if isinstance(self.parameters[param_name], WavelikeFitted):
-                        param_i[param_name] = param[i]
-                    else:
-                        param_i[param_name] = param
-
+                param_i = self.extract_parameters_for_wavelength_i(parameters, i)
                 # **FUNCTION TO MODEL - MAKE SURE IT MATCHES self.temp_model()!**
                 function_of_param_i = some_function_of_parameters(param_i)
                 # store the function at wavelength i
@@ -143,16 +134,9 @@ class tempModel(LightcurveModel):
                 Deterministic(f"{name}model", pm.math.stack(y_model, axis=0))
 
             # add the model to the overall lightcurve:
-            if not hasattr(self, "every_light_curve"):
-                self.every_light_curve = pm.math.stack(y_model, axis=0)
-            else:
-                print("?")
-
+            self.every_light_curve = pm.math.stack(y_model, axis=0)
             # store the initial guess:
-            if not hasattr(self, "initial_guess"):
-                self.initial_guess = pm.math.stack(initial_guess, axis=0)
-            else:
-                print("?")
+            self.initial_guess = pm.math.stack(initial_guess, axis=0)
 
     def temp_model(self, temp_params: dict, i: int = 0) -> np.array:
         """

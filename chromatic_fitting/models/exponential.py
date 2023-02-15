@@ -65,6 +65,7 @@ class ExponentialModel(LightcurveModel):
         """
         self.defaults = dict(A=0.01, decay_time=0.01, baseline=1.0)
 
+    @to_loop_for_separate_wavelength_fitting
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create an exponential model, given the stored parameters.
@@ -95,17 +96,14 @@ class ExponentialModel(LightcurveModel):
         if store_models == True:
             self.store_models = store_models
 
-        parameters_to_loop_over = {
+        parameters = {
             f"{name}A": [],
             f"{name}decay_time": [],
             f"{name}baseline": [],
         }
 
         with self._pymc3_model:
-            for pname in parameters_to_loop_over.keys():
-                parameters_to_loop_over[pname] = self.parameters[
-                    pname
-                ].get_prior_vector(**kw)
+            parameters = self.setup_priors(parameters, **kw)
 
             # get the independent variable from the Rainbow object:
             x = data.get(self.independant_variable)
@@ -125,12 +123,7 @@ class ExponentialModel(LightcurveModel):
                 else:
                     xi = x
 
-                param_i = {}
-                for pname, param in parameters_to_loop_over.items():
-                    if isinstance(self.parameters[pname], WavelikeFitted):
-                        param_i[pname] = param[i]
-                    else:
-                        param_i[pname] = param
+                param_i = self.extract_parameters_for_wavelength_i(parameters, i)
 
                 exp.append(
                     param_i[f"{name}A"]
@@ -146,17 +139,18 @@ class ExponentialModel(LightcurveModel):
                 Deterministic(f"{name}model", exp)
 
             # add the exponential model to the overall lightcurve:
-            if not hasattr(self, "every_light_curve"):
-                self.every_light_curve = pm.math.stack(exp)
-            else:
-                print("ERROR: WHEN WOULD THIS HAPPEN?")
+            # if not hasattr(self, "every_light_curve"):
+            self.every_light_curve = pm.math.stack(exp)
+            # else:
+            #     print("ERROR: WHEN WOULD THIS HAPPEN?")
 
             # add the initial guess to the model:
-            if not hasattr(self, "initial_guess"):
-                self.initial_guess = np.array(initial_guess)
-            else:
-                print("ERROR: WHEN WOULD THIS HAPPEN?")
+            # if not hasattr(self, "initial_guess"):
+            self.initial_guess = np.array(initial_guess)
+            # else:
+            #     print("ERROR: WHEN WOULD THIS HAPPEN?")
 
+    @to_loop_for_separate_wavelength_fitting
     def exponential_model(self, exponential_params: dict, i: int = 0) -> np.array:
         """
         Return a exponential model, given a dictionary of parameters.
@@ -191,6 +185,7 @@ class ExponentialModel(LightcurveModel):
         )
         return exponential
 
+    @to_loop_for_separate_wavelength_fitting
     def add_model_to_rainbow(self):
         """
         Add the exponential model to the Rainbow object.

@@ -49,6 +49,7 @@ class TrapezoidModel(LightcurveModel):
         """
         self.defaults = dict(delta=0.01, P=1, t0=0, T=0.1, tau=0.01, baseline=1.0)
 
+    @to_loop_for_separate_wavelength_fitting
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create a trapezoid model, given the stored parameters.
@@ -81,7 +82,7 @@ class TrapezoidModel(LightcurveModel):
             self.store_models = store_models
 
         # P, t0, tau, T, baseline, delta = [], [], [], [], [], []
-        parameters_to_loop_over = {
+        parameters = {
             f"{name}P": [],
             f"{name}t0": [],
             f"{name}delta": [],
@@ -90,21 +91,13 @@ class TrapezoidModel(LightcurveModel):
             f"{name}baseline": [],
         }
 
-        with mod:
+        with self._pymc3_model:
             # for every wavelength set up a step model
-            for pname in parameters_to_loop_over.keys():
-                parameters_to_loop_over[pname].append(
-                    self.parameters[pname].get_prior_vector(**kw)
-                )
+            parameters = self.setup_priors(parameters, **kw)
 
             trap, initial_guess = [], []
             for i, w in enumerate(data.wavelength):
-                param_i = {}
-                for pname, param in parameters_to_loop_over.items():
-                    if isinstance(self.parameters[pname], WavelikeFitted):
-                        param_i[pname] = param[i]
-                    else:
-                        param_i[pname] = param
+                param_i = self.extract_parameters_for_wavelength_i(parameters, i)
 
                 # calculate a phase-folded time (still in units of days)
                 x = (
@@ -154,17 +147,11 @@ class TrapezoidModel(LightcurveModel):
                 Deterministic(f"{name}model", pm.math.stack(trap, axis=0))
 
             # add the step model to the overall lightcurve:
-            if not hasattr(self, "every_light_curve"):
-                self.every_light_curve = pm.math.stack(trap, axis=0)
-            else:
-                print("?")
-
+            self.every_light_curve = pm.math.stack(trap, axis=0)
             # add the initial_guess to the overall lightcurve:
-            if not hasattr(self, "initial_guess"):
-                self.initial_guess = pm.math.stack(initial_guess, axis=0)
-            else:
-                print("?")
+            self.initial_guess = pm.math.stack(initial_guess, axis=0)
 
+    @to_loop_for_separate_wavelength_fitting
     def trapezoid_model(self, trap_params: dict, i: int = 0) -> np.array:
         """
         Return a step model, given a dictionary of parameters.
@@ -225,6 +212,7 @@ class TrapezoidModel(LightcurveModel):
         )
         return flux
 
+    @to_loop_for_separate_wavelength_fitting
     def add_model_to_rainbow(self):
         """
         Add the trapezoid model to the Rainbow object.

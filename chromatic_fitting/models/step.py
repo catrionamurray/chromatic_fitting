@@ -52,6 +52,7 @@ class StepModel(LightcurveModel):
         """
         self.defaults = dict(df=0.01, f0=1.0, t0=0.0)
 
+    @to_loop_for_separate_wavelength_fitting
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create a polynomial model, given the stored parameters.
@@ -85,8 +86,7 @@ class StepModel(LightcurveModel):
         if store_models == True:
             self.store_models = store_models
 
-        df, t0, f0 = [], [], []
-        parameters_to_loop_over = {
+        parameters = {
             f"{name}df": [],
             f"{name}t0": [],
             f"{name}f0": [],
@@ -94,10 +94,7 @@ class StepModel(LightcurveModel):
 
         with mod:
             # for every wavelength set up a step model
-            for pname in parameters_to_loop_over.keys():
-                parameters_to_loop_over[pname] = self.parameters[
-                    pname
-                ].get_prior_vector(**kw)
+            parameters = self.setup_priors(parameters, **kw)
 
             # get the independent variable from the Rainbow object:
             x = data.get(self.independant_variable)
@@ -117,12 +114,7 @@ class StepModel(LightcurveModel):
                 else:
                     xi = x
 
-                param_i = {}
-                for pname, param in parameters_to_loop_over.items():
-                    if isinstance(self.parameters[pname], WavelikeFitted):
-                        param_i[pname] = param[i]
-                    else:
-                        param_i[pname] = param
+                param_i = self.extract_parameters_for_wavelength_i(parameters, i)
 
                 # print(xi, eval_in_model(t0_i), eval_in_model(pm.math.gt(xi, t0_i)))
                 step.append(
@@ -140,16 +132,10 @@ class StepModel(LightcurveModel):
                 Deterministic(f"{name}model", pm.math.stack(step, axis=0))
 
             # add the step model to the overall lightcurve:
-            if not hasattr(self, "every_light_curve"):
-                self.every_light_curve = pm.math.stack(step, axis=0)
-            else:
-                print("WHEN WOULD THIS HAPPEN?")
+            self.every_light_curve = pm.math.stack(step, axis=0)
+            self.initial_guess = pm.math.stack(initial_guess, axis=0)
 
-            if not hasattr(self, "initial_guess"):
-                self.initial_guess = pm.math.stack(initial_guess, axis=0)
-            else:
-                print("WHEN WOULD THIS HAPPEN?")
-
+    @to_loop_for_separate_wavelength_fitting
     def step_model(self, step_params: dict, i: int = 0) -> np.array:
         """
         Return a step model, given a dictionary of parameters.
@@ -180,19 +166,13 @@ class StepModel(LightcurveModel):
 
         self.check_and_fill_missing_parameters(step_params, i)
 
-        # try:
         step = np.ones(len(x)) * step_params[f"{self.name}_f0"]
         step[x >= step_params[f"{self.name}_t0"]] = (
             step_params[f"{self.name}_f0"] + step_params[f"{self.name}_df"]
         )
         return step
-        # except KeyError:
-        #     step = np.ones(len(x)) * step_params[f"{self.name}_f0_w0"]
-        #     step[x >= step_params[f"{self.name}_t0_w0"]] = (
-        #         step_params[f"{self.name}_f0_w0"] + step_params[f"{self.name}_df_w0"]
-        #     )
-        #     return step
 
+    @to_loop_for_separate_wavelength_fitting
     def add_model_to_rainbow(self):
         """
         Add the step model to the Rainbow object.

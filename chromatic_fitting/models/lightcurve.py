@@ -26,8 +26,53 @@ from ..diagnostics import (
 )
 
 allowed_types_of_models = ["planet", "systematic"]
+import time
+from functools import wraps
 
 
+def decorate_all_functions(function_decorator):
+    def decorator(cls):
+        for name, obj in vars(cls).items():
+            if callable(obj):
+                try:
+                    obj = obj.__func__  # unwrap Python 2 unbound method
+                except AttributeError:
+                    pass  # not needed in Python 3
+                setattr(cls, name, function_decorator(obj))
+        return cls
+
+    return decorator
+
+
+def to_loop_for_separate_wavelength_fitting(func):
+    @wraps(func)
+    def wrapper(*args, **kw):
+        if isinstance(args[0], LightcurveModels):
+            print("{} called".format(func.__name__))
+            print(args)
+            print(kw)
+            for k, v in kw.items():
+                setattr(args[0], k, v)
+            return args[0].apply_operation_to_constituent_models(func.__name__)(**kw)
+        else:
+            print(args[0].__class__)
+            return func(*args, **kw)
+
+    return wrapper
+
+
+def my_timer(func):
+    def _timer(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        print(f"Execution time: {end - start}")
+        return result
+
+    return _timer
+
+
+# @decorate_all_functions(print_on_call)
 class LightcurveModel:
     """
     The base lightcurve model
@@ -384,6 +429,21 @@ class LightcurveModel:
 
         return self.data
 
+    def setup_priors(self, param_dict, **kw):
+        for pname in param_dict.keys():
+            param_dict[pname] = self.parameters[pname].get_prior_vector(**kw)
+        return param_dict
+
+    def extract_parameters_for_wavelength_i(self, param_dict, i):
+        param_i = {}
+        for pname, param in param_dict.items():
+            if isinstance(self.parameters[pname], WavelikeFitted):
+                param_i[pname] = param[i]
+            else:
+                param_i[pname] = param
+        return param_i
+
+    @to_loop_for_separate_wavelength_fitting
     def setup_likelihood(
         self,
         mask_outliers=False,
@@ -462,6 +522,7 @@ class LightcurveModel:
             except Exception as e:
                 print(e)
 
+    @to_loop_for_separate_wavelength_fitting
     def sample_priors(self, ndraws=3):
         """
         Draw samples from the prior distribution.
@@ -471,6 +532,7 @@ class LightcurveModel:
         with self._pymc3_model:
             return sample_prior_predictive(ndraws)
 
+    @to_loop_for_separate_wavelength_fitting
     def sample_posteriors(self, ndraws=3, var_names=None):
         """
         Draw samples from the posterior distribution.
@@ -487,6 +549,7 @@ class LightcurveModel:
         with self._pymc3_model:
             return sample_posterior_predictive(self.trace, ndraws, var_names=var_names)
 
+    @to_loop_for_separate_wavelength_fitting
     def optimize(self, plot=False, plotkw={}, **kw):
         """
         Wrapper for PyMC3_ext sample
@@ -585,6 +648,7 @@ class LightcurveModel:
                 print(f"Sampling failed for one of the models: {e}")
                 return None
 
+    @to_loop_for_separate_wavelength_fitting
     def sample(
         self,
         use_optimized_start_point=False,
@@ -715,6 +779,7 @@ class LightcurveModel:
         self.sample(start=opt)
         self.summarize(round_to=7, fmt="wide")
 
+    @to_loop_for_separate_wavelength_fitting
     def plot_priors(self, n=3, quantity="data", plot_all=True):
         """
         Plot n prior samples from the parameter distributions defined by the user
@@ -763,6 +828,7 @@ class LightcurveModel:
                 else:
                     data.imshow(ax=ax[i], quantity=f"prior-predictive-{i}")
 
+    @to_loop_for_separate_wavelength_fitting
     def plot_posteriors(self, n=3, quantity="data", plot_all=True):
         """
         Plot n posterior samples from the parameter distributions defined by the user
@@ -993,6 +1059,7 @@ class LightcurveModel:
                     )
         return params
 
+    @to_loop_for_separate_wavelength_fitting
     def get_model(
         self,
         params_dict: dict = None,
@@ -1466,6 +1533,7 @@ class LightcurveModel:
             )
 
 
+# @decorate_all_functions(print_on_call)
 class LightcurveModels(LightcurveModel):
     def __init__(self, model):
         self.models = {}
@@ -1475,6 +1543,8 @@ class LightcurveModels(LightcurveModel):
         self.outlier_flag = False
         self.parameters = model.parameters
         self.type_of_model = model.type_of_model
+        self._list_of_methods = list(dir(self))
+        self._list_of_og_methods = list(dir(model))
 
         if hasattr(model, "data"):
             self.attach_data(model.data)
@@ -1488,6 +1558,22 @@ class LightcurveModels(LightcurveModel):
         else:
             return f'<chromatic models (unknown number of separate wavelengths) "{self.name}" 🌈>'
 
+    def __getattr__(self, item):
+        if item not in self._list_of_methods:
+            if item in self._list_of_og_methods:
+
+                def make_wrap(**kw):
+                    print("Running this once...")
+                    op = getattr(self._og_model.__class__, item)
+                    return op(self, **kw)
+
+                return make_wrap
+                # return self.apply_operation_to_constituent_models(operation=item)
+            else:
+                raise AttributeError
+        else:
+            return self.item
+
     def setup_separate_structure(self, wavelengths):
         self.wavelengths = wavelengths
         self.nwave = len(wavelengths)
@@ -1496,9 +1582,7 @@ class LightcurveModels(LightcurveModel):
             self.models[f"w{w}"]._pymc3_model = pm.Model()
             self.models[f"w{w}"].name = self.name
 
-    def apply_operation_to_constituent_models(
-        self, operation: str, *args: object, **kwargs: object
-    ) -> object:
+    def apply_operation_to_constituent_models(self, operation: str) -> object:
         """
         Apply an operation to all models within LightcurveModels
 
@@ -1512,22 +1596,25 @@ class LightcurveModels(LightcurveModel):
         -------
         object
         """
-        results = []
-        # for each constituent model apply the chosen operation
-        for name, model in self.models.items():
-            try:
-                op = getattr(model, operation)
-                result = op(*args, **kwargs)
-                if result is not None:
-                    results.append(result)
-            except Exception as e:
-                print(f"Error applying {operation} to {model}: {e}")
 
-        # if there are returned value(s) from the operation then return these, otherwise return None
-        if len(results) == 0:
-            return None
-        else:
-            return results
+        def wrapper_for_function(*args, **kwargs):
+            results = []
+            # for each constituent model apply the chosen operation
+            for name, model in self.models.items():
+                try:
+                    op = getattr(model, operation)
+                    result = op(*args, **kwargs)
+                    if result is not None:
+                        results.append(result)
+                except Exception as e:
+                    print(f"Error applying {operation} to {model}: {e}")
+
+            if len(results) == 0:
+                return None
+            else:
+                return results
+
+        return wrapper_for_function
 
     def separate_wavelengths(self, i):
         data_copy = self.data._create_copy()
@@ -1561,85 +1648,24 @@ class LightcurveModels(LightcurveModel):
             data_copy = self.separate_wavelengths(i)
             self.models[f"w{i}"].data = data_copy
 
-    def setup_orbit(self, **kw):
-        """
-        Set-up orbit
-        """
-        if isinstance(self._og_model, TransitModel):
-            self.apply_operation_to_constituent_models("setup_orbit", **kw)
-        else:
-            warnings.warn(
-                f"You cannot set up an orbit for a non-transit model!"
-                f" Your model is: {self._og_model}"
-            )
-
-        return
-
-    def plot_orbit(self, **kw):
-        """
-        Plot orbit
-        """
-        if isinstance(self._og_model, TransitModel):
-            self.apply_operation_to_constituent_models("plot_orbit", **kw)
-        else:
-            warnings.warn(
-                f"You cannot plot an orbit for a non-transit model!"
-                f" Your model is: {self._og_model}"
-            )
-
-        return
-
-    def setup_lightcurves(self, store_models=False, **kw):
+    def setup_lightcurves(self, **kw):
         """
         Set-up lightcurves
         """
         if not hasattr(self, "nwave"):
             self.setup_separate_structure(self.data.wavelength)
-        self.store_models = store_models
-        self.apply_operation_to_constituent_models(
-            "setup_lightcurves", store_models=store_models, **kw
-        )
-
-    def optimize(self, **kw):
-        """
-        Optimize parameters for best-fit
-        """
-        opt = self.apply_operation_to_constituent_models("optimize", **kw)
-        return opt
-
-    def sample_priors(self, **kw):
-        """
-        Sample the prior distributions
-        """
-        priors = self.apply_operation_to_constituent_models("sample_priors", **kw)
-        return priors
-
-    def sample_posteriors(self, **kw):
-        """
-        Sample the posterior distributions
-        """
-        posteriors = self.apply_operation_to_constituent_models(
-            "sample_posteriors", **kw
-        )
-        return posteriors
-
-    def plot_priors(self, **kw):
-        """
-        Sample and plot the prior distributions
-        """
-        self.apply_operation_to_constituent_models("plot_priors", **kw)
-
-    def plot_posteriors(self, **kw):
-        """
-        Sample and plot the posteriors distributions
-        """
-        self.apply_operation_to_constituent_models("plot_posteriors", **kw)
+        # self.store_models = store_models
+        self._og_model.__class__.setup_lightcurves(self, **kw)
+        # self.apply_operation_to_constituent_models(operation="setup_lightcurves")(
+        #     store_models=store_models, **kw
+        # )
 
     def get_model(self, **kw):
         if hasattr(self, "_fit_models") and "as_array" not in kw.keys():
             return self._fit_models
         else:
-            models_list = self.apply_operation_to_constituent_models("get_model", **kw)
+            models_list = self._og_model.__class__.get_model(self, **kw)
+            # models_list = self.apply_operation_to_constituent_models("get_model")(**kw)
             if "as_array" in kw.keys():
                 if kw["as_array"] == True:
                     models_array = np.array([m[0] for m in models_list])
@@ -1656,14 +1682,9 @@ class LightcurveModels(LightcurveModel):
         """
         Sample parameters using NUTS MCMC
         """
-        self.apply_operation_to_constituent_models("sample", **kw)
+        self._og_model.__class__.sample(self, **kw)
+        # self.apply_operation_to_constituent_models("sample")(**kw)
         self.recombine_summaries()
-
-    def setup_likelihood(self, **kw):
-        """
-        Setup Likelihood
-        """
-        self.apply_operation_to_constituent_models("setup_likelihood", **kw)
 
     def make_transmission_spectrum_table(self, **kw):
         if isinstance(self._og_model, TransitModel):
@@ -1690,7 +1711,7 @@ class LightcurveModels(LightcurveModel):
                 summaries = model.summary.copy()
             else:
                 summary = model.summary.copy()
-                summary.index = [s.replace("0", f"{i}") for s in summary.index.values]
+                summary.index = [s.replace("[0", f"[{i}") for s in summary.index.values]
                 summaries = pd.concat([summaries, summary])
         self.summary = summaries
 
@@ -1705,11 +1726,11 @@ class LightcurveModels(LightcurveModel):
                 b = model.get_results()
                 b.index = [name]
                 a = pd.concat([a, b])
-
         return a
 
     def add_model_to_rainbow(self):
-        self.apply_operation_to_constituent_models("add_model_to_rainbow")
+        self._og_model.__class__.add_model_to_rainbow(self)
+        # self.apply_operation_to_constituent_models("add_model_to_rainbow")()
 
         total_model, systematics, planet = [], [], []
         for name, model in self.models.items():

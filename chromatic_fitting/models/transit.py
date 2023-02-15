@@ -105,6 +105,7 @@ class TransitModel(LightcurveModel):
             limb_darkening=[0.2, 0.2],
         )
 
+    @to_loop_for_separate_wavelength_fitting
     def setup_orbit(self):
         """
         Create an `exoplanet` orbit model, given the stored parameters.
@@ -139,6 +140,7 @@ class TransitModel(LightcurveModel):
 
             self.orbit = orbit
 
+    @to_loop_for_separate_wavelength_fitting
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create an `exoplanet` light curve model, given the stored parameters.
@@ -256,6 +258,7 @@ class TransitModel(LightcurveModel):
             #     self.every_light_curve[k] for k in tqdm(self.every_light_curve)
             # ]
 
+    @to_loop_for_separate_wavelength_fitting
     def transit_model(
         self, transit_params: dict, i: int = 0, time: list = None
     ) -> np.array:
@@ -309,6 +312,7 @@ class TransitModel(LightcurveModel):
 
         return ldlc.transpose()[0] + transit_params[f"{name}baseline"]
 
+    @to_loop_for_separate_wavelength_fitting
     def plot_orbit(self, timedata: object = None, filename: str = None):
         """
         Plot the orbit model (to check that the planet is transiting at the times we've set).
@@ -443,6 +447,7 @@ class TransitModel(LightcurveModel):
         plt.xlabel("Wavelength (microns)")
         plt.ylabel("Radius Ratio")
 
+    @to_loop_for_separate_wavelength_fitting
     def add_model_to_rainbow(self):
         """
         Add the transit model to the Rainbow object.
