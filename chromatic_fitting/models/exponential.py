@@ -151,7 +151,7 @@ class ExponentialModel(LightcurveModel):
             #     print("ERROR: WHEN WOULD THIS HAPPEN?")
 
     @to_loop_for_separate_wavelength_fitting
-    def exponential_model(self, exponential_params: dict, i: int = 0) -> np.array:
+    def exponential_model(self, params: dict, i: int = 0) -> np.array:
         """
         Return a exponential model, given a dictionary of parameters.
 
@@ -174,14 +174,12 @@ class ExponentialModel(LightcurveModel):
         if len(np.shape(x)) > 1:
             x = x[i, :]
 
-        self.check_and_fill_missing_parameters(exponential_params, i)
+        self.check_and_fill_missing_parameters(params, i)
 
-        #         try:
-        #             for d in range(self.degree + 1)
         exponential = (
-            exponential_params[f"{self.name}_A"]
-            * np.exp(-(x - self.t0) / exponential_params[f"{self.name}_decay_time"])
-            + exponential_params[f"{self.name}_baseline"]
+            params[f"{self.name}_A"]
+            * np.exp(-(x - self.t0) / params[f"{self.name}_decay_time"])
+            + params[f"{self.name}_baseline"]
         )
         return exponential
 

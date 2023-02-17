@@ -191,7 +191,7 @@ class PolynomialModel(LightcurveModel):
             self.initial_guess = np.array(initial_guess)
 
     @to_loop_for_separate_wavelength_fitting
-    def polynomial_model(self, poly_params: dict, i: int = 0) -> np.array:
+    def polynomial_model(self, params: dict, i: int = 0) -> np.array:
         """
         Return a polynomial model, given a dictionary of parameters.
 
@@ -223,15 +223,15 @@ class PolynomialModel(LightcurveModel):
         if len(np.shape(x)) > 1:
             x = x[i, :]
 
-        self.check_and_fill_missing_parameters(poly_params, i)
+        self.check_and_fill_missing_parameters(params, i)
 
         try:
             for d in range(self.degree + 1):
-                poly.append(poly_params[f"{self.name}_p_{d}"] * (x**d))
+                poly.append(params[f"{self.name}_p_{d}"] * (x**d))
             return np.sum(poly, axis=0)
         except KeyError:
             for d in range(self.degree + 1):
-                poly.append(poly_params[f"{self.name}_p_{d}_w0"] * (x**d))
+                poly.append(params[f"{self.name}_p_{d}_w0"] * (x**d))
             return np.sum(poly, axis=0)
 
     @to_loop_for_separate_wavelength_fitting

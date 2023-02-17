@@ -48,14 +48,14 @@ def to_loop_for_separate_wavelength_fitting(func):
     @wraps(func)
     def wrapper(*args, **kw):
         if isinstance(args[0], LightcurveModels):
-            print("{} called".format(func.__name__))
-            print(args)
-            print(kw)
+            # print("{} called".format(func.__name__))
+            # print(args)
+            # print(kw)
             for k, v in kw.items():
                 setattr(args[0], k, v)
             return args[0].apply_operation_to_constituent_models(func.__name__)(**kw)
         else:
-            print(args[0].__class__)
+            # print(args[0].__class__)
             return func(*args, **kw)
 
     return wrapper
@@ -287,6 +287,13 @@ class LightcurveModel:
         # make a "copy" of each model:
         class_inputs = self.extract_extra_class_inputs()
         new_model = self.__class__(**class_inputs)
+
+        if isinstance(self, CombinedModel):
+            if hasattr(self, "_chromatic_models"):
+                new_model._chromatic_models = {}
+                new_model.how_to_combine = self.how_to_combine
+                for name, model in self._chromatic_models.items():
+                    new_model._chromatic_models[name] = model.copy()
 
         # new_model._pymc3_model = self._pymc3_model
         model_params = {}
@@ -811,7 +818,7 @@ class LightcurveModel:
                             i_dict = {**i_dict, **{k: v[i][0]}}
                         else:
                             i_dict = {**i_dict, **{k: v[i][w]}}
-                    model_for_this_sample.append(self.model(i_dict))
+                    model_for_this_sample.append(self.model(params=i_dict, i=w))
                 model_for_this_sample = np.array(model_for_this_sample)
 
             # add posterior model and draw from posterior distribution to the Rainbow quantities:
@@ -864,7 +871,7 @@ class LightcurveModel:
                             i_dict = {**i_dict, **{k: v[i][0]}}
                         else:
                             i_dict = {**i_dict, **{k: v[i][w]}}
-                    model_for_this_sample.append(self.model(i_dict))
+                    model_for_this_sample.append(self.model(params=i_dict, i=w))
                 model_for_this_sample = np.array(model_for_this_sample)
 
             # add posterior model and draw from posterior distribution to the Rainbow quantities:
@@ -1115,7 +1122,7 @@ class LightcurveModel:
                     else:
                         params = params_dict[f"w{i}"]
 
-                model_i = self.model(params, i)
+                model_i = self.model(params=params, i=i)
                 model[f"w{i}"] = model_i
 
             if store:
@@ -1203,7 +1210,8 @@ class LightcurveModel:
             self.add_model_to_rainbow()
         self.data_with_model.plot_with_model_and_residuals(**kw)
 
-    def plot_model(self, normalize=True, plot_data=True, **kw):
+    @to_loop_for_separate_wavelength_fitting
+    def plot_model(self, normalize=True, plot_data=True, wavelength=None, **kw):
         """
 
         Parameters
@@ -1218,16 +1226,25 @@ class LightcurveModel:
         """
         model = self.get_model()
 
-        def plot_one_model(model, normalize, name_label=None, **kw):
-            if "wavelength" in kw:
+        def plot_models_for_each_w(ax, mod, name_label, normalize):
+            if normalize:
+                if np.nanmedian(mod) < 0.1:
+                    ax.plot(self.data.time, mod + 1, label=f"{name_label}")
+                else:
+                    ax.plot(self.data.time, mod, label=f"{name_label}")
+            else:
+                ax.plot(self.data.time, mod, label=f"{name_label}")
+
+        def plot_one_model(model, normalize, wavelength, name_label=None, **kw):
+            if wavelength is not None:
                 wave_num = []
                 model_one_wavelength = {}
-                if type(kw["wavelength"]) == int:
-                    i = kw["wavelength"]
+                if type(wavelength) == int:
+                    i = wavelength
                     wave_num.append(i)
                     model_one_wavelength[f"w{i}"] = model[f"w{i}"]
                 else:
-                    for i in kw["wavelength"]:
+                    for i in wavelength:
                         wave_num.append(i)
                         model_one_wavelength[f"w{i}"] = model[f"w{i}"]
                 model = model_one_wavelength
@@ -1238,10 +1255,15 @@ class LightcurveModel:
             if "ax" in kw:
                 ax = kw["ax"]
             else:
-                if "wavelength" not in kw:
+                if len(wave_num) == 1 or wavelength is not None:
+                    figsize = (8, 6)
+                else:
+                    figsize = (8, 16)
+
+                if wavelength is not None:
                     fi, ax = plt.subplots(
                         nrows=len(wave_num),
-                        figsize=(8, 16),
+                        figsize=figsize,
                         constrained_layout=True,
                     )
                 else:
@@ -1259,13 +1281,15 @@ class LightcurveModel:
                 name_label = self.name
 
             for wave_n, ax_i, mod in zip(wave_num, ax, model.values()):
-                if normalize:
-                    if np.nanmedian(mod) < 0.1:
-                        ax_i.plot(self.data.time, mod + 1, label=f"{name_label}")
-                    else:
-                        ax_i.plot(self.data.time, mod, label=f"{name_label}")
+                if isinstance(self, CombinedModel):
+                    list_of_chrom_mods = list(self._chromatic_models.keys())
+                    list_of_chrom_mods.append("total")
+                    for chrom_mod in list_of_chrom_mods:
+                        plot_models_for_each_w(
+                            ax_i, mod[chrom_mod], chrom_mod, normalize
+                        )
                 else:
-                    ax_i.plot(self.data.time, mod, label=f"{name_label}")
+                    plot_models_for_each_w(ax_i, mod, name_label, normalize)
 
                 if plot_data:
                     ax_i.plot(self.data.time, self.data.flux[wave_n, :], "k.")
@@ -1284,16 +1308,16 @@ class LightcurveModel:
 
             return kw
 
-        if isinstance(self, CombinedModel):
-            for chrom_mod in self._chromatic_models.keys():
-                kw = plot_one_model(
-                    model[chrom_mod], normalize=normalize, name_label=chrom_mod, **kw
-                )
-            plot_one_model(
-                model["total"], normalize=normalize, name_label="total", **kw
-            )
-        else:
-            plot_one_model(model, normalize=normalize, **kw)
+        # if isinstance(self, CombinedModel):
+        #     for chrom_mod in self._chromatic_models.keys():
+        #         kw = plot_one_model(
+        #             model[chrom_mod], normalize=normalize, name_label=chrom_mod, **kw
+        #         )
+        #     plot_one_model(
+        #         model["total"], normalize=normalize, name_label="total", **kw
+        #     )
+        # else:
+        plot_one_model(model, normalize=normalize, wavelength=wavelength, **kw)
 
     def chi_squared(self, individual_wavelengths=False, **kw):
         """
@@ -1563,7 +1587,6 @@ class LightcurveModels(LightcurveModel):
             if item in self._list_of_og_methods:
 
                 def make_wrap(**kw):
-                    print("Running this once...")
                     op = getattr(self._og_model.__class__, item)
                     return op(self, **kw)
 
@@ -1579,7 +1602,13 @@ class LightcurveModels(LightcurveModel):
         self.nwave = len(wavelengths)
         for w in range(self.nwave):
             self.models[f"w{w}"] = self._og_model.copy()
-            self.models[f"w{w}"]._pymc3_model = pm.Model()
+            if isinstance(self._og_model, CombinedModel):
+                pm_model = pm.Model()
+                for name, chromatic_model in self._og_model._chromatic_models.items():
+                    self.models[f"w{w}"]._pymc3_model = pm_model
+                    self.models[f"w{w}"]._chromatic_models[name]._pymc3_model = pm_model
+            else:
+                self.models[f"w{w}"]._pymc3_model = pm.Model()
             self.models[f"w{w}"].name = self.name
 
     def apply_operation_to_constituent_models(self, operation: str) -> object:
@@ -1646,7 +1675,10 @@ class LightcurveModels(LightcurveModel):
 
         for i in range(self.nwave):
             data_copy = self.separate_wavelengths(i)
-            self.models[f"w{i}"].data = data_copy
+            if isinstance(self.models[f"w{i}"], CombinedModel):
+                self.models[f"w{i}"].attach_data(data_copy)
+            else:
+                self.models[f"w{i}"].data = data_copy
 
     def setup_lightcurves(self, **kw):
         """

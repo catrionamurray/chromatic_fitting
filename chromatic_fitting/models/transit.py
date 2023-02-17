@@ -259,9 +259,7 @@ class TransitModel(LightcurveModel):
             # ]
 
     @to_loop_for_separate_wavelength_fitting
-    def transit_model(
-        self, transit_params: dict, i: int = 0, time: list = None
-    ) -> np.array:
+    def transit_model(self, params: dict, i: int = 0, time: list = None) -> np.array:
         """
         Create a transit model given the passed parameters.
 
@@ -287,30 +285,29 @@ class TransitModel(LightcurveModel):
         if time is None:
             time = list(data.time.to_value("day"))
 
-        self.check_and_fill_missing_parameters(transit_params, i)
+        self.check_and_fill_missing_parameters(params, i)
 
         orbit = xo.orbits.KeplerianOrbit(
-            period=transit_params[f"{name}period"],
-            t0=transit_params[f"{name}epoch"],
-            b=transit_params[f"{name}impact_parameter"],
+            period=params[f"{name}period"],
+            t0=params[f"{name}epoch"],
+            b=params[f"{name}impact_parameter"],
             # ecc=transit_params["eccentricity"],
             # omega=transit_params["omega"],
-            r_star=transit_params[f"{name}stellar_radius"],
-            m_star=transit_params[f"{name}stellar_mass"],
+            r_star=params[f"{name}stellar_radius"],
+            m_star=params[f"{name}stellar_mass"],
         )
 
         ldlc = (
-            xo.LimbDarkLightCurve(transit_params[f"{name}limb_darkening"])
+            xo.LimbDarkLightCurve(params[f"{name}limb_darkening"])
             .get_light_curve(
                 orbit=orbit,
-                r=transit_params[f"{name}radius_ratio"]
-                * transit_params[f"{name}stellar_radius"],
+                r=params[f"{name}radius_ratio"] * params[f"{name}stellar_radius"],
                 t=time,
             )
             .eval()
         )
 
-        return ldlc.transpose()[0] + transit_params[f"{name}baseline"]
+        return ldlc.transpose()[0] + params[f"{name}baseline"]
 
     @to_loop_for_separate_wavelength_fitting
     def plot_orbit(self, timedata: object = None, filename: str = None):

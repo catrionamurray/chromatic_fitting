@@ -4,6 +4,7 @@ from ..imports import *
 
 # from .lightcurve import *
 from typing import Union
+import operator
 
 from .transit import *
 from .polynomial import *
@@ -137,6 +138,13 @@ combination_options = {
     "/": divide_dicts,
 }
 
+combination_options_array = {
+    "+": operator.add,
+    "-": operator.sub,
+    "*": operator.mul,
+    "/": operator.truediv,
+}
+
 
 class CombinedModel(LightcurveModel):
     """
@@ -157,6 +165,7 @@ class CombinedModel(LightcurveModel):
         self.metadata = {}
         self.parameters = {}
         self.model = self.combined_model
+        self.type_of_model = "combined"
 
     def __repr__(self):
         """
@@ -348,19 +357,9 @@ class CombinedModel(LightcurveModel):
         optimization_method: the method of optimization, options are 'simultaneous', 'separate' or 'white_light'
         (default='simultaneous')
         """
-        super().choose_optimization_method(self, optimization_method)
+        super().choose_optimization_method(optimization_method)
         for m in self._chromatic_models.values():
             m.optimization = optimization_method
-
-        if self.optimization == "separate":
-            try:
-                og_model = self.copy()
-                if hasattr(self, "data"):
-                    og_model.data = self.data
-                self.__class__ = LightcurveModels
-                self.__init__(model=og_model)
-            except Exception as e:
-                print(e)
 
     @to_loop_for_separate_wavelength_fitting
     def setup_orbit(self):
@@ -388,8 +387,8 @@ class CombinedModel(LightcurveModel):
         plotting/access later), default=False
         """
 
-        self.every_light_curve = {}
-        self.initial_guess = {}
+        # self.every_light_curve = []
+        # self.initial_guess = []
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -404,31 +403,39 @@ class CombinedModel(LightcurveModel):
             # for each lightcurve in the combined model, add/subtract/multiply/divide their lightcurve into the combined
             # model
             if i == 0:
-                self.every_light_curve = add_dicts(
-                    self.every_light_curve, mod.every_light_curve
-                )
-                self.initial_guess = add_dicts(self.initial_guess, mod.initial_guess)
+                self.every_light_curve = mod.every_light_curve
+                self.initial_guess = mod.initial_guess
+                # self.every_light_curve = add_dicts(
+                #     self.every_light_curve, mod.every_light_curve
+                # )
+                # self.initial_guess = add_dicts(self.initial_guess, mod.initial_guess)
             else:
-                self.every_light_curve = combination_options[
+                self.every_light_curve = combination_options_array[
                     self.how_to_combine[i - 1]
                 ](self.every_light_curve, mod.every_light_curve)
 
-                self.initial_guess = combination_options[self.how_to_combine[i - 1]](
-                    self.initial_guess, mod.initial_guess
-                )
+                self.initial_guess = combination_options_array[
+                    self.how_to_combine[i - 1]
+                ](self.initial_guess, mod.initial_guess)
+                # self.every_light_curve = combination_options[
+                #     self.how_to_combine[i - 1]
+                # ](self.every_light_curve, mod.every_light_curve)
 
-        datas, models = self.choose_model_based_on_optimization_method()
+                # self.initial_guess = combination_options[self.how_to_combine[i - 1]](
+                #     self.initial_guess, mod.initial_guess
+                # )
+
+        # datas, models = self.choose_model_based_on_optimization_method()
 
         # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
         # later:
         if self.store_models:
-            for i, (mod, data) in enumerate(zip(models, datas)):
-                with mod:
-                    # for w in range(data.nwave):
-                    # k = f"wavelength_{i + w}"
-                    Deterministic(
-                        f"{self.name}_model", self.every_light_curve[f"wavelength_{i}"]
-                    )
+            # for i, (mod, data) in enumerate(zip(models, datas)):
+            #     with mod:
+            # for w in range(data.nwave):
+            # k = f"wavelength_{i + w}"
+            with self._pymc3_model:
+                Deterministic(f"{self.name}_model", self.every_light_curve)
 
     def get_results(self, **kw):
         """
@@ -443,32 +450,34 @@ class CombinedModel(LightcurveModel):
         df = df.loc[:, ~df.columns.duplicated()].copy()
         return df
 
+    @to_loop_for_separate_wavelength_fitting
     def get_model(self, store: bool = True, **kw: object):
         """
         Extract each of the 'best-fit' models (for each chromatic_fitting model) from the arviz summary tables.
         """
         all_models, total_model = {}, {}
-        # for each constituent model get its 'best-fit' model:
-        models = self.apply_operation_to_constituent_models("get_model", **kw)
 
         as_array = False
         if "as_array" in kw:
             if kw["as_array"]:
+                kw.pop("as_array")
                 as_array = True
+
+        # for each constituent model get its 'best-fit' model
+        models = self.apply_operation_to_constituent_models("get_model", **kw)
 
         kw["store"] = store
 
         if models is not None:
             for i, (name, m) in enumerate(self._chromatic_models.items()):
                 models_dict = {}
-                # get 'best-fit' model from constituent model:
-                all_models[name] = models[i]
 
-                if as_array:
-                    for w in range(len(models[i])):
-                        models_dict[f"w{w}"] = models[i][w]
-                else:
-                    models_dict = models[i]
+                for w in range(len(models[i])):
+                    models_dict[f"w{w}"] = models[i][f"w{w}"]
+                    if f"w{w}" in all_models.keys():
+                        all_models[f"w{w}"][name] = models_dict[f"w{w}"]
+                    else:
+                        all_models = {f"w{w}": {name: models_dict[f"w{w}"]}}
 
                 # add this model to the total model:
                 if not self.store_models:
@@ -479,17 +488,18 @@ class CombinedModel(LightcurveModel):
             if self.store_models:
                 all_models["total"] = self.extract_deterministic_model()
             else:
-                all_models["total"] = total_model
+                for w in all_models.keys():
+                    if not as_array:
+                        all_models[w]["total"] = total_model[w]
 
             if store:
                 self._fit_models = all_models
 
             # return all_models
-            if "as_array" in kw:
-                if kw["as_array"]:
-                    return np.array(
-                        list([list(mod.values()) for mod in all_models.values()])
-                    )
+            if as_array:
+                return np.array(
+                    list([list(mod.values()) for mod in all_models.values()])
+                )
             else:
                 return all_models
 
@@ -500,17 +510,20 @@ class CombinedModel(LightcurveModel):
             )
 
     @to_loop_for_separate_wavelength_fitting
-    def combined_model(self, **kw):
+    def combined_model(self, *args, **kw):
         all_models, total_model = {}, []
         # for each constituent model get its 'best-fit' model:
-        models = self.apply_operation_to_constituent_models("model", **kw)
+        models = self.apply_operation_to_constituent_models("model", *args, **kw)
 
         if models is not None:
-            for i in len(self._chromatic_models.keys()):
-                # add this model to the total model:
-                total_model = combination_options[self.how_to_combine[i - 1]](
-                    total_model, models[i]
-                )
+            for i, k in enumerate(self._chromatic_models.keys()):
+                if i == 0:
+                    total_model = models[i]
+                else:
+                    # add this model to the total model:
+                    total_model = combination_options_array[self.how_to_combine[i - 1]](
+                        total_model, models[i]
+                    )
 
         return total_model
 
