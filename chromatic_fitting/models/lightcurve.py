@@ -28,6 +28,7 @@ from ..diagnostics import (
 allowed_types_of_models = ["planet", "systematic"]
 import time
 from functools import wraps
+from tqdm import tqdm
 
 
 def decorate_all_functions(function_decorator):
@@ -1237,17 +1238,20 @@ class LightcurveModel:
 
         def plot_one_model(model, normalize, wavelength, name_label=None, **kw):
             if wavelength is not None:
-                wave_num = []
-                model_one_wavelength = {}
-                if type(wavelength) == int:
-                    i = wavelength
-                    wave_num.append(i)
-                    model_one_wavelength[f"w{i}"] = model[f"w{i}"]
-                else:
-                    for i in wavelength:
+                try:
+                    wave_num = []
+                    model_one_wavelength = {}
+                    if type(wavelength) == int:
+                        i = wavelength
                         wave_num.append(i)
                         model_one_wavelength[f"w{i}"] = model[f"w{i}"]
-                model = model_one_wavelength
+                    else:
+                        for i in wavelength:
+                            wave_num.append(i)
+                            model_one_wavelength[f"w{i}"] = model[f"w{i}"]
+                    model = model_one_wavelength
+                except:
+                    return
 
             else:
                 wave_num = range(self.data.nwave)
@@ -1256,7 +1260,7 @@ class LightcurveModel:
                 ax = kw["ax"]
             else:
                 if len(wave_num) == 1 or wavelength is not None:
-                    figsize = (8, 6)
+                    figsize = (8, 4)
                 else:
                     figsize = (8, 16)
 
@@ -1270,7 +1274,7 @@ class LightcurveModel:
                     # make sure ax is set up
                     fi, ax = plt.subplots(
                         nrows=len(wave_num),
-                        figsize=(8, 6),
+                        figsize=(8, 4),
                         constrained_layout=True,
                     )
                 if len(wave_num) == 1:
@@ -1292,11 +1296,18 @@ class LightcurveModel:
                     plot_models_for_each_w(ax_i, mod, name_label, normalize)
 
                 if plot_data:
-                    ax_i.plot(self.data.time, self.data.flux[wave_n, :], "k.")
+                    if wave_n > 0 and self.data.nwave == 1:
+                        flux = self.data.flux[0, :]
+                        uncertainty = self.data.uncertainty[0, :]
+                    else:
+                        flux = self.data.flux[wave_n, :]
+                        uncertainty = self.data.uncertainty[wave_n, :]
+
+                    ax_i.plot(self.data.time, flux, "k.")
                     ax_i.errorbar(
                         self.data.time,
-                        self.data.flux[wave_n, :],
-                        self.data.uncertainty[wave_n, :],
+                        flux,
+                        uncertainty,
                         color="k",
                         linestyle="None",
                         capsize=2,
@@ -1308,15 +1319,6 @@ class LightcurveModel:
 
             return kw
 
-        # if isinstance(self, CombinedModel):
-        #     for chrom_mod in self._chromatic_models.keys():
-        #         kw = plot_one_model(
-        #             model[chrom_mod], normalize=normalize, name_label=chrom_mod, **kw
-        #         )
-        #     plot_one_model(
-        #         model["total"], normalize=normalize, name_label="total", **kw
-        #     )
-        # else:
         plot_one_model(model, normalize=normalize, wavelength=wavelength, **kw)
 
     def chi_squared(self, individual_wavelengths=False, **kw):
@@ -1593,6 +1595,7 @@ class LightcurveModels(LightcurveModel):
                 return make_wrap
                 # return self.apply_operation_to_constituent_models(operation=item)
             else:
+                # warnings.warn(f"{item} doesn't seem to exist for this model.")
                 raise AttributeError
         else:
             return self.item
@@ -1610,6 +1613,7 @@ class LightcurveModels(LightcurveModel):
             else:
                 self.models[f"w{w}"]._pymc3_model = pm.Model()
             self.models[f"w{w}"].name = self.name
+            self._pymc3_model = [m._pymc3_model for m in self.models.values()]
 
     def apply_operation_to_constituent_models(self, operation: str) -> object:
         """
@@ -1629,7 +1633,7 @@ class LightcurveModels(LightcurveModel):
         def wrapper_for_function(*args, **kwargs):
             results = []
             # for each constituent model apply the chosen operation
-            for name, model in self.models.items():
+            for name, model in tqdm(self.models.items()):
                 try:
                     op = getattr(model, operation)
                     result = op(*args, **kwargs)
@@ -1692,6 +1696,10 @@ class LightcurveModels(LightcurveModel):
         #     store_models=store_models, **kw
         # )
 
+    # def plot_model(self, **kw):
+    #     # self.get_model()
+    #     self._og_model.__class__.plot_model(self, **kw)
+
     def get_model(self, **kw):
         if hasattr(self, "_fit_models") and "as_array" not in kw.keys():
             return self._fit_models
@@ -1706,7 +1714,8 @@ class LightcurveModels(LightcurveModel):
             models_dict = {}
             for i, (name, model) in enumerate(self.models.items()):
                 models_dict[name] = model._fit_models["w0"]
-                model._fit_models = {name: model._fit_models["w0"]}
+                # model._fit_models = {name: model._fit_models["w0"]}
+                self.models[name]._fit_models = {name: model._fit_models["w0"]}
             self._fit_models = models_dict
             return models_dict
 
@@ -1717,6 +1726,7 @@ class LightcurveModels(LightcurveModel):
         self._og_model.__class__.sample(self, **kw)
         # self.apply_operation_to_constituent_models("sample")(**kw)
         self.recombine_summaries()
+        self.get_model()
 
     def make_transmission_spectrum_table(self, **kw):
         if isinstance(self._og_model, TransitModel):
@@ -1761,6 +1771,7 @@ class LightcurveModels(LightcurveModel):
         return a
 
     def add_model_to_rainbow(self):
+        # self.get_model()
         self._og_model.__class__.add_model_to_rainbow(self)
         # self.apply_operation_to_constituent_models("add_model_to_rainbow")()
 

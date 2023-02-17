@@ -455,59 +455,62 @@ class CombinedModel(LightcurveModel):
         """
         Extract each of the 'best-fit' models (for each chromatic_fitting model) from the arviz summary tables.
         """
-        all_models, total_model = {}, {}
-
-        as_array = False
-        if "as_array" in kw:
-            if kw["as_array"]:
-                kw.pop("as_array")
-                as_array = True
-
-        # for each constituent model get its 'best-fit' model
-        models = self.apply_operation_to_constituent_models("get_model", **kw)
-
-        kw["store"] = store
-
-        if models is not None:
-            for i, (name, m) in enumerate(self._chromatic_models.items()):
-                models_dict = {}
-
-                for w in range(len(models[i])):
-                    models_dict[f"w{w}"] = models[i][f"w{w}"]
-                    if f"w{w}" in all_models.keys():
-                        all_models[f"w{w}"][name] = models_dict[f"w{w}"]
-                    else:
-                        all_models = {f"w{w}": {name: models_dict[f"w{w}"]}}
-
-                # add this model to the total model:
-                if not self.store_models:
-                    total_model = combination_options[self.how_to_combine[i - 1]](
-                        total_model, models_dict
-                    )
-
-            if self.store_models:
-                all_models["total"] = self.extract_deterministic_model()
-            else:
-                for w in all_models.keys():
-                    if not as_array:
-                        all_models[w]["total"] = total_model[w]
-
-            if store:
-                self._fit_models = all_models
-
-            # return all_models
-            if as_array:
-                return np.array(
-                    list([list(mod.values()) for mod in all_models.values()])
-                )
-            else:
-                return all_models
-
+        if hasattr(self, "_fit_models"):
+            return self._fit_models
         else:
-            warnings.warn(
-                "There are no current saved models. You can, however, generate models by passing a dictionary with "
-                "all the necessary parameters"
-            )
+            all_models, total_model = {}, {}
+
+            as_array = False
+            if "as_array" in kw:
+                if kw["as_array"]:
+                    kw.pop("as_array")
+                    as_array = True
+
+            # for each constituent model get its 'best-fit' model
+            models = self.apply_operation_to_constituent_models("get_model", **kw)
+
+            kw["store"] = store
+
+            if models is not None:
+                for i, (name, m) in enumerate(self._chromatic_models.items()):
+                    models_dict = {}
+
+                    for w in range(len(models[i])):
+                        models_dict[f"w{w}"] = models[i][f"w{w}"]
+                        if f"w{w}" in all_models.keys():
+                            all_models[f"w{w}"][name] = models_dict[f"w{w}"]
+                        else:
+                            all_models = {f"w{w}": {name: models_dict[f"w{w}"]}}
+
+                    # add this model to the total model:
+                    if not self.store_models:
+                        total_model = combination_options[self.how_to_combine[i - 1]](
+                            total_model, models_dict
+                        )
+
+                if self.store_models:
+                    all_models["total"] = self.extract_deterministic_model()
+                else:
+                    for w in all_models.keys():
+                        if not as_array:
+                            all_models[w]["total"] = total_model[w]
+
+                if store:
+                    self._fit_models = all_models
+
+                # return all_models
+                if as_array:
+                    return np.array(
+                        list([list(mod.values()) for mod in all_models.values()])
+                    )
+                else:
+                    return all_models
+
+            else:
+                warnings.warn(
+                    "There are no current saved models. You can, however, generate models by passing a dictionary with "
+                    "all the necessary parameters"
+                )
 
     @to_loop_for_separate_wavelength_fitting
     def combined_model(self, *args, **kw):
