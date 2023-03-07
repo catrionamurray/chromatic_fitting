@@ -585,6 +585,7 @@ class CombinedModel(LightcurveModel):
         # save the rainbow_with_model for plotting:
         self.data_with_model = r_with_model
 
+    @to_loop_for_separate_wavelength_fitting
     def make_transmission_spectrum_table(self, **kw: object) -> object:
         """
         Return a transmission spectrum table using the best fit parameters

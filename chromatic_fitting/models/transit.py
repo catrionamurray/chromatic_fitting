@@ -358,7 +358,7 @@ class TransitModel(LightcurveModel):
             plt.close()
 
     def make_transmission_spectrum_table(
-        self, uncertainty=["hdi_16%", "hdi_84%"], svname=None
+        self, uncertainty=["hdi_16%", "hdi_84%"], store=True, svname=None
     ):
         """
         Generate and return a transmission spectrum table
@@ -388,6 +388,9 @@ class TransitModel(LightcurveModel):
             trans_table[f"{self.name}_radius_ratio_pos_error"] = results[
                 f"{self.name}_radius_ratio_{uncertainty[1]}"
             ]
+
+        if store:
+            self.transmission_spectrum = trans_table
 
         if svname is not None:
             assert isinstance(svname, object)

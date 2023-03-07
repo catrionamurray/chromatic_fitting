@@ -79,6 +79,7 @@ class tempModel(LightcurveModel):
         # **DEFINE THE DEFAULT VALUES FOR (AT LEAST) EACH REQUIRED PARAMETER**
         self.defaults = dict(param_1=0, param_2=1)
 
+    @to_loop_for_separate_wavelength_fitting
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create an temp model, given the stored parameters.
@@ -136,9 +137,10 @@ class tempModel(LightcurveModel):
             # add the model to the overall lightcurve:
             self.every_light_curve = pm.math.stack(y_model, axis=0)
             # store the initial guess:
-            self.initial_guess = pm.math.stack(initial_guess, axis=0)
+            self.initial_guess = np.array(initial_guess)
 
-    def temp_model(self, temp_params: dict, i: int = 0) -> np.array:
+    @to_loop_for_separate_wavelength_fitting
+    def temp_model(self, params: dict, i: int = 0) -> np.array:
         """
         Return a temp model, given a dictionary of parameters.
 
@@ -153,13 +155,14 @@ class tempModel(LightcurveModel):
         """
         data = self.get_data()
 
-        self.check_and_fill_missing_parameters(temp_params, i)
+        self.check_and_fill_missing_parameters(params, i)
 
         # **FUNCTION TO MODEL - MAKE SURE IT MATCHES self.setup_lightcurves()!**
-        temp = some_function_of_parameters(temp_params, data)
+        temp = some_function_of_parameters(params, data)
 
         return temp
 
+    @to_loop_for_separate_wavelength_fitting
     def add_model_to_rainbow(self):
         """
         Add the exponential model to the Rainbow object.

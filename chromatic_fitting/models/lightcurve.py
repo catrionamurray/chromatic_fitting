@@ -49,14 +49,10 @@ def to_loop_for_separate_wavelength_fitting(func):
     @wraps(func)
     def wrapper(*args, **kw):
         if isinstance(args[0], LightcurveModels):
-            # print("{} called".format(func.__name__))
-            # print(args)
-            # print(kw)
             for k, v in kw.items():
                 setattr(args[0], k, v)
-            return args[0].apply_operation_to_constituent_models(func.__name__)(**kw)
+            return args[0].apply_operation_to_each_wavelength(func.__name__)(**kw)
         else:
-            # print(args[0].__class__)
             return func(*args, **kw)
 
     return wrapper
@@ -918,6 +914,16 @@ class LightcurveModel:
     def get_stored_model(self, as_dict=True, as_array=False):
         """
         Return the 'best-fit' model from the summary table as a dictionary or as an array
+
+        Parameters
+        ----------
+        as_dict: Boolean whether to return a dictionary (default=True)
+        as_array: Boolean whether to return a dictionary (default=False)
+
+        Returns
+        -------
+        model as either a dictionary or array
+
         """
         model = self.extract_deterministic_model()
 
@@ -926,7 +932,23 @@ class LightcurveModel:
         elif as_dict:
             return model
 
-    def plot_lightcurves(self, t_unit="day", detrend=False, ax=None, **kw):
+    def plot_lightcurves(self, t_unit="day", ax=None, **kw):
+        """
+        Plot the 2D lightcurves for each wavelength separated on the same plot
+
+        Parameters
+        ----------
+        t_unit: Unit for the time series (default="day")
+        ax: Axis object to plot onto (default=None)
+        kw: Any extra keywords to pass to chromatic.Rainbow.plot()
+
+        Returns
+        -------
+
+        """
+
+        data = self.get_data()
+
         if not hasattr(self, "summary"):
             print(
                 "The summarize step has not been run yet. To include the 'best-fit' model please run "
@@ -937,32 +959,37 @@ class LightcurveModel:
             if isinstance(self, CombinedModel):
                 model = self.get_model()
             else:
-                model = {"total": self.get_model()}
+                model = {}
+                for i in range(data.nwave):
+                    model[f"w{i}"] = {"total": self.get_model()}
             add_model = True
 
+        # if the user has provided an axis object then use, otherwise create one here
         if ax is None:
             ax = plt.subplot()
         plt.sca(ax)
 
-        data = self.get_data()
-
+        # if we've flagged outliers then show these on the plot in red
         if self.outlier_flag:
             data.plot(ax=ax, cmap="Reds", **kw)
             self.data_without_outliers.plot(ax=ax, **kw)
         else:
             data.plot(ax=ax, **kw)
 
-        # for data in datas:
+        # get the lightcurve spacing from chromatic
         spacing = ax._most_recent_chromatic_plot_spacing
 
+        # if add_model=True then overplot the fitted model
         if add_model:
             for i in range(data.nwave):
+                print(i, model.keys())
                 ax.plot(
                     data.time.to_value(t_unit),
-                    np.array(model["total"][f"w{i}"]) - (i * spacing),
+                    np.array(model[f"w{i}"]["total"]) - (i * spacing),
                     color="k",
                 )
 
+        # if filename is provided then save the plot
         if "filename" not in kw.keys():
             plt.show()
         else:
@@ -1244,7 +1271,10 @@ class LightcurveModel:
                     if type(wavelength) == int:
                         i = wavelength
                         wave_num.append(i)
-                        model_one_wavelength[f"w{i}"] = model[f"w{i}"]
+                        if f"w{i}" in model.keys():
+                            model_one_wavelength[f"w{i}"] = model[f"w{i}"]
+                        else:
+                            model_one_wavelength[f"w{i}"] = model["w0"]
                     else:
                         for i in wavelength:
                             wave_num.append(i)
@@ -1615,7 +1645,7 @@ class LightcurveModels(LightcurveModel):
             self.models[f"w{w}"].name = self.name
             self._pymc3_model = [m._pymc3_model for m in self.models.values()]
 
-    def apply_operation_to_constituent_models(self, operation: str) -> object:
+    def apply_operation_to_each_wavelength(self, operation: str) -> object:
         """
         Apply an operation to all models within LightcurveModels
 
@@ -1714,8 +1744,8 @@ class LightcurveModels(LightcurveModel):
             models_dict = {}
             for i, (name, model) in enumerate(self.models.items()):
                 models_dict[name] = model._fit_models["w0"]
-                # model._fit_models = {name: model._fit_models["w0"]}
-                self.models[name]._fit_models = {name: model._fit_models["w0"]}
+                model._fit_models = {name: model._fit_models["w0"]}
+                # self.models[name]._fit_models = {name: model._fit_models["w0"]}
             self._fit_models = models_dict
             return models_dict
 
@@ -1728,9 +1758,48 @@ class LightcurveModels(LightcurveModel):
         self.recombine_summaries()
         self.get_model()
 
+    def recombine_one_line_dfs(self, attribute):
+        for i, name, model in enumerate(self.models.items()):
+            if name == "w0":
+                attribute_to_combine = getattr(self, attribute).copy()
+            else:
+                one_line_df = getattr(self, attribute).copy()
+                one_line_df.index = [
+                    s.replace("[0", f"[{i}") for s in one_line_df.index.values
+                ]
+                one_line_df.index = [
+                    s.replace("w0", f"w{i}") for s in one_line_df.index.values
+                ]
+                attribute_to_combine = pd.concat([attribute_to_combine, one_line_df])
+        return attribute_to_combine
+
+    def recombine_spectrum_table(self, list_of_spec):
+        for i, ((name, model), transspec) in enumerate(
+            zip(self.models.items(), list_of_spec)
+        ):
+            if name == "w0":
+                spec = transspec.copy()
+            else:
+                sp = transspec.copy()
+                sp.index = [s.replace("0", f"{i}") for s in sp.index.values]
+                spec = pd.concat([spec, sp])
+        return spec
+
     def make_transmission_spectrum_table(self, **kw):
         if isinstance(self._og_model, TransitModel):
             return TransitModel.make_transmission_spectrum_table(self, **kw)
+        elif isinstance(self._og_model, CombinedModel):
+            for mod in self._og_model._chromatic_models.values():
+                if isinstance(mod, TransitModel):
+                    list_of_spec = CombinedModel.make_transmission_spectrum_table(
+                        self, **kw
+                    )
+                    spec = self.recombine_spectrum_table(list_of_spec)
+                    return spec
+            warnings.warn(
+                f"You cannot make a transmission spectrum table for a non-transit model!"
+                f" Your model is: {self._og_model}"
+            )
         else:
             warnings.warn(
                 f"You cannot make a transmission spectrum table for a non-transit model!"
@@ -1740,6 +1809,10 @@ class LightcurveModels(LightcurveModel):
     def plot_transmission_spectrum(self, **kw):
         if isinstance(self._og_model, TransitModel):
             return TransitModel.plot_transmission_spectrum(self, **kw)
+        elif isinstance(self._og_model, CombinedModel):
+            for mod in self._og_model._chromatic_models.values():
+                if isinstance(mod, TransitModel):
+                    return CombinedModel.plot_transmission_spectrum(self, **kw)
         else:
             warnings.warn(
                 f"You cannot plot a transmission spectrum table for a non-transit model!"

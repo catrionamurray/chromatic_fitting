@@ -149,10 +149,10 @@ class TrapezoidModel(LightcurveModel):
             # add the step model to the overall lightcurve:
             self.every_light_curve = pm.math.stack(trap, axis=0)
             # add the initial_guess to the overall lightcurve:
-            self.initial_guess = pm.math.stack(initial_guess, axis=0)
+            self.initial_guess = np.array(initial_guess)
 
     @to_loop_for_separate_wavelength_fitting
-    def trapezoid_model(self, trap_params: dict, i: int = 0) -> np.array:
+    def trapezoid_model(self, params: dict, i: int = 0) -> np.array:
         """
         Return a step model, given a dictionary of parameters.
 
@@ -171,12 +171,12 @@ class TrapezoidModel(LightcurveModel):
 
         self.check_and_fill_missing_parameters(trap_params, i)
 
-        P = trap_params[f"{self.name}_P"]
-        t0 = trap_params[f"{self.name}_t0"]
-        tau = trap_params[f"{self.name}_tau"]
-        T = trap_params[f"{self.name}_T"]
-        delta = trap_params[f"{self.name}_delta"]
-        baseline = trap_params[f"{self.name}_baseline"]
+        P = params[f"{self.name}_P"]
+        t0 = params[f"{self.name}_t0"]
+        tau = params[f"{self.name}_tau"]
+        T = params[f"{self.name}_T"]
+        delta = params[f"{self.name}_delta"]
+        baseline = params[f"{self.name}_baseline"]
 
         # calculate a phase-folded time (still in units of days)
         x = (data.time.to_value(u.day) - t0 + 0.5 * P) % P - 0.5 * P
