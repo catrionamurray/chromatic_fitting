@@ -1271,27 +1271,28 @@ class LightcurveModel:
                 ax.plot(self.data.time, mod, label=f"{name_label}")
 
         def plot_one_model(model, normalize, wavelength, name_label=None, **kw):
+            wave_num = [int(k.replace("w", "")) for k in model.keys()]
+
             if wavelength is not None:
                 try:
-                    wave_num = []
                     model_one_wavelength = {}
                     if type(wavelength) == int:
                         i = wavelength
-                        wave_num.append(i)
                         if f"w{i}" in model.keys():
                             model_one_wavelength[f"w{i}"] = model[f"w{i}"]
                         else:
-                            model_one_wavelength[f"w{i}"] = model["w0"]
+                            return
+                    #                     else:
+                    #                         model_one_wavelength[f"w{i}"] = model["w0"]
                     else:
                         for i in wavelength:
-                            wave_num.append(i)
-                            model_one_wavelength[f"w{i}"] = model[f"w{i}"]
+                            if f"w{i}" in model.keys():
+                                model_one_wavelength[f"w{i}"] = model[f"w{i}"]
+                        if len(model_one_wavelength.values()) == 0:
+                            return
                     model = model_one_wavelength
                 except:
                     return
-
-            else:
-                wave_num = range(self.data.nwave)
 
             if "ax" in kw:
                 ax = kw["ax"]
@@ -1321,7 +1322,7 @@ class LightcurveModel:
             if name_label is None:
                 name_label = self.name
 
-            for wave_n, ax_i, mod in zip(wave_num, ax, model.values()):
+            for wnum, ax_i, mod in zip(wave_num, ax, model.values()):
                 if isinstance(self, CombinedModel):
                     list_of_chrom_mods = list(self._chromatic_models.keys())
                     list_of_chrom_mods.append("total")
@@ -1333,12 +1334,12 @@ class LightcurveModel:
                     plot_models_for_each_w(ax_i, mod, name_label, normalize)
 
                 if plot_data:
-                    if wave_n > 0 and self.data.nwave == 1:
+                    if wnum > 0 and self.data.nwave == 1:
                         flux = self.data.flux[0, :]
                         uncertainty = self.data.uncertainty[0, :]
                     else:
-                        flux = self.data.flux[wave_n, :]
-                        uncertainty = self.data.uncertainty[wave_n, :]
+                        flux = self.data.flux[wnum, :]
+                        uncertainty = self.data.uncertainty[wnum, :]
 
                     ax_i.plot(self.data.time, flux, "k.")
                     ax_i.errorbar(
@@ -1349,7 +1350,7 @@ class LightcurveModel:
                         linestyle="None",
                         capsize=2,
                     )
-                ax_i.set_title(f"Wavelength {wave_n}")
+                ax_i.set_title(f"Wavelength {wnum}")
                 ax_i.set_ylabel("Relative Flux")
                 ax_i.set_xlabel("Time [d]")
                 ax_i.legend()
