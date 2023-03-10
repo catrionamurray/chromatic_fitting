@@ -601,6 +601,21 @@ class CombinedModel(LightcurveModel):
         results = self.apply_operation_to_constituent_models(
             "make_transmission_spectrum_table", **kw
         )
+
+        num_transspec = 0
+        for v in self._chromatic_models.values:
+            if hasattr(v, "transmission_spectrum"):
+                transspec = v.transmission_spectrum
+                num_transspec += 1
+
+        if num_transspec == 1:
+            self.transmission_spectrum = transspec
+        elif num_transspec > 1:
+            warnings.warn(
+                "WARNING: More than one of the models in CombinedModel have a transmission spectrum - "
+                "are you sure this is right?"
+            )
+
         if len(results) == 1:
             results = results[0]
         return results

@@ -358,35 +358,39 @@ class TransitModel(LightcurveModel):
             plt.close()
 
     def make_transmission_spectrum_table(
-        self, uncertainty=["hdi_16%", "hdi_84%"], store=True, svname=None
+        self, uncertainty=["hdi_16%", "hdi_84%"], name=None, store=True, svname=None
     ):
         """
         Generate and return a transmission spectrum table
         """
+
+        if name is None:
+            name = self.name
+
         results = self.get_results(uncertainty=uncertainty)[
             [
                 "wavelength",
-                f"{self.name}_radius_ratio",
-                f"{self.name}_radius_ratio_{uncertainty[0]}",
-                f"{self.name}_radius_ratio_{uncertainty[1]}",
+                f"{name}_radius_ratio",
+                f"{name}_radius_ratio_{uncertainty[0]}",
+                f"{name}_radius_ratio_{uncertainty[1]}",
             ]
         ]
-        trans_table = results[["wavelength", f"{self.name}_radius_ratio"]]
+        trans_table = results[["wavelength", f"{name}_radius_ratio"]]
         if "hdi" in uncertainty[0]:
-            trans_table[f"{self.name}_radius_ratio_neg_error"] = (
-                results[f"{self.name}_radius_ratio"]
-                - results[f"{self.name}_radius_ratio_{uncertainty[0]}"]
+            trans_table[f"{name}_radius_ratio_neg_error"] = (
+                results[f"{name}_radius_ratio"]
+                - results[f"{name}_radius_ratio_{uncertainty[0]}"]
             )
-            trans_table[f"{self.name}_radius_ratio_pos_error"] = (
-                results[f"{self.name}_radius_ratio_{uncertainty[1]}"]
-                - results[f"{self.name}_radius_ratio"]
+            trans_table[f"{name}_radius_ratio_pos_error"] = (
+                results[f"{name}_radius_ratio_{uncertainty[1]}"]
+                - results[f"{name}_radius_ratio"]
             )
         else:
-            trans_table[f"{self.name}_radius_ratio_neg_error"] = results[
-                f"{self.name}_radius_ratio_{uncertainty[0]}"
+            trans_table[f"{name}_radius_ratio_neg_error"] = results[
+                f"{name}_radius_ratio_{uncertainty[0]}"
             ]
-            trans_table[f"{self.name}_radius_ratio_pos_error"] = results[
-                f"{self.name}_radius_ratio_{uncertainty[1]}"
+            trans_table[f"{name}_radius_ratio_pos_error"] = results[
+                f"{name}_radius_ratio_{uncertainty[1]}"
             ]
 
         if store:
@@ -399,52 +403,70 @@ class TransitModel(LightcurveModel):
             return trans_table
 
     def plot_transmission_spectrum(
-        self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
+        self,
+        table=None,
+        uncertainty=["hdi_16%", "hdi_84%"],
+        ax=None,
+        plotkw={},
+        w_unit="micron",
+        **kw,
     ):
+        if "name" in kw.keys():
+            name = kw["name"]
+        else:
+            name = self.name
+
         if table is not None:
             transmission_spectrum = table
             try:
                 # ensure the correct columns exist in the transmission spectrum table
-                assert transmission_spectrum[f"{self.name}_radius_ratio"]
-                assert transmission_spectrum[f"{self.name}_radius_ratio_neg_error"]
-                assert transmission_spectrum[f"{self.name}_radius_ratio_pos_error"]
-                assert transmission_spectrum["wavelength"]
+                transmission_spectrum[f"{name}_radius_ratio"]
+                transmission_spectrum[f"{name}_radius_ratio_neg_error"]
+                transmission_spectrum[f"{name}_radius_ratio_pos_error"]
+                transmission_spectrum["wavelength"]
             except:
                 print(
-                    f"The given table doesn't have the correct columns 'wavelength', '{self.name}_radius_ratio', "
-                    f"{self.name}_radius_ratio_pos_error' and '{self.name}_radius_ratio_neg_error'"
+                    f"The given table doesn't have the correct columns 'wavelength', '{name}_radius_ratio', "
+                    f"{name}_radius_ratio_pos_error' and '{name}_radius_ratio_neg_error'"
                 )
         else:
             kw["uncertainty"] = uncertainty
             transmission_spectrum = self.make_transmission_spectrum_table(**kw)
             transmission_spectrum["wavelength"] = [
-                t.to_value("micron") for t in transmission_spectrum["wavelength"].values
+                t.to_value(w_unit) for t in transmission_spectrum["wavelength"].values
             ]
 
         if ax is None:
             fig, ax = plt.subplots(figsize=(10, 4))
 
+        try:
+            wavelength = np.array(
+                [s.to_value(w_unit) for s in transmission_spectrum["wavelength"].values]
+            )
+        except:
+            wavelength = transmission_spectrum["wavelength"].values
+
         plt.sca(ax)
         plt.title("Transmission Spectrum")
         plt.plot(
-            transmission_spectrum["wavelength"],
-            transmission_spectrum[f"{self.name}_radius_ratio"],
+            wavelength,
+            transmission_spectrum[f"{name}_radius_ratio"],
             "kx",
             **plotkw,
         )
         plt.errorbar(
-            transmission_spectrum["wavelength"],
-            transmission_spectrum[f"{self.name}_radius_ratio"],
+            wavelength,
+            transmission_spectrum[f"{name}_radius_ratio"],
             yerr=[
-                transmission_spectrum[f"{self.name}_radius_ratio_neg_error"],
-                transmission_spectrum[f"{self.name}_radius_ratio_pos_error"],
+                transmission_spectrum[f"{name}_radius_ratio_neg_error"],
+                transmission_spectrum[f"{name}_radius_ratio_pos_error"],
             ],
             color="k",
             capsize=2,
             linestyle="None",
             **plotkw,
         )
-        plt.xlabel("Wavelength (microns)")
+        plt.xlabel(f"Wavelength ({w_unit})")
         plt.ylabel("Radius Ratio")
 
     @to_loop_for_separate_wavelength_fitting

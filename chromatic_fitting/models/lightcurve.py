@@ -958,6 +958,13 @@ class LightcurveModel:
         else:
             if isinstance(self, CombinedModel):
                 model = self.get_model()
+            elif isinstance(self, LightcurveModels):
+                if isinstance(self._og_model, CombinedModel):
+                    model = self.get_model()
+                else:
+                    model = {}
+                    for i in range(data.nwave):
+                        model[f"w{i}"] = {"total": self.get_model()}
             else:
                 model = {}
                 for i in range(data.nwave):
@@ -982,7 +989,7 @@ class LightcurveModel:
         # if add_model=True then overplot the fitted model
         if add_model:
             for i in range(data.nwave):
-                print(i, model.keys())
+                # print(i, model.keys())
                 ax.plot(
                     data.time.to_value(t_unit),
                     np.array(model[f"w{i}"]["total"]) - (i * spacing),
@@ -1773,17 +1780,17 @@ class LightcurveModels(LightcurveModel):
                 attribute_to_combine = pd.concat([attribute_to_combine, one_line_df])
         return attribute_to_combine
 
-    def recombine_spectrum_table(self, list_of_spec):
-        for i, ((name, model), transspec) in enumerate(
-            zip(self.models.items(), list_of_spec)
-        ):
-            if name == "w0":
-                spec = transspec.copy()
-            else:
-                sp = transspec.copy()
-                sp.index = [s.replace("0", f"{i}") for s in sp.index.values]
-                spec = pd.concat([spec, sp])
-        return spec
+    # def recombine_spectrum_table(self, list_of_spec):
+    #     for i, ((name, model), transspec) in enumerate(
+    #         zip(self.models.items(), list_of_spec)
+    #     ):
+    #         if name == "w0":
+    #             spec = transspec.copy()
+    #         else:
+    #             sp = transspec.copy()
+    #             sp.index = [s.replace("0", f"{i}") for s in sp.index.values]
+    #             spec = pd.concat([spec, sp])
+    #     return spec
 
     def make_transmission_spectrum_table(self, **kw):
         if isinstance(self._og_model, TransitModel):
@@ -1791,10 +1798,9 @@ class LightcurveModels(LightcurveModel):
         elif isinstance(self._og_model, CombinedModel):
             for mod in self._og_model._chromatic_models.values():
                 if isinstance(mod, TransitModel):
-                    list_of_spec = CombinedModel.make_transmission_spectrum_table(
-                        self, **kw
+                    spec = TransitModel.make_transmission_spectrum_table(
+                        self, name=mod.name, **kw
                     )
-                    spec = self.recombine_spectrum_table(list_of_spec)
                     return spec
             warnings.warn(
                 f"You cannot make a transmission spectrum table for a non-transit model!"
@@ -1807,12 +1813,21 @@ class LightcurveModels(LightcurveModel):
             )
 
     def plot_transmission_spectrum(self, **kw):
+        if hasattr(self, "transmission_spectrum"):
+            transmission_table = self.transmission_spectrum
+        else:
+            transmission_table = self.make_transmission_spectrum_table()
+
         if isinstance(self._og_model, TransitModel):
-            return TransitModel.plot_transmission_spectrum(self, **kw)
+            return TransitModel.plot_transmission_spectrum(
+                self, table=transmission_table, **kw
+            )
         elif isinstance(self._og_model, CombinedModel):
             for mod in self._og_model._chromatic_models.values():
                 if isinstance(mod, TransitModel):
-                    return CombinedModel.plot_transmission_spectrum(self, **kw)
+                    return TransitModel.plot_transmission_spectrum(
+                        self, table=transmission_table, name=mod.name, **kw
+                    )
         else:
             warnings.warn(
                 f"You cannot plot a transmission spectrum table for a non-transit model!"
