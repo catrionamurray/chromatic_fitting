@@ -1476,17 +1476,18 @@ class LightcurveModel:
 
         """
         if hasattr(self, "data_with_model"):
+            data = self.data_with_model
             plt.figure(figsize=(8, 6))
-            for i in range(self.data.nwave):
+            for i in range(data.nwave):
                 plt.hist(
-                    self.data_with_model.residuals[i],
+                    data.residuals[i],
                     alpha=0.5,
                     label=f"Wavelength {i}",
                     histtype="step",
                     **kw,
                 )
             plt.hist(
-                np.mean(self.data_with_model.residuals, axis=0),
+                np.mean(data.residuals, axis=0),
                 color="k",
                 label=f"Mean Wavelength",
                 histtype="step",
