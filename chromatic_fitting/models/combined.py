@@ -603,7 +603,7 @@ class CombinedModel(LightcurveModel):
         )
 
         num_transspec = 0
-        for v in self._chromatic_models.values:
+        for v in self._chromatic_models.values():
             if hasattr(v, "transmission_spectrum"):
                 transspec = v.transmission_spectrum
                 num_transspec += 1
