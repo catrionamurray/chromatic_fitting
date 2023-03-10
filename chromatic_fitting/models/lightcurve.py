@@ -964,11 +964,11 @@ class LightcurveModel:
                 else:
                     model = {}
                     for i in range(data.nwave):
-                        model[f"w{i}"] = {"total": self.get_model()}
+                        model[f"w{i}"] = {"total": self.get_model()[f"w{i}"]}
             else:
                 model = {}
                 for i in range(data.nwave):
-                    model[f"w{i}"] = {"total": self.get_model()}
+                    model[f"w{i}"] = {"total": self.get_model()[f"w{i}"]}
             add_model = True
 
         # if the user has provided an axis object then use, otherwise create one here
@@ -1514,18 +1514,19 @@ class LightcurveModel:
 
         """
         if hasattr(self, "data_with_model"):
+            data = self.data_with_model
             plt.figure(figsize=(12, 6))
-            for i in range(self.data.nwave):
+            for i in range(data.nwave):
                 plt.plot(
-                    self.data_with_model.time,
-                    self.data_with_model.residuals[i],
+                    data.time,
+                    data.residuals[i],
                     alpha=0.5,
                     label=f"Wavelength {i}",
                     **kw,
                 )
             plt.plot(
-                self.data_with_model.time,
-                np.mean(self.data_with_model.residuals, axis=0),
+                data.time,
+                np.mean(data.residuals, axis=0),
                 color="k",
                 label=f"Mean Wavelength",
             )
@@ -1554,12 +1555,13 @@ class LightcurveModel:
 
         """
         if hasattr(self, "data_with_model"):
+            data = self.data_with_model
             print("For the Wavelength-Averaged Residuals...")
-            noise_calculator(np.mean(self.data_with_model.residuals, axis=0), **kw)
+            noise_calculator(np.mean(data.residuals, axis=0), **kw)
             if individual_wavelengths:
-                for i in range(self.data.nwave):
+                for i in range(data.nwave):
                     print(f"\nFor wavelength {i}")
-                    noise_calculator(self.data_with_model.residuals[i], **kw)
+                    noise_calculator(data.residuals[i], **kw)
         else:
             warnings.warn(
                 f"""Could not find .data_with_model in {self.name} model! 
@@ -1580,13 +1582,12 @@ class LightcurveModel:
 
         """
         if hasattr(self, "data_with_model"):
+            data = self.data_with_model
             plt.figure(figsize=(12, 6))
             plt.title("Periodogram of Wavelength-Averaged Residuals")
             generate_periodogram(
-                x=np.mean(self.data_with_model.residuals, axis=0),
-                fs=(
-                    1 / (self.data_with_model.time[1] - self.data_with_model.time[0])
-                ).to_value("1/d"),
+                x=np.mean(data.residuals, axis=0),
+                fs=(1 / (data.time[1] - data.time[0])).to_value("1/d"),
                 **kw,
             )
         else:
