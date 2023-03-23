@@ -53,11 +53,11 @@ def add_dicts(dict_1: dict, dict_2: dict) -> dict:
 
     """
     # combine the keys that are unique to dict_1 or dict_2 into new dict_3 (order doesn't matter for addition)
-    dict_3 = {**dict_2, **dict_1}
+    dict_3 = {**dict_1, **dict_2}
     # for the keys that appear in both add the values
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = np.array(value) + np.array(dict_2[key])
+            dict_3[key] = np.array(value) + np.array(dict_1[key])
     return dict_3
 
 
@@ -76,11 +76,11 @@ def subtract_dicts(dict_1: dict, dict_2: dict) -> dict:
 
     """
     # # combine the keys that are unique to dict_1 or dict_2 into new dict_3 (order matters for subtraction!)
-    dict_3 = {**dict_2, **dict_1}
+    dict_3 = {**dict_1, **dict_2}
     # for the keys that appear in both subtract values in dict_2 from value in dict_1
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = np.array(value) - np.array(dict_2[key])
+            dict_3[key] = -np.array(value) + np.array(dict_1[key])
     return dict_3
 
 
@@ -99,11 +99,11 @@ def multiply_dicts(dict_1: dict, dict_2: dict) -> dict:
 
     """
     # combine the keys that are unique to dict_1 or dict_2 into new dict_3 (order doesn't matter for multiplication)
-    dict_3 = {**dict_2, **dict_1}
+    dict_3 = {**dict_1, **dict_2}
     # for the keys that appear in both multiply values in dict_2 by value in dict_1
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = np.array(value) * np.array(dict_2[key])
+            dict_3[key] = np.array(value) * np.array(dict_1[key])
     return dict_3
 
 
@@ -122,11 +122,11 @@ def divide_dicts(dict_1: dict, dict_2: dict) -> dict:
 
     """
     # combine the keys that are unique to dict_1 or dict_2 into new dict_3 (order matters for division!)
-    dict_3 = {**dict_2, **dict_1}
+    dict_3 = {**dict_1, **dict_1}
     # for the keys that appear in both divide values in dict_1 by value in dict_2
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = np.array(value) / np.array(dict_2[key])
+            dict_3[key] = np.array(dict_1[key]) / np.array(value)
     return dict_3
 
 
@@ -199,8 +199,12 @@ class CombinedModel(LightcurveModel):
             chromatic_models = add_dicts(
                 first._chromatic_models.copy(), second._chromatic_models.copy()
             )
-            self.how_to_combine = first.how_to_combine + second.how_to_combine
-            self.attach_models(chromatic_models, how_to_combine=how_to_combine)
+            self.how_to_combine = (
+                first.how_to_combine + how_to_combine
+            )  # second.how_to_combine
+            self.attach_models(
+                chromatic_models, how_to_combine=second.how_to_combine
+            )  # how_to_combine)
         elif isinstance(first, CombinedModel):
             # if the first is a CombinedModel but second is not
             chromatic_models = first._chromatic_models.copy()
@@ -235,7 +239,7 @@ class CombinedModel(LightcurveModel):
         # if we have already attached models with instructions on how to combine then add this operation
         # to self.how_to_combine. This is useful for recursively adding new models to the CombinedModel object
         if hasattr(self, "how_to_combine"):
-            self.how_to_combine.append(how_to_combine)
+            self.how_to_combine.extend(how_to_combine)
         else:
             if type(how_to_combine) == str:
                 # if a string operation ("+","-", etc.) has been passed then repeat this operation for every model
