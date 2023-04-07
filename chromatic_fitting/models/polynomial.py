@@ -48,6 +48,8 @@ class PolynomialModel(LightcurveModel):
         degree: int,
         independant_variable: str = "time",
         name: str = "polynomial",
+        type_of_model: str = "systematic",
+        xlims=None,
         **kw: object,
     ) -> None:
         """
@@ -66,10 +68,18 @@ class PolynomialModel(LightcurveModel):
         super().__init__(**kw)
         self.degree = degree
         self.independant_variable = independant_variable
+        self.xlims = xlims
         self.set_defaults()
         self.metadata = {}
         self.set_name(name)
         self.model = self.polynomial_model
+
+        if type_of_model in allowed_types_of_models:
+            self.type_of_model = type_of_model
+        else:
+            warnings.warn(
+                f"{type_of_model} is not a valid type of model. Please select one of: {allowed_types_of_models}"
+            )
 
     def __repr__(self):
         """
@@ -156,6 +166,17 @@ class PolynomialModel(LightcurveModel):
                     self.independant_variable_normalised = x
 
                 self.normalize = normalize
+
+                if self.xlims is not None:
+                    if len(self.xlims) == 2:
+                        x[: self.xlims[0]] = 0
+                        x[self.xlims[1] :] = 0
+                    else:
+                        warnings.warn(
+                            "You have provided 'xlims' for this polynomial model, however, it needs to be"
+                            "in the format xlims=[x1, x2] where x1 and x2 are the min and max indices of the"
+                            "data you would like to fit"
+                        )
 
                 # compute the polynomial by looping over the coeffs for each degree:
 

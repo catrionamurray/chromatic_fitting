@@ -73,6 +73,7 @@ class TransitModel(LightcurveModel):
         ]
 
         super().__init__(**kw)
+        # self.xlims = xlims
         self.set_defaults()
         self.set_name(name)
         self.model = self.transit_model
@@ -228,6 +229,19 @@ class TransitModel(LightcurveModel):
                     self.parameters[name + "baseline"].get_prior_vector(**kw)
                 )
 
+                x = data.time.to_value("day")
+                # if self.xlims is not None:
+                #     if len(self.xlims) == 2:
+                #         x = x[self]
+                #         x[: self.xlims[0]] = np.nan
+                #         x[self.xlims[1] :] = np.nan
+                #     else:
+                #         warnings.warn(
+                #             "You have provided 'xlims' for this polynomial model, however, it needs to be"
+                #             "in the format xlims=[x1, x2] where x1 and x2 are the min and max indices of the"
+                #             "data you would like to fit"
+                #         )
+
                 light_curves = []
                 for i, w in enumerate(data.wavelength):
                     if isinstance(
@@ -249,7 +263,7 @@ class TransitModel(LightcurveModel):
                         xo.LimbDarkLightCurve(ld).get_light_curve(
                             orbit=orbit,
                             r=pr,
-                            t=list(data.time.to_value("day")),
+                            t=list(x),
                         )
                     )
 

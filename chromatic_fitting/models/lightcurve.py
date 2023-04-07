@@ -25,33 +25,7 @@ from ..diagnostics import (
     check_initial_guess,
 )
 
-
-#  - Q=sqrt(N)*depth/error (Winn 2010/ Carter 2008)
-#  - chi-sq
-
-# chi_sq = []
-# nparams = 15
-# for i in range(cmod.data.nwave-1):
-#     chi_sq.append(np.sum((cmod.data_with_model.residuals[i,:]/cmod.data.uncertainty[i,:])**2)/(cmod.data.ntime-numparams-1))
-#     if chi_sq[-1] > 2:
-#         print(cmod.data.wavelength[i], chi_sq[-1])
-# chi_sq
-
-# nparams = 0
-# for k, v in self._chromatic_models.items():
-#     for pname, p in v.parameters.items():
-#         if isinstance(p, Fixed) or isinstance(p, WavelikeFixed):
-#             pass
-#         elif isinstance(p, WavelikeFitted):
-#             nparams += cmod.data.nwave
-#
-#             if "limb_darkening" in pname:
-#                 nparams += 1
-#         else:
-#
-#             if "limb_darkening" in pname:
-#                 nparams += 1
-#             nparams += 1
+allowed_types_of_models = ["planet", "systematic"]
 
 
 class LightcurveModel:
