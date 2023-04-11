@@ -70,8 +70,7 @@ class EclipseModel(LightcurveModel):
             "inclination",
             "planet_mass",
             "planet_radius",
-            "eccentricity",
-            "omega",
+            "ecs",
             "limbdark1",
             "limbdark2",
         ]
@@ -104,8 +103,7 @@ class EclipseModel(LightcurveModel):
             inclination=90.0,
             planet_mass=0.01,
             planet_radius=0.01,
-            eccentricity=0.0,
-            omega=0.0,
+            ecs=np.array([0.0,0.0]),
             limbdark1=0.4,
             limbdark2=0.2,
         )
@@ -120,7 +118,6 @@ class EclipseModel(LightcurveModel):
         store_models: boolean for whether to store the eclipse model during fitting (for faster
         plotting/access later), default=False
         """
-
         if starry.config.lazy == False:
             print(
                 "Starry will not play nice with pymc3 in greedy mode.\n Please set starry.config.lazy=True and try again!"
@@ -172,8 +169,7 @@ class EclipseModel(LightcurveModel):
             f"{name}inclination": [],
             f"{name}planet_mass": [],
             f"{name}planet_radius": [],
-            f"{name}eccentricity": [],
-            f"{name}omega": [],
+            f"{name}ecs": [],
             f"{name}limbdark1": [],
             f"{name}limbdark2": [],
         }
@@ -194,15 +190,10 @@ class EclipseModel(LightcurveModel):
                 for i, w in enumerate(data.wavelength):
                     param_i = {}
                     for param_name, param in parameters_to_loop_over.items():
-                        #                     if isinstance(self.parameters[param_name], WavelikeFitted):
-                        try:
+                        if isinstance(self.parameters[param_name],WavelikeFitted):
                             param_i[param_name] = param[j][i]
-                        except:
-                            try:
-                                param_i[param_name] = param[j][0]
-                            except:
-                                param_i[param_name] = param[j]
-
+                        else:
+                            param_i[param_name] = param[j]
                     # **FUNCTION TO MODEL - MAKE SURE IT MATCHES self.temp_model()!**
                     # extract light curve from Starry model at given times
                     star = starry.Primary(
@@ -219,7 +210,13 @@ class EclipseModel(LightcurveModel):
                     )
                     star.map[1] = param_i[f"{name}limbdark1"]
                     star.map[2] = param_i[f"{name}limbdark2"]
-
+                    omega = (theano.tensor.arctan2(param_i[f"{name}ecs"][1], param_i[f"{name}ecs"][0])*180.0)/np.pi
+                    eccentricity = pm.math.sqrt(param_i[f"{name}ecs"][0]**2+param_i[f"{name}ecs"][1]**2)
+                    #eccentricity_limit = pm.Uniform(f"{name}eccentricity_limit_{i}", lower = 0.001, upper = 0.3, observed=eccentricity)
+                    #omega = theano.tensor.arctan2(param_i[f"{name}esinw"],param_i[f"{name}ecosw"])*180.0/np.pi
+                    #eccentricity = theano.tensor.sqrt(param_i[f"{name}ecosw"]**2 + param_i[f"{name}esinw"]**2)#param_i[f"{name}ecosw"]/np.cos(omega*np.pi/180)
+                    #omega = np.arccos(param_i[f"{name}ecosw"]/eccentricity)#(np.arctan(param_i[f"{name}esinw"]/param_i[f"{name}ecosw"])*180)/np.pi
+                   
                     planet = starry.kepler.Secondary(
                         starry.Map(
                             ydeg=0,
@@ -234,8 +231,8 @@ class EclipseModel(LightcurveModel):
                         r=param_i[f"{name}planet_radius"],  # radius in Jupiter radii
                         porb=param_i[f"{name}period"],  # orbital period in days
                         prot=param_i[f"{name}period"],  # orbital period in days
-                        ecc=param_i[f"{name}eccentricity"],  # eccentricity
-                        w=param_i[f"{name}omega"],  # longitude of pericenter in degrees
+                        ecc=eccentricity,  # eccentricity
+                        w=omega,  # longitude of pericenter in degrees
                         t0=param_i[f"{name}t0"],  # time of transit in days
                         length_unit=u.R_jup,
                         mass_unit=u.M_jup,
@@ -247,7 +244,7 @@ class EclipseModel(LightcurveModel):
                     y_model.append(flux_model)
 
                     initial_guess.append(eval_in_model(flux_model))
-
+                
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
                 if self.store_models:
@@ -352,6 +349,10 @@ class EclipseModel(LightcurveModel):
             r=eclipse_params[f"{name}stellar_radius"],
             prot=eclipse_params[f"{name}stellar_prot"],
         )
+        print (eclipse_params)
+        print (eclipse_params[f"{name}ecs"][1])
+        omega = theano.tensor.arctan2(eclipse_params[f"{name}ecs"][1], eclipse_params[f"{name}ecs"][0])
+        eccentricity = pm.math.sqrt(eclipse_params[f"{name}ecs"][0]**2+eclipse_params[f"{name}ecs"][1]**2)
 
         planet = starry.kepler.Secondary(
             starry.Map(
@@ -367,8 +368,8 @@ class EclipseModel(LightcurveModel):
             r=eclipse_params[f"{name}planet_radius"],  # radius in Jupiter radii
             porb=eclipse_params[f"{name}period"],  # orbital period in days
             prot=eclipse_params[f"{name}period"],  # orbital period in days
-            ecc=eclipse_params[f"{name}eccentricity"],  # eccentricity
-            w=eclipse_params[f"{name}omega"],  # longitude of pericenter in degrees
+            ecc=eccentricity,  # eccentricity
+            w=omega,  # longitude of pericenter in degrees
             t0=eclipse_params[f"{name}t0"],  # time of transit in days
             length_unit=u.R_jup,
             mass_unit=u.M_jup,
@@ -378,6 +379,15 @@ class EclipseModel(LightcurveModel):
         flux_model = system.flux(time).eval()
 
         return flux_model
+
+    def ecs_prior(self,prior_mu,prior_sigma):
+        print (prior_mu)
+        with self._pymc3_model:
+            ecs_normal = pm.Normal("ecs_normal",mu=prior_mu,sigma=prior_sigma,shape=2)
+            ecs_normal.__name__ = "ecs_normal"
+            e = pm.math.sqrt(ecs_normal[0]**2 + ecs_normal[1]**2)
+            eccentricity_limit = pm.Uniform("eccentricity_limit", 0, 1, observed=e)
+        return ecs_normal
 
 
 '''

@@ -536,7 +536,7 @@ class CombinedModel(LightcurveModel):
         i_transit, i_sys = 0, 0
         for i, mod in enumerate(self._chromatic_models.values()):
             # if there's a transit model in the CombinedModel then separate this out to add to Rainbow
-            if isinstance(mod, TransitModel):
+            if isinstance(mod, TransitModel) or isinstance(mod, EclipseModel):
                 if i_transit == 0:
                     transit_model = mod.get_model()
                 else:
