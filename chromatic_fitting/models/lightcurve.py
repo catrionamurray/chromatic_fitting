@@ -410,14 +410,6 @@ class LightcurveModel:
             print(".setup_lightcurves() has not been run yet, running now...")
             self.setup_lightcurves(**setup_lightcurves_kw)
 
-        # if self.optimization == "separate":
-        #     models = self._pymc3_model
-        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
-        #     data = self.data
-        # else:
-        #     models = [self._pymc3_model]
-        #     data = self.get_data()
-        #     datas = [data]
         datas, models = self.choose_model_based_on_optimization_method()
 
         # if the data has outliers, then mask them out
@@ -684,13 +676,6 @@ class LightcurveModel:
                     for m in self._chromatic_models.values():
                         m.summary = self.summary
 
-            # for mod in self._pymc3_model:
-            #     with mod:
-            #         try:
-            #             self.trace.append(sample(**kw))
-            #         except Exception as e:
-            #             print(f"Sampling failed for one of the models!: {e}")
-            #             self.trace.append(None)
         else:
             check_initial_guess(self._pymc3_model)
             with self._pymc3_model:
@@ -797,15 +782,6 @@ class LightcurveModel:
         self.sample(start=opt)
         self.summarize(round_to=7, fmt="wide")
 
-    # def remove_data_outliers(self, **kw):
-    #     """
-    #     Remove outliers from the data.
-    #     [Ideally to be replaced with some chromatic.flag_outliers() function]
-    #     """
-    #     data_outliers_removed = remove_data_outliers(self.data, **kw)
-    #     self.data_outliers_removed = data_outliers_removed
-    #     self.outlier_flag = True
-
     def plot_priors(self, n=3, quantity="data", plot_all=True):
         """
         Plot n prior samples from the parameter distributions defined by the user
@@ -813,12 +789,6 @@ class LightcurveModel:
         Number of priors to plot (default=3)
         """
         # setup the models, data and orbits in a format for looping
-        # if self.optimization == "separate":
-        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
-        #     prior_predictive_traces = self.sample_prior(ndraws=n)
-        # else:
-        #     datas = [self.get_data()]
-        #     prior_predictive_traces = [self.sample_prior(ndraws=n)]
         (
             datas,
             _,
@@ -879,12 +849,6 @@ class LightcurveModel:
         Number of posteriors to plot (default=3)
         """
         # if we have the separate wavelength optimization method chosen then repeat for every wavelength/model
-        # if self.optimization == "separate":
-        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
-        #     posterior_predictive_traces = self.sample_posterior(n)
-        # else:
-        #     datas = [self.get_data()]
-        #     posterior_predictive_traces = [self.sample_posterior(n)]
         (
             datas,
             _,
@@ -895,19 +859,6 @@ class LightcurveModel:
         for nm, (data, posterior_predictive_trace) in enumerate(
             zip(datas, posterior_predictive_traces)
         ):
-
-            # for w in range(data.nwave):
-            # if "data" in posterior_predictive_trace.keys():
-            #     # generate a posterior model for every wavelength:
-            #     if (
-            #         f"{self.name}_model"  # _w{w + nm}"
-            #         in posterior_predictive_trace.keys()
-            #     ):
-            #         posterior_model[f"{self.name}_model"] = posterior_predictive_trace[
-            #             f"{self.name}_model"
-            #         ]
-
-            # for w in range(data.nwave):
             for i in range(n):
                 # for every posterior sample extract the posterior model and distribution draw:
                 try:
@@ -956,10 +907,6 @@ class LightcurveModel:
         """
         Extract the deterministic model from the summary statistics
         """
-        # if self.optimization == "separate":
-        #     datas = [self.get_data(i) for i in range(self.data.nwave)]
-        # else:
-        #     datas = [self.get_data()]
         datas, _ = self.choose_model_based_on_optimization_method()
 
         model = {}

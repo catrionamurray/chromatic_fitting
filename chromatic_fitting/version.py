@@ -25,5 +25,6 @@ def version():
 #    v 0.9.5 - vectorized nsigma parameter (for inflating uncertainties)
 #    v 0.9.6 - added setup_lightcurves under setup_likelihood
 #    v 0.9.7 - added a simple check for attaching Rainbow objects and setting up WLC (nw>0, nt>0)
+#    v 0.9.8 - fixed exponential bug
 # v 0.10.0 - added eclipse model
 # v 0.10.1 - fixed looping bug in exponential model

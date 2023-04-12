@@ -85,12 +85,7 @@ class SpotModel(LightcurveModel):
             print("No name set for the model.")
 
         # set up the models and data in a format for looping
-        if self.optimization == "separate":
-            models = self._pymc3_model
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-        else:
-            models = [self._pymc3_model]
-            datas = [self.get_data()]
+        datas, models = self.choose_model_based_on_optimization_method()
 
         # kw = {"shape": self.get_data().nwave}
         kw = {"shape": datas[0].nwave}

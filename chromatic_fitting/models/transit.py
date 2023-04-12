@@ -180,14 +180,9 @@ class TransitModel(LightcurveModel):
             print("No name set for the model.")
 
         # set up the models, data and orbits in a format for looping
-        if self.optimization == "separate":
-            models = self._pymc3_model
-            datas = [self.get_data(i) for i in range(self.data.nwave)]
-            orbits = self.orbit
-        else:
-            orbits = [self.orbit]
-            models = [self._pymc3_model]
-            datas = [self.get_data()]
+        datas, models, orbits = self.choose_model_based_on_optimization_method(
+            self.orbit
+        )
 
         # kw = {"shape": self.get_data().nwave}
         kw = {"shape": datas[0].nwave}
