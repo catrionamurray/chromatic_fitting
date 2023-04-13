@@ -1177,7 +1177,6 @@ class LightcurveModel:
                         params = params_dict
                     else:
                         params = params_dict[f"w{i}"]
-
                 model_i = self.model(params, i)
                 model[f"w{i}"] = model_i
 

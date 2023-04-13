@@ -13,18 +13,23 @@ Example of setting up an EclipseModel:
 def create_new_eclipse_model():
     # create eclipse model:
     e = EclipseModel()
-    
-    # add our parameters:
+
+    # add out parameters:
     e.setup_parameters(
-                      period=1, # a fixed value!
-                       epoch=Fitted(Uniform,lower=-0.05,upper=0.05), # one fitted value across all wavelengths
-                       stellar_radius = Fitted(Uniform, lower=0.8, upper=1.2,testval=1),
-                       stellar_mass =Fitted(Uniform, lower=0.8, upper=1.2,testval=1),
-                       radius_ratio=WavelikeFitted(Normal, mu=0.5, sigma=0.05), # a value fitted for every wavelength!
-                       impact_parameter=Fitted(ImpactParameter,ror=0.15,testval=0.44),
-                       limb_darkening=WavelikeFitted(QuadLimbDark,testval=[0.05,0.35]),
-                        baseline = WavelikeFitted(Normal, mu=1.0, sigma=0.05), # I will keep this fixed for when we add a polynomial model!
-                    )
+                stellar_radius =  1.0,   #r_sun
+                stellar_mass = 1.0,      #m_sun
+                stellar_amplitude = 1.0, #baseline for lightcurve
+                stellar_prot = 1.0,      #days
+                period = 5.3587657,      #planet period
+                t0 = 2458412.70851,      #t0 of transit
+                planet_log_amplitude = WavelikeFitted(pm.Uniform,lower=-6.0,upper=-2.0,testval=-4.0),#Whitelight fit
+                inclination = 89.68,     #planet inclination
+                planet_mass = 0.00903,   #m_jup
+                planet_radius = 0.1164,  #r_jup
+                ecs =  Fitted(pm.TruncatedNormal,mu=np.array([0.0,0.0]),sigma=np.array([0.01,0.01]),upper=np.array([0.1,0.1]),lower=np.array([-0.1,-0.1]),testval=np.array([0.001,0.001]), shape=2),#2-d parameter which is [ecosw, esinw]
+                limbdark1 = 0.4,         #quadratic coeff 1
+                limbdark2 = 0.2,         #quadratic coeff 2
+            )    
     
     # attach a Rainbow object, r, to the model:
     e.attach_data(r)
@@ -205,10 +210,6 @@ class EclipseModel(LightcurveModel):
                     star.map[2] = param_i[f"{name}limbdark2"]
                     omega = (theano.tensor.arctan2(param_i[f"{name}ecs"][1], param_i[f"{name}ecs"][0])*180.0)/np.pi
                     eccentricity = pm.math.sqrt(param_i[f"{name}ecs"][0]**2+param_i[f"{name}ecs"][1]**2)
-                    #eccentricity_limit = pm.Uniform(f"{name}eccentricity_limit_{i}", lower = 0.001, upper = 0.3, observed=eccentricity)
-                    #omega = theano.tensor.arctan2(param_i[f"{name}esinw"],param_i[f"{name}ecosw"])*180.0/np.pi
-                    #eccentricity = theano.tensor.sqrt(param_i[f"{name}ecosw"]**2 + param_i[f"{name}esinw"]**2)#param_i[f"{name}ecosw"]/np.cos(omega*np.pi/180)
-                    #omega = np.arccos(param_i[f"{name}ecosw"]/eccentricity)#(np.arctan(param_i[f"{name}esinw"]/param_i[f"{name}ecosw"])*180)/np.pi
                    
                     planet = starry.kepler.Secondary(
                         starry.Map(
@@ -342,16 +343,15 @@ class EclipseModel(LightcurveModel):
             r=eclipse_params[f"{name}stellar_radius"],
             prot=eclipse_params[f"{name}stellar_prot"],
         )
-        print (eclipse_params)
-        print (eclipse_params[f"{name}ecs"][1])
-        omega = theano.tensor.arctan2(eclipse_params[f"{name}ecs"][1], eclipse_params[f"{name}ecs"][0])
-        eccentricity = pm.math.sqrt(eclipse_params[f"{name}ecs"][0]**2+eclipse_params[f"{name}ecs"][1]**2)
+
+        omega = theano.tensor.arctan2(eclipse_params[f"{name}ecs[1]"], eclipse_params[f"{name}ecs[0]"])
+        eccentricity = pm.math.sqrt(eclipse_params[f"{name}ecs[0]"]**2+eclipse_params[f"{name}ecs[1]"]**2)
 
         planet = starry.kepler.Secondary(
             starry.Map(
                 ydeg=0,
                 udeg=0,
-                amp=10 ** eclipse_params[f"{name}planet_log_amplitude"],
+                amp=10 ** eclipse_params[f"{name}planet_log_amplitude[{i}]"],
                 inc=90.0,
                 obl=0.0,
             ),
@@ -373,14 +373,6 @@ class EclipseModel(LightcurveModel):
 
         return flux_model
 
-    def ecs_prior(self,prior_mu,prior_sigma):
-        print (prior_mu)
-        with self._pymc3_model:
-            ecs_normal = pm.Normal("ecs_normal",mu=prior_mu,sigma=prior_sigma,shape=2)
-            ecs_normal.__name__ = "ecs_normal"
-            e = pm.math.sqrt(ecs_normal[0]**2 + ecs_normal[1]**2)
-            eccentricity_limit = pm.Uniform("eccentricity_limit", 0, 1, observed=e)
-        return ecs_normal
 
 
 '''
