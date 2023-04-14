@@ -27,8 +27,7 @@ def create_new_eclipse_model():
                 planet_mass = 0.00903,   #m_jup
                 planet_radius = 0.1164,  #r_jup
                 ecs =  Fitted(pm.TruncatedNormal,mu=np.array([0.0,0.0]),sigma=np.array([0.01,0.01]),upper=np.array([0.1,0.1]),lower=np.array([-0.1,-0.1]),testval=np.array([0.001,0.001]), shape=2),#2-d parameter which is [ecosw, esinw]
-                limbdark1 = 0.4,         #quadratic coeff 1
-                limbdark2 = 0.2,         #quadratic coeff 2
+                limb_darkening = np.array([0.4,0.2]),         #limb darkening quadratic coeff np.array([1,2])
             )    
     
     # attach a Rainbow object, r, to the model:
@@ -76,8 +75,7 @@ class EclipseModel(LightcurveModel):
             "planet_mass",
             "planet_radius",
             "ecs",
-            "limbdark1",
-            "limbdark2",
+            "limb_darkening",
         ]
 
         super().__init__(**kw)
@@ -109,8 +107,7 @@ class EclipseModel(LightcurveModel):
             planet_mass=0.01,
             planet_radius=0.01,
             ecs=np.array([0.0,0.0]),
-            limbdark1=0.4,
-            limbdark2=0.2,
+            limb_darkening=np.array([0.4,0.2]),
         )
 
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
@@ -168,8 +165,7 @@ class EclipseModel(LightcurveModel):
             f"{name}planet_mass": [],
             f"{name}planet_radius": [],
             f"{name}ecs": [],
-            f"{name}limbdark1": [],
-            f"{name}limbdark2": [],
+            f"{name}limb_darkening": [],
         }
 
         for j, (mod, data) in enumerate(zip(models, datas)):
@@ -206,8 +202,8 @@ class EclipseModel(LightcurveModel):
                         r=param_i[f"{name}stellar_radius"],
                         prot=param_i[f"{name}stellar_prot"],
                     )
-                    star.map[1] = param_i[f"{name}limbdark1"]
-                    star.map[2] = param_i[f"{name}limbdark2"]
+                    star.map[1] = param_i[f"{name}limb_darkening"][0]
+                    star.map[2] = param_i[f"{name}limb_darkening"][1]
                     omega = (theano.tensor.arctan2(param_i[f"{name}ecs"][1], param_i[f"{name}ecs"][0])*180.0)/np.pi
                     eccentricity = pm.math.sqrt(param_i[f"{name}ecs"][0]**2+param_i[f"{name}ecs"][1]**2)
                    
@@ -334,7 +330,7 @@ class EclipseModel(LightcurveModel):
         star = starry.Primary(
             starry.Map(
                 ydeg=0,
-                udeg=0,
+                udeg=2,
                 amp=eclipse_params[f"{name}stellar_amplitude"],
                 inc=90.0,
                 obl=0.0,
@@ -343,15 +339,18 @@ class EclipseModel(LightcurveModel):
             r=eclipse_params[f"{name}stellar_radius"],
             prot=eclipse_params[f"{name}stellar_prot"],
         )
+        
+        star.map[1] = eclipse_params[f"{name}limb_darkening"][0]
+        star.map[2] = eclipse_params[f"{name}limb_darkening"][1]
 
-        omega = theano.tensor.arctan2(eclipse_params[f"{name}ecs[1]"], eclipse_params[f"{name}ecs[0]"])
-        eccentricity = pm.math.sqrt(eclipse_params[f"{name}ecs[0]"]**2+eclipse_params[f"{name}ecs[1]"]**2)
+        omega = theano.tensor.arctan2(eclipse_params[f"{name}ecs"][1], eclipse_params[f"{name}ecs"][0])
+        eccentricity = pm.math.sqrt(eclipse_params[f"{name}ecs"][0]**2+eclipse_params[f"{name}ecs"][1]**2)
 
         planet = starry.kepler.Secondary(
             starry.Map(
                 ydeg=0,
                 udeg=0,
-                amp=10 ** eclipse_params[f"{name}planet_log_amplitude[{i}]"],
+                amp=10 ** eclipse_params[f"{name}planet_log_amplitude"],
                 inc=90.0,
                 obl=0.0,
             ),
