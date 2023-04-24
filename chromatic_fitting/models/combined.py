@@ -400,22 +400,22 @@ class CombinedModel(LightcurveModel):
                 self.every_light_curve = add_dicts(
                     self.every_light_curve, mod.every_light_curve
                 )
-                try:
+                if hasattr(mod.initial_guess):
                     self.initial_guess = add_dicts(
                         self.initial_guess, mod.initial_guess
                     )
-                except:
+                else:
                     print(f"No initial guess saved for chromatic model {mod}")
             else:
                 self.every_light_curve = combination_options[
                     self.how_to_combine[i - 1]
                 ](self.every_light_curve, mod.every_light_curve)
 
-                try:
+                if hasattr(mod.initial_guess):
                     self.initial_guess = combination_options[
                         self.how_to_combine[i - 1]
                     ](self.initial_guess, mod.initial_guess)
-                except:
+                else:
                     print(f"No initial guess saved for chromatic model {mod}")
 
         datas, models = self.choose_model_based_on_optimization_method()
