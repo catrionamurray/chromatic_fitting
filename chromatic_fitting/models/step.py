@@ -76,7 +76,7 @@ class StepModel(LightcurveModel):
         if store_models == True:
             self.store_models = store_models
 
-        df, t0, f0 = [], [], []
+        # df, t0, f0 = [], [], []
         parameters_to_loop_over = {
             f"{name}df": [],
             f"{name}t0": [],

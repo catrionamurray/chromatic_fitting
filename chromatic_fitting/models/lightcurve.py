@@ -391,19 +391,19 @@ class LightcurveModel:
             # if the user has specified a mask, then use that
             if data_mask is None:
                 # sigma-clip in time
-                data_mask = np.array(get_data_outlier_mask(data, **kw))
+                data_mask = np.array(get_data_outlier_mask(datas, **kw))
                 if mask_wavelength_outliers:
                     # sigma-clip in wavelength
                     data_mask[
                         get_data_outlier_mask(
-                            data, clip_axis="wavelength", sigma=sigma_wavelength
+                            datas, clip_axis="wavelength", sigma=sigma_wavelength
                         )
                         == True
                     ] = True
                 # data_mask_wave =  get_data_outlier_mask(data, clip_axis='wavelength', sigma=4.5)
             self.outlier_mask = data_mask
             self.outlier_flag = True
-            self.data_without_outliers = remove_data_outliers(data, data_mask)
+            self.data_without_outliers = remove_data_outliers(datas, data_mask)
 
         if inflate_uncertainties:
             self.parameters["nsigma"] = WavelikeFitted(

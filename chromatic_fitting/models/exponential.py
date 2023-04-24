@@ -191,8 +191,6 @@ class ExponentialModel(LightcurveModel):
 
         self.check_and_fill_missing_parameters(exponential_params, i)
 
-        #         try:
-        #             for d in range(self.degree + 1)
         exponential = (
             exponential_params[f"{self.name}_A"]
             * np.exp(-(x - self.t0) / exponential_params[f"{self.name}_decay_time"])
