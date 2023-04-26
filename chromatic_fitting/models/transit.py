@@ -50,7 +50,9 @@ class TransitModel(LightcurveModel):
     A transit model for the lightcurve.
     """
 
-    def __init__(self, name: str = "transit", **kw: object) -> None:
+    def __init__(
+        self, name: str = "transit", type_of_model: str = "planet", **kw: object
+    ) -> None:
         """
         Initialise the transit model.
 
@@ -77,6 +79,13 @@ class TransitModel(LightcurveModel):
         self.set_defaults()
         self.set_name(name)
         self.model = self.transit_model
+
+        if type_of_model in allowed_types_of_models:
+            self.type_of_model = type_of_model
+        else:
+            warnings.warn(
+                f"{type_of_model} is not a valid type of model. Please select one of: {allowed_types_of_models}"
+            )
 
     def __repr__(self):
         """

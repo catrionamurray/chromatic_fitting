@@ -15,6 +15,7 @@ class ExponentialModel(LightcurveModel):
         t0: int,
         independant_variable: str = "time",
         name: str = "exponential",
+        type_of_model: str = "systematic",
         **kw: object,
     ) -> None:
         """
@@ -43,6 +44,13 @@ class ExponentialModel(LightcurveModel):
         self.set_name(name)
         self.metadata = {}
         self.model = self.exponential_model
+
+        if type_of_model in allowed_types_of_models:
+            self.type_of_model = type_of_model
+        else:
+            warnings.warn(
+                f"{type_of_model} is not a valid type of model. Please select one of: {allowed_types_of_models}"
+            )
 
     def __repr__(self):
         """

@@ -4,6 +4,7 @@ from ..imports import *
 
 # from .lightcurve import *
 from typing import Union
+import operator
 
 from .transit import *
 from .polynomial import *
@@ -55,11 +56,11 @@ def add_dicts(dict_1: dict, dict_2: dict) -> dict:
 
     """
     # combine the keys that are unique to dict_1 or dict_2 into new dict_3 (order doesn't matter for addition)
-    dict_3 = {**dict_2, **dict_1}
+    dict_3 = {**dict_1, **dict_2}
     # for the keys that appear in both add the values
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = np.array(value) + np.array(dict_2[key])
+            dict_3[key] = np.array(value) + np.array(dict_1[key])
     return dict_3
 
 
@@ -78,11 +79,11 @@ def subtract_dicts(dict_1: dict, dict_2: dict) -> dict:
 
     """
     # # combine the keys that are unique to dict_1 or dict_2 into new dict_3 (order matters for subtraction!)
-    dict_3 = {**dict_2, **dict_1}
+    dict_3 = {**dict_1, **dict_2}
     # for the keys that appear in both subtract values in dict_2 from value in dict_1
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = np.array(value) - np.array(dict_2[key])
+            dict_3[key] = -np.array(value) + np.array(dict_1[key])
     return dict_3
 
 
@@ -101,11 +102,11 @@ def multiply_dicts(dict_1: dict, dict_2: dict) -> dict:
 
     """
     # combine the keys that are unique to dict_1 or dict_2 into new dict_3 (order doesn't matter for multiplication)
-    dict_3 = {**dict_2, **dict_1}
+    dict_3 = {**dict_1, **dict_2}
     # for the keys that appear in both multiply values in dict_2 by value in dict_1
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = np.array(value) * np.array(dict_2[key])
+            dict_3[key] = np.array(value) * np.array(dict_1[key])
     return dict_3
 
 
@@ -124,11 +125,11 @@ def divide_dicts(dict_1: dict, dict_2: dict) -> dict:
 
     """
     # combine the keys that are unique to dict_1 or dict_2 into new dict_3 (order matters for division!)
-    dict_3 = {**dict_2, **dict_1}
+    dict_3 = {**dict_1, **dict_1}
     # for the keys that appear in both divide values in dict_1 by value in dict_2
     for key, value in dict_3.items():
         if key in dict_1 and key in dict_2:
-            dict_3[key] = np.array(value) / np.array(dict_2[key])
+            dict_3[key] = np.array(dict_1[key]) / np.array(value)
     return dict_3
 
 
@@ -138,6 +139,13 @@ combination_options = {
     "-": subtract_dicts,
     "*": multiply_dicts,
     "/": divide_dicts,
+}
+
+combination_options_array = {
+    "+": operator.add,
+    "-": operator.sub,
+    "*": operator.mul,
+    "/": operator.truediv,
 }
 
 
@@ -160,6 +168,7 @@ class CombinedModel(LightcurveModel):
         self.metadata = {}
         self.parameters = {}
         self.model = self.combined_model
+        self.type_of_model = "combined"
 
     def __repr__(self):
         """
@@ -193,8 +202,14 @@ class CombinedModel(LightcurveModel):
             chromatic_models = add_dicts(
                 first._chromatic_models.copy(), second._chromatic_models.copy()
             )
-            self.how_to_combine = first.how_to_combine + second.how_to_combine
-            self.attach_models(chromatic_models, how_to_combine=how_to_combine)
+            self.how_to_combine = first.how_to_combine + [
+                how_to_combine
+            ]  # second.how_to_combine
+            self.attach_models(
+                chromatic_models, how_to_combine=second.how_to_combine
+            )  # how_to_combine)
+            # self.how_to_combine = first.how_to_combine + second.how_to_combine
+            # self.attach_models(chromatic_models, how_to_combine=how_to_combine)
         elif isinstance(first, CombinedModel):
             # if the first is a CombinedModel but second is not
             chromatic_models = first._chromatic_models.copy()
@@ -229,7 +244,7 @@ class CombinedModel(LightcurveModel):
         # if we have already attached models with instructions on how to combine then add this operation
         # to self.how_to_combine. This is useful for recursively adding new models to the CombinedModel object
         if hasattr(self, "how_to_combine"):
-            self.how_to_combine.append(how_to_combine)
+            self.how_to_combine.extend(how_to_combine)
         else:
             if type(how_to_combine) == str:
                 # if a string operation ("+","-", etc.) has been passed then repeat this operation for every model
@@ -349,7 +364,7 @@ class CombinedModel(LightcurveModel):
         optimization_method: the method of optimization, options are 'simultaneous', 'separate' or 'white_light'
         (default='simultaneous')
         """
-        LightcurveModel.choose_optimization_method(self, optimization_method)
+        super().choose_optimization_method(self, optimization_method)
         for m in self._chromatic_models.values():
             m.optimization = optimization_method
 
@@ -397,19 +412,31 @@ class CombinedModel(LightcurveModel):
             # for each lightcurve in the combined model, add/subtract/multiply/divide their lightcurve into the combined
             # model
             if i == 0:
-                self.every_light_curve = add_dicts(
-                    self.every_light_curve, mod.every_light_curve
-                )
+                if hasattr(mod, "every_light_curve"):
+                    self.every_light_curve = mod.every_light_curve
+                else:
+                    print(f"No light curve saved for chromatic model {mod}")
+
                 if hasattr(mod, "initial_guess"):
-                    self.initial_guess = add_dicts(
-                        self.initial_guess, mod.initial_guess
-                    )
+                    self.initial_guess = mod.initial_guess
                 else:
                     print(f"No initial guess saved for chromatic model {mod}")
+                # self.every_light_curve = add_dicts(
+                #     self.every_light_curve, mod.every_light_curve
+                # )
+                # if hasattr(mod, "initial_guess"):
+                #     self.initial_guess = add_dicts(
+                #         self.initial_guess, mod.initial_guess
+                #     )
+                # else:
+                #     print(f"No initial guess saved for chromatic model {mod}")
             else:
-                self.every_light_curve = combination_options[
-                    self.how_to_combine[i - 1]
-                ](self.every_light_curve, mod.every_light_curve)
+                if hasattr(mod, "every_light_curve"):
+                    self.every_light_curve = combination_options[
+                        self.how_to_combine[i - 1]
+                    ](self.every_light_curve, mod.every_light_curve)
+                else:
+                    print(f"No light curve saved for chromatic model {mod}")
 
                 if hasattr(mod, "initial_guess"):
                     self.initial_guess = combination_options[
@@ -417,6 +444,16 @@ class CombinedModel(LightcurveModel):
                     ](self.initial_guess, mod.initial_guess)
                 else:
                     print(f"No initial guess saved for chromatic model {mod}")
+                # self.every_light_curve = combination_options[
+                #     self.how_to_combine[i - 1]
+                # ](self.every_light_curve, mod.every_light_curve)
+                #
+                # if hasattr(mod, "initial_guess"):
+                #     self.initial_guess = combination_options[
+                #         self.how_to_combine[i - 1]
+                #     ](self.initial_guess, mod.initial_guess)
+                # else:
+                #     print(f"No initial guess saved for chromatic model {mod}")
 
         datas, models = self.choose_model_based_on_optimization_method()
 
@@ -508,6 +545,9 @@ class CombinedModel(LightcurveModel):
         if models is not None:
             for i in len(self._chromatic_models.keys()):
                 # add this model to the total model:
+                # total_model = combination_options[self.how_to_combine[i - 1]](
+                #     total_model, models[i]
+                # )
                 total_model = combination_options[self.how_to_combine[i - 1]](
                     total_model, models[i]
                 )
@@ -522,8 +562,9 @@ class CombinedModel(LightcurveModel):
         transit_model, systematics_model, total_model = {}, {}, {}
         i_transit, i_sys = 0, 0
         for i, mod in enumerate(self._chromatic_models.values()):
-            # if there's a transit model in the CombinedModel then separate this out to add to Rainbow
-            if isinstance(mod, TransitModel):
+            # if there's a planet model in the CombinedModel then separate this out to add to Rainbow
+            # if isinstance(mod, TransitModel):
+            if mod.type_of_model == "planet":
                 if i_transit == 0:
                     transit_model = mod.get_model()
                 else:
@@ -583,6 +624,21 @@ class CombinedModel(LightcurveModel):
         results = self.apply_operation_to_constituent_models(
             "make_transmission_spectrum_table", **kw
         )
+
+        num_transspec = 0
+        for v in self._chromatic_models.values():
+            if hasattr(v, "transmission_spectrum"):
+                transspec = v.transmission_spectrum
+                num_transspec += 1
+
+        if num_transspec == 1:
+            self.transmission_spectrum = transspec
+        elif num_transspec > 1:
+            warnings.warn(
+                "WARNING: More than one of the models in CombinedModel have a transmission spectrum - "
+                "are you sure this is right?"
+            )
+
         if len(results) == 1:
             results = results[0]
         return results
