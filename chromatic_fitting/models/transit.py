@@ -191,6 +191,9 @@ class TransitModel(LightcurveModel):
         # if the .every_light_curve attribute (final lc model) is not already present then create it now
         if not hasattr(self, "every_light_curve"):
             self.every_light_curve = {}
+        # if the .every_light_curve attribute (final lc model) is not already present then create it now
+        if not hasattr(self, "initial_guess"):
+            self.initial_guess = {}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -213,9 +216,10 @@ class TransitModel(LightcurveModel):
 
             with mod:
                 for pname in parameters_to_loop_over.keys():
-                    parameters_to_loop_over[pname] = self.parameters[
-                        pname
-                    ].get_prior_vector(**kw)
+                    if pname != f"{name}planet_radius":
+                        parameters_to_loop_over[pname] = self.parameters[
+                            pname
+                        ].get_prior_vector(**kw)
 
                 # store Deterministic parameter {a/R*} for use later
                 Deterministic(
@@ -280,7 +284,7 @@ class TransitModel(LightcurveModel):
                         xo.LimbDarkLightCurve(
                             param_i[f"{name}limb_darkening"]
                         ).get_light_curve(
-                            orbit=self.orbit,
+                            orbit=orbit,
                             r=param_i[f"{name}planet_radius"],
                             t=list(data.time.to_value("day")),
                         )
@@ -320,10 +324,10 @@ class TransitModel(LightcurveModel):
                 # ]
 
                 # add the initial guess to the final light curve
-                if not hasattr(self, "initial_guess"):
-                    self.initial_guess = initial_guess
+                if f"wavelength_{j}" not in self.initial_guess.keys():
+                    self.initial_guess[f"wavelength_{j}"] = np.array(initial_guess)
                 else:
-                    print("WHEN?")
+                    self.initial_guess[f"wavelength_{j}"] += initial_guess
 
     def transit_model(
         self, transit_params: dict, i: int = 0, time: list = None

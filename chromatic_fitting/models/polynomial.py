@@ -262,7 +262,10 @@ class PolynomialModel(LightcurveModel):
                 x = (x - np.mean(x)) / np.std(x)
 
         if len(np.shape(x)) > 1:
-            x = x[i, :]
+            if np.shape(x)[0] > 1:
+                x = x[i, :]
+            else:
+                x = x[0, :]
 
         self.check_and_fill_missing_parameters(poly_params, i)
 

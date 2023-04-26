@@ -70,6 +70,8 @@ class StepModel(LightcurveModel):
         # if the .every_light_curve attribute (final lc model) is not already present then create it now
         if not hasattr(self, "every_light_curve"):
             self.every_light_curve = {}
+        if not hasattr(self, "initial_guess"):
+            self.initial_guess = {}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -104,7 +106,7 @@ class StepModel(LightcurveModel):
                     except AttributeError:
                         pass
 
-                step = []
+                step, initial_guess = [], []
                 for i, w in enumerate(data.wavelength):
                     if len(np.shape(x)) > 1:
                         xi = x[i, :]
@@ -127,6 +129,8 @@ class StepModel(LightcurveModel):
                         )
                     )
 
+                    initial_guess.append(eval_in_model(step[-1]))
+
                 # print(eval_in_model(pm.math.stack(step, axis=0)))
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
@@ -144,6 +148,12 @@ class StepModel(LightcurveModel):
                     self.every_light_curve[f"wavelength_{j}"] += pm.math.stack(
                         step, axis=0
                     )
+
+                # add the initial guess to the model:
+                if f"wavelength_{j}" not in self.initial_guess.keys():
+                    self.initial_guess[f"wavelength_{j}"] = np.array(initial_guess)
+                else:
+                    self.initial_guess[f"wavelength_{j}"] += initial_guess
 
     def step_model(self, step_params: dict, i: int = 0) -> np.array:
         """

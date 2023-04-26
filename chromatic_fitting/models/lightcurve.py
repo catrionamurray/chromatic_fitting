@@ -300,16 +300,44 @@ class LightcurveModel:
                 self.parameters[k] = Fixed(v.values[0])
                 self.parameters[k].set_name(k)
 
-    def separate_wavelengths(self, i):
-        # if self.outlier_flag:
-        #     data_copy = self.data_without_outliers._create_copy()
-        # else:
-        data_copy = self.data._create_copy()
+    # def separate_wavelengths(self, i):
+    #     # if self.outlier_flag:
+    #     #     data_copy = self.data_without_outliers._create_copy()
+    #     # else:
+    #     data_copy = self.data._create_copy()
+    #
+    #     for k, v in data_copy.fluxlike.items():
+    #         data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
+    #     for k, v in data_copy.wavelike.items():
+    #         data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
+    #     return data_copy
 
+    def separate_wavelengths(self, i):
+        """
+        Extracts a single-wavelength Rainbow object from the attached Rainbow
+
+        Parameters
+        ----------
+        i: the index of the wavelength to extract
+
+        Returns
+        -------
+        Rainbow object for one wavelength of the original data
+
+        """
+        data_copy = self.data._create_copy()
         for k, v in data_copy.fluxlike.items():
-            data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
+            try:
+                assert v.unit
+                data_copy.fluxlike[k] = [data_copy.fluxlike[k][i, :]] * v.unit
+            except AttributeError:
+                data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
         for k, v in data_copy.wavelike.items():
-            data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
+            try:
+                assert v.unit
+                data_copy.wavelike[k] = [data_copy.wavelike[k][i]] * v.unit
+            except AttributeError:
+                data_copy.wavelike[k] = np.array([data_copy.wavelike[k][i]])
         return data_copy
 
     def choose_model_based_on_optimization_method(self, *extra_arrs):
@@ -535,6 +563,7 @@ class LightcurveModel:
             for j in range(data.nwave):
                 # create a new plot for each wavelength
                 plt.figure(figsize=figsize)
+                plt.title(f"Wavelength: {data.wavelength[j]}")
                 # plot the data and errors
                 plt.plot(
                     data.time,

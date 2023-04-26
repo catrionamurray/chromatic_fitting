@@ -400,7 +400,7 @@ class CombinedModel(LightcurveModel):
                 self.every_light_curve = add_dicts(
                     self.every_light_curve, mod.every_light_curve
                 )
-                if hasattr(mod.initial_guess):
+                if hasattr(mod, "initial_guess"):
                     self.initial_guess = add_dicts(
                         self.initial_guess, mod.initial_guess
                     )
@@ -411,7 +411,7 @@ class CombinedModel(LightcurveModel):
                     self.how_to_combine[i - 1]
                 ](self.every_light_curve, mod.every_light_curve)
 
-                if hasattr(mod.initial_guess):
+                if hasattr(mod, "initial_guess"):
                     self.initial_guess = combination_options[
                         self.how_to_combine[i - 1]
                     ](self.initial_guess, mod.initial_guess)
