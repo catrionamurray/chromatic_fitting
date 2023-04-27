@@ -364,7 +364,7 @@ class CombinedModel(LightcurveModel):
         optimization_method: the method of optimization, options are 'simultaneous', 'separate' or 'white_light'
         (default='simultaneous')
         """
-        super().choose_optimization_method(self, optimization_method)
+        super().choose_optimization_method(optimization_method)
         for m in self._chromatic_models.values():
             m.optimization = optimization_method
 
