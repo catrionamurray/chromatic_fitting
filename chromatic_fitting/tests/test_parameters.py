@@ -5,22 +5,32 @@ from pymc3 import Normal
 import pymc3 as pm
 
 
-# class MyTestCase(unittest.TestCase):
-#     def test_something(self):
-#         self.assertEqual(True, False)  # add assertion here
+class TestParameter(unittest.TestCase):
+    def test_set_name(self):
+        param = Parameter()
+        param.set_name("test_param")
+        self.assertEqual(param.name, "test_param")
 
 
 class TestFixed(unittest.TestCase):
-    def test_fixed(self):
+    def test_get_prior(self):
         a = Fixed(1.0)
         b = Fixed(1)
-
         assert a.value == 1.0
         assert a.get_prior() == 1.0
-        assert a.get_prior_vector() == 1.0
         assert b.value == 1
         assert b.get_prior() == 1
+
+    def test_get_prior_vector(self):
+        a = Fixed(1.0)
+        b = Fixed(1)
+        assert a.get_prior_vector() == 1.0
         assert b.get_prior_vector() == 1
+
+        values = np.array([1, 2, 3])
+        param = WavelikeFixed(values=values)
+        prior = param.get_prior_vector()
+        self.assertTrue(np.array_equal(prior, values))
 
     def test_wavelikefixed(self):
         values = [1.0, 2.0, 3.0]
@@ -34,17 +44,24 @@ class TestFixed(unittest.TestCase):
 
 
 class TestFitted(unittest.TestCase):
-    def test_fitted(self):
-        # *** TEST NORMAL CASE ***
+    def test_generate_pymc3(self):
         a = Fitted(Normal, mu=1.0, sigma=0.1, name="a")
-
-        assert a.distribution == Normal
+        with pm.Model():
+            prior = a.generate_pymc3()
+        #         self.assertIsInstance(prior, Normal)
+        self.assertIsInstance(prior.distribution, Normal)
         assert a.inputs["mu"] == 1.0
         assert a.inputs["sigma"] == 0.1
         assert a.inputs["name"] == "a"
 
+    def test_get_prior(self):
+        # *** TEST NORMAL CASE ***
+        a = Fitted(Normal, mu=1.0, sigma=0.1, name="a")
+
         with pm.Model() as mod:
-            a.get_prior()
+            prior = a.get_prior()
+        self.assertIsInstance(prior.distribution, Normal)
+
         assert mod["a"] == a.get_prior()
         assert mod["a"] == a._pymc3_prior
 
@@ -61,7 +78,25 @@ class TestFitted(unittest.TestCase):
             with pytest.raises(TypeError):
                 c.get_prior()
 
-    def test_wavelikefitted(self):
+    def test_clear_prior(self):
+        param = Fitted(Normal, mu=0, sigma=1, name="a")
+        param.clear_prior()
+        self.assertFalse(hasattr(param, "_pymc3_prior"))
+
+
+class TestWavelikeFitted(unittest.TestCase):
+    def test_label(self):
+        param = WavelikeFitted(Normal, mu=0, sigma=1, name="test_param")
+        label = param.label(2)
+        self.assertEqual(label, "test_param_w2")
+
+    def test_generate_pymc3(self):
+        param = WavelikeFitted(Normal, mu=0, sigma=1, shape=3, name="test_param")
+        with pm.Model():
+            prior = param.generate_pymc3(i=2)
+        self.assertIsInstance(prior.distribution, Normal)
+
+    def test_get_prior_vector(self):
         # test vectorized parameter
         a = WavelikeFitted(Normal, mu=1.0, sigma=0.1, name="a")
 

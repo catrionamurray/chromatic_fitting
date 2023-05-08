@@ -25,33 +25,7 @@ from ..diagnostics import (
     check_initial_guess,
 )
 
-
-#  - Q=sqrt(N)*depth/error (Winn 2010/ Carter 2008)
-#  - chi-sq
-
-# chi_sq = []
-# nparams = 15
-# for i in range(cmod.data.nwave-1):
-#     chi_sq.append(np.sum((cmod.data_with_model.residuals[i,:]/cmod.data.uncertainty[i,:])**2)/(cmod.data.ntime-numparams-1))
-#     if chi_sq[-1] > 2:
-#         print(cmod.data.wavelength[i], chi_sq[-1])
-# chi_sq
-
-# nparams = 0
-# for k, v in self._chromatic_models.items():
-#     for pname, p in v.parameters.items():
-#         if isinstance(p, Fixed) or isinstance(p, WavelikeFixed):
-#             pass
-#         elif isinstance(p, WavelikeFitted):
-#             nparams += cmod.data.nwave
-#
-#             if "limb_darkening" in pname:
-#                 nparams += 1
-#         else:
-#
-#             if "limb_darkening" in pname:
-#                 nparams += 1
-#             nparams += 1
+allowed_types_of_models = ["planet", "systematic"]
 
 
 class LightcurveModel:
@@ -258,6 +232,50 @@ class LightcurveModel:
         """
         self._pymc3_model = pm.Model()
 
+    def copy(self):
+        """
+         make a "copy" of each lightcurve model:
+        :return:
+        copy of lightcurve model
+        """
+
+        class_inputs = self.extract_extra_class_inputs()
+        new_model = self.__class__(**class_inputs)
+
+        if isinstance(self, CombinedModel):
+            if hasattr(self, "_chromatic_models"):
+                new_model._chromatic_models = {}
+                new_model.how_to_combine = self.how_to_combine
+                for name, model in self._chromatic_models.items():
+                    new_model._chromatic_models[name] = model.copy()
+
+        # new_model._pymc3_model = self._pymc3_model
+        model_params = {}
+
+        # for every parameter in the separate models redefine them in the separate models within CombinedModel
+        # and the new CombinedModel
+        for k, v in self.parameters.items():
+            if isinstance(v, WavelikeFixed):
+                # parameter is WavelikeFixed
+                model_params[k] = v.__class__(v.values)
+            elif isinstance(v, Fixed):
+                # parameter is Fixed
+                model_params[k] = v.__class__(v.value)
+            else:
+                # parameter is Fitted or WavelikeFitted
+                model_params[k] = v.__class__(v.distribution, **v.inputs)
+
+        # set up parameters in new models
+        new_model.defaults = add_string_before_each_dictionary_key(
+            new_model.defaults, new_model.name
+        )
+        new_model.required_parameters = [
+            f"{new_model.name}_{a}" for a in new_model.required_parameters
+        ]
+        new_model.setup_parameters(**model_params)
+
+        return new_model
+
     def attach_data(self, rainbow):
         """
         Connect a `chromatic` Rainbow dataset to this object.
@@ -326,16 +344,44 @@ class LightcurveModel:
                 self.parameters[k] = Fixed(v.values[0])
                 self.parameters[k].set_name(k)
 
-    def separate_wavelengths(self, i):
-        # if self.outlier_flag:
-        #     data_copy = self.data_without_outliers._create_copy()
-        # else:
-        data_copy = self.data._create_copy()
+    # def separate_wavelengths(self, i):
+    #     # if self.outlier_flag:
+    #     #     data_copy = self.data_without_outliers._create_copy()
+    #     # else:
+    #     data_copy = self.data._create_copy()
+    #
+    #     for k, v in data_copy.fluxlike.items():
+    #         data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
+    #     for k, v in data_copy.wavelike.items():
+    #         data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
+    #     return data_copy
 
+    def separate_wavelengths(self, i):
+        """
+        Extracts a single-wavelength Rainbow object from the attached Rainbow
+
+        Parameters
+        ----------
+        i: the index of the wavelength to extract
+
+        Returns
+        -------
+        Rainbow object for one wavelength of the original data
+
+        """
+        data_copy = self.data._create_copy()
         for k, v in data_copy.fluxlike.items():
-            data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
+            try:
+                assert v.unit
+                data_copy.fluxlike[k] = [data_copy.fluxlike[k][i, :]] * v.unit
+            except AttributeError:
+                data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
         for k, v in data_copy.wavelike.items():
-            data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
+            try:
+                assert v.unit
+                data_copy.wavelike[k] = [data_copy.wavelike[k][i]] * v.unit
+            except AttributeError:
+                data_copy.wavelike[k] = np.array([data_copy.wavelike[k][i]])
         return data_copy
 
     def choose_model_based_on_optimization_method(self, *extra_arrs):
@@ -417,19 +463,19 @@ class LightcurveModel:
             # if the user has specified a mask, then use that
             if data_mask is None:
                 # sigma-clip in time
-                data_mask = np.array(get_data_outlier_mask(data, **kw))
+                data_mask = np.array(get_data_outlier_mask(datas, **kw))
                 if mask_wavelength_outliers:
                     # sigma-clip in wavelength
                     data_mask[
                         get_data_outlier_mask(
-                            data, clip_axis="wavelength", sigma=sigma_wavelength
+                            datas, clip_axis="wavelength", sigma=sigma_wavelength
                         )
                         == True
                     ] = True
                 # data_mask_wave =  get_data_outlier_mask(data, clip_axis='wavelength', sigma=4.5)
             self.outlier_mask = data_mask
             self.outlier_flag = True
-            self.data_without_outliers = remove_data_outliers(data, data_mask)
+            self.data_without_outliers = remove_data_outliers(datas, data_mask)
 
         if inflate_uncertainties:
             self.parameters["nsigma"] = WavelikeFitted(
@@ -561,6 +607,7 @@ class LightcurveModel:
             for j in range(data.nwave):
                 # create a new plot for each wavelength
                 plt.figure(figsize=figsize)
+                plt.title(f"Wavelength: {data.wavelength[j]}")
                 # plot the data and errors
                 plt.plot(
                     data.time,
