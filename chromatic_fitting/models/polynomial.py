@@ -49,7 +49,7 @@ class PolynomialModel(LightcurveModel):
         independant_variable: str = "time",
         name: str = "polynomial",
         type_of_model: str = "systematic",
-        xlims=None,
+        xlims: object = None,
         **kw: object,
     ) -> None:
         """
