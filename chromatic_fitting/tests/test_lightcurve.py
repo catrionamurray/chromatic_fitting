@@ -1,6 +1,8 @@
 import unittest
-from ..models.lightcurve import *
-from ..models.combined import *
+
+# from ..models.lightcurve import *
+# from ..models.combined import *
+from chromatic_fitting.models import *
 from pymc3 import Uniform, Normal
 
 from io import StringIO
