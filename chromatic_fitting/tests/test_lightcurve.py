@@ -57,9 +57,6 @@ class TestLightcurveModel(unittest.TestCase):
         self.assertIsInstance(self.lc_model.parameters[f"{name}param2"], Fitted)
 
     def test_summarize_parameters(self):
-        name = self.lc_model.name
-        if name != "":
-            name = name + "_"
         # set up some parameters for the model
         self.lc_model.setup_parameters(
             param1=Fixed(2), param2=Fitted(Uniform, lower=0, upper=1)
@@ -72,6 +69,10 @@ class TestLightcurveModel(unittest.TestCase):
             self.assertIn("param2", output)
 
     def test_add(self):
+        if not hasattr(self, "parameters"):
+            self.lc_model.setup_parameters(
+                param1=Fixed(2), param2=Fitted(Uniform, lower=0, upper=1)
+            )
         # create a second LightcurveModel object
         lc_model2 = LightcurveModel(name="lc_model2")
         lc_model2.setup_parameters(
@@ -81,6 +82,10 @@ class TestLightcurveModel(unittest.TestCase):
         self.assertIsInstance(self.lc_model + lc_model2, CombinedModel)
 
     def test_subtract(self):
+        if not hasattr(self, "parameters"):
+            self.lc_model.setup_parameters(
+                param1=Fixed(2), param2=Fitted(Uniform, lower=0, upper=1)
+            )
         # create a second LightcurveModel object
         lc_model2 = LightcurveModel()
         lc_model2.setup_parameters(
@@ -90,6 +95,10 @@ class TestLightcurveModel(unittest.TestCase):
         self.assertIsInstance(self.lc_model - lc_model2, CombinedModel)
 
     def test_multiply(self):
+        if not hasattr(self, "parameters"):
+            self.lc_model.setup_parameters(
+                param1=Fixed(2), param2=Fitted(Uniform, lower=0, upper=1)
+            )
         # create a second LightcurveModel object
         lc_model2 = LightcurveModel()
         lc_model2.setup_parameters(
@@ -99,6 +108,10 @@ class TestLightcurveModel(unittest.TestCase):
         self.assertIsInstance(self.lc_model * lc_model2, CombinedModel)
 
     def test_divide(self):
+        if not hasattr(self, "parameters"):
+            self.lc_model.setup_parameters(
+                param1=Fixed(2), param2=Fitted(Uniform, lower=0, upper=1)
+            )
         # create a second LightcurveModel object
         lc_model2 = LightcurveModel()
         lc_model2.setup_parameters(
