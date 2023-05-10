@@ -293,7 +293,7 @@ class GPModel(LightcurveModel):
         new_params = {}
         for parname, par in params.items():
             if "interval" not in parname:
-                parname_without_modelname = parname.replace(f"{p.name}_", "")
+                parname_without_modelname = parname.replace(f"{self.name}_", "")
                 if f"[{i}]" in parname_without_modelname:
                     try:
                         new_params[
