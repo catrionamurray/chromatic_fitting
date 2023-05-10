@@ -5,6 +5,7 @@ from .combined import *
 from .trapezoid import *
 from .step import *
 from .exponential import *
+from .gp import *
 
 # from .spot import *
 

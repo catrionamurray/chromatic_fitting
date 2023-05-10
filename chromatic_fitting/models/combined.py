@@ -8,6 +8,7 @@ import operator
 
 from .transit import *
 from .polynomial import *
+from .gp import *
 
 """
 Example of setting up a CombinedModel:
@@ -169,6 +170,7 @@ class CombinedModel(LightcurveModel):
         self.parameters = {}
         self.model = self.combined_model
         self.type_of_model = "combined"
+        self.has_gp = False
 
     def __repr__(self):
         """
@@ -301,6 +303,10 @@ class CombinedModel(LightcurveModel):
         # set up parameters in new combined model
         self._chromatic_models = new_models
 
+        for mod in self._chromatic_models.values():
+            if isinstance(mod, GPModel):
+                self.has_gp = True
+
     def apply_operation_to_constituent_models(
         self, operation: str, *args: object, **kwargs: object
     ) -> object:
@@ -421,6 +427,12 @@ class CombinedModel(LightcurveModel):
                     self.initial_guess = mod.initial_guess
                 else:
                     print(f"No initial guess saved for chromatic model {mod}")
+
+                if hasattr(mod, "kernel_func"):
+                    self.kernel_func = mod.kernel_func
+
+                if hasattr(mod, "covar"):
+                    self.covar = mod.covar
                 # self.every_light_curve = add_dicts(
                 #     self.every_light_curve, mod.every_light_curve
                 # )
@@ -444,6 +456,16 @@ class CombinedModel(LightcurveModel):
                     ](self.initial_guess, mod.initial_guess)
                 else:
                     print(f"No initial guess saved for chromatic model {mod}")
+
+                if hasattr(mod, "kernel_func"):
+                    self.kernel_func = combination_options_array[
+                        self.how_to_combine[i - 1]
+                    ](self.kernel_func, mod.kernel_func)
+                if hasattr(mod, "covar"):
+                    self.covar = combination_options_array[self.how_to_combine[i - 1]](
+                        self.covar, mod.covar
+                    )
+
                 # self.every_light_curve = combination_options[
                 #     self.how_to_combine[i - 1]
                 # ](self.every_light_curve, mod.every_light_curve)
@@ -467,6 +489,15 @@ class CombinedModel(LightcurveModel):
                     Deterministic(
                         f"{self.name}_model", self.every_light_curve[f"wavelength_{i}"]
                     )
+
+    def setup_likelihood(
+        self,
+        **kw,
+    ):
+        if self.has_gp:
+            GPModel.setup_likelihood(self, **kw)
+        else:
+            LightcurveModel.setup_likelihood(self, **kw)
 
     def get_results(self, **kw):
         """
