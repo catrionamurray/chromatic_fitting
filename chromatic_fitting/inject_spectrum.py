@@ -56,69 +56,116 @@ class synthetic_planet(PlanetarySpectrumModel):
         '''
 
         ld_coeffs, mask = [], []
-        prev_ld = 0.0
+        # prev_ld = 0.0
 
         # For ExoTiC we need a range of wavelengths - create bins around each value (not ideal)
         for w in range(len(self.table["wavelength"])):
-            # wsdata = [self.table["wavelength_lower"][w],self.table["wavelength_upper"][w]]
-            wsdata = np.arange(self.table["wavelength_lower"][w], self.table["wavelength_upper"][w], 0.001)
-            print("Wavelength range: ", wsdata)
+            wsdata = [self.table["wavelength_lower"][w],self.table["wavelength_upper"][w]]
+            # wsdata = np.arange(self.table["wavelength_lower"][w], self.table["wavelength_upper"][w], 0.001)
 
             # * * * * * * * *
             # Use ExoTiC-LD to calculate wavelength-dependent LD coeffs
-            result = limb_dark_fit(mode, np.array(wsdata) * 10000, self.stellar.M_H, self.stellar.Teff,
-                                   self.stellar.logg, dirsen, ld_model=ld_model)
-            # * * * * * * * *
-
-            # If all zeros are returned then ignore (happens when we're outside the wavelength range defined by 'mode')
-            if np.all(np.array(result) == 0.0):
-                if prev_ld == 0.0:
-                    print("Outside " + mode + " wavelength range!\n")
-                    mask.append(1)
-                    ld_coeffs.append(np.nan)
-                else:
-                    print("There may be an issue with grid spacing!\n")
-                    mask.append(1)
-                    ld_coeffs.append(np.nan)
-                    prev_ld = 0.0
-            else:
-                prev_ld = result[0]
-                if ld_eqn == "linear":
-                    print("Using linear LD equation\n")
-                    ld_coeffs.append(result[0])
-                    mask.append(0)
-
-                elif ld_eqn == "quadratic":
-                    print("Using quadratic LD equation\n")
-                    ld_coeffs.append(result[9:11])
-                    mask.append(0)
-
-                elif ld_eqn == "nonlinear":
-                    print("Using non-linear LD equation\n")
-                    ld_coeffs.append(result[1:5])
-                    mask.append(0)
-
+            sld = StellarLimbDarkening(self.stellar.M_H, self.stellar.Teff,self.stellar.logg, ld_model, dirsen)
+            try:
+                if ld_eqn == "quadratic":
+                    result = sld.compute_quadratic_ld_coeffs(np.array(wsdata) * 10000, mode)
+                elif ld_eqn == "linear":
+                    result = sld.compute_linear_ld_coeffs(np.array(wsdata) * 10000, mode)
                 elif ld_eqn == "threeparam":
-                    print("Using three-paramter LD equation\n")
-                    ld_coeffs.append(result[6:9])
-                    mask.append(0)
-
+                    result = sld.compute_3_parameter_non_linear_ld_coeffs(np.array(wsdata) * 10000, mode)
+                elif ld_eqn == "fourparam":
+                    result = sld.compute_4_parameter_non_linear_ld_coeffs(np.array(wsdata) * 10000, mode)
                 else:
                     print("No valid LD equation method chosen!\n")
+                    return
 
-        ld_0, ld_1 = [], []
+                # prev_ld = result  # [0]
+                # print(result, type(result))
+                ld_coeffs.append(result)  # [1:5])
+                mask.append(0)
+
+                # print("Wavelength range: ", wsdata)
+
+                # result = limb_dark_fit(mode, np.array(wsdata) * 10000, self.stellar.M_H, self.stellar.Teff,
+                #                        self.stellar.logg, dirsen, ld_model=ld_model)
+                # * * * * * * * *
+
+                # If all zeros are returned then ignore (happens when we're outside the wavelength range defined by 'mode')
+                # if np.all(np.array(result) == 0.0):
+                #     if prev_ld == 0.0:
+                #         print("Outside " + mode + " wavelength range!\n")
+                #         mask.append(1)
+                #         ld_coeffs.append(np.nan)
+                #     else:
+                #         print("There may be an issue with grid spacing!\n")
+                #         mask.append(1)
+                #         ld_coeffs.append(np.nan)
+                #         prev_ld = 0.0
+                # else:
+                #     prev_ld = result#[0]
+                #     ld_coeffs.append(result)  # [1:5])
+                #     mask.append(0)
+                    # if ld_eqn == "linear":
+                    #     print("Using linear LD equation\n")
+                    #     # ld_coeffs.append(result)#[0])
+                    #     # mask.append(0)
+                    #
+                    # elif ld_eqn == "quadratic":
+                    #     print("Using quadratic LD equation\n")
+                    #     # ld_coeffs.append(result)#[9:11])
+                    #     # mask.append(0)
+                    #
+                    # elif ld_eqn == "fourparam":
+                    #     print("Using four-parameter LD equation\n")
+                    #     # ld_coeffs.append(result)#[1:5])
+                    #     # mask.append(0)
+                    #
+                    # elif ld_eqn == "threeparam":
+                    #     print("Using three-paramter LD equation\n")
+                        # ld_coeffs.append(result[6:9])
+                        # mask.append(0)
+
+                    # else:
+                    #     print("No valid LD equation method chosen!\n")
+            except Exception as e:
+                # print(e)
+                mask.append(1)
+                ld_coeffs.append(np.nan)
+                pass
+
+        ld_0, ld_1, ld_2, ld_3 = [], [], [], []
         for u in ld_coeffs:
-            if type(u) == tuple:
+            try:
                 ld_0.append(u[0])
-                ld_1.append(u[1])
-            else:
+                if ld_eqn == "linear":
+                    ld_1.append(np.nan)
+                    ld_2.append(np.nan)
+                    ld_3.append(np.nan)
+                elif ld_eqn == "quadratic":
+                    ld_1.append(u[1])
+                    ld_2.append(np.nan)
+                    ld_3.append(np.nan)
+                elif ld_eqn == "threeparam":
+                    ld_1.append(u[1])
+                    ld_2.append(u[2])
+                    ld_3.append(np.nan)
+                elif ld_eqn == "fourparam":
+                    ld_1.append(u[1])
+                    ld_2.append(u[2])
+                    ld_3.append(u[3])
+            except Exception as e:
+                print(e)
                 ld_0.append(np.nan)
                 ld_1.append(np.nan)
+                ld_2.append(np.nan)
+                ld_3.append(np.nan)
 
         self.modemask = np.array(mask)
         self.ld_coeffs = np.array(ld_coeffs)
         self.table["ld_0"] = ld_0
         self.table["ld_1"] = ld_1
+        self.table["ld_2"] = ld_2
+        self.table["ld_3"] = ld_3
         self.table["ld_mask"] = self.modemask
         self.ld_eqn = ld_eqn
         self.ld_model = ld_model
