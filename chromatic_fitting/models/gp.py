@@ -262,23 +262,30 @@ class GPModel(LightcurveModel):
                     flux = np.array(data.flux)
 
                 #                 try:
-                x = data.get(self.independant_variable)
-                if self.independant_variable == "time":
-                    x = x.to_value("day")
 
                 light_curve_name = f"wavelength_{j}"
                 self.gp = []
                 for i in range(data.nwave):
-                    self.gp.append(
-                        GaussianProcess(
-                            self.covar[light_curve_name][i],
-                            t=x,
-                            diag=uncertainties[i] ** 2
-                            + pm.math.exp(self.log_jitter.get_prior(i + j)),
-                            mean=self.mean.get_prior(i + j),
-                            quiet=True,
+
+                    if type(self.independant_variable) is not list:
+                        x = data.get(self.independant_variable)
+                        if self.independant_variable == "time":
+                            x = x.to_value("day")
+                        if len(np.shape(x)) > 1:
+                            xi = x[i, :]
+                        else:
+                            xi = x
+
+                        self.gp.append(
+                            GaussianProcess(
+                                self.covar[light_curve_name][i],
+                                t=xi,
+                                diag=uncertainties[i] ** 2
+                                + pm.math.exp(self.log_jitter.get_prior(i + j)),
+                                mean=self.mean.get_prior(i + j),
+                                quiet=True,
+                            )
                         )
-                    )
 
                     self.gp[-1].marginal(
                         f"gp_w{j + i}",
@@ -290,24 +297,27 @@ class GPModel(LightcurveModel):
         return self.gp.predict(y=y)
 
     def generate_gp_model_from_params(self, params, i=0):
-        new_params = {}
-        for parname, par in params.items():
-            if "interval" not in parname:
-                parname_without_modelname = parname.replace(f"{self.name}_", "")
-                if f"[{i}]" in parname_without_modelname:
-                    try:
-                        new_params[
-                            parname_without_modelname.replace(f"[{i}]", "")
-                        ] = par[i]
-                    except:
-                        new_params[
-                            parname_without_modelname.replace(f"[{i}]", "")
-                        ] = par
-                else:
-                    try:
-                        new_params[parname_without_modelname] = par[i]
-                    except:
-                        new_params[parname_without_modelname] = par
+        new_params = remove_all_keys_with_string_from_dictionary(params, 'interval')
+        new_params = remove_string_from_each_dictionary_key(new_params, f"{self.name}_")
+        new_params = remove_string_from_each_dictionary_key(new_params, f"[{i}]")
+        # for parname, par in params.items():
+        #     if "interval" not in parname:
+        #         # parname_without_modelname = parname.replace(f"{self.name}_", "")
+        #
+        #         if f"[{i}]" in parname_without_modelname:
+        #             try:
+        #                 new_params[
+        #                     parname_without_modelname.replace(f"[{i}]", "")
+        #                 ] = par[i]
+        #             except:
+        #                 new_params[
+        #                     parname_without_modelname.replace(f"[{i}]", "")
+        #                 ] = par
+        #         else:
+        #             try:
+        #                 new_params[parname_without_modelname] = par[i]
+        #             except:
+        #                 new_params[parname_without_modelname] = par
 
         extra_params = {}
         for name, default_value in zip(["log_jitter", "mean"], [1.0, 0.0]):
@@ -322,12 +332,43 @@ class GPModel(LightcurveModel):
         x = self.data.get(self.independant_variable)
         if self.independant_variable == "time":
             x = x.to_value("day")
+        if len(np.shape(x)) > 1:
+            xi = x[i, :]
+        else:
+            xi = x
 
         gp = GaussianProcess(
             kernel,
             mean=extra_params["mean"],
-            t=x,
+            t=xi,
             diag=self.data.uncertainty[i, :] + np.exp(extra_params["log_jitter"]),
         )
 
         return gp
+
+    def plot_prediction(self, gp, i=0, plot_var=True, legend=True):
+        t = self.data.time.to_value('d')
+        sample_t = np.linspace(t[0], t[-1], 1000)
+
+        plt.plot(t, self.data.flux[i], "k", lw=1.5, alpha=0.3, label="data")
+        plt.errorbar(t, self.data.flux[i], yerr=self.data.uncertainty[i], fmt=".k", capsize=0)
+
+        if gp:
+            mu, variance = eval_in_model(gp.predict(self.data.flux[i], t=sample_t, return_var=True), model=self._pymc3_model)
+            plt.plot(sample_t, mu, label="prediction", c='C0')
+            if plot_var:
+                sigma = np.sqrt(variance)
+                plt.fill_between(sample_t, mu - sigma, mu + sigma, color="C0", alpha=0.2)
+
+        plt.xlabel("time [day]")
+        plt.ylabel("flux")
+        # plt.xlim(0, 10)
+        # plt.ylim(-2.5, 2.5)
+        if legend:
+            plt.legend()
+
+    def plot_traces(self, num_traces, i=0):
+        plt.figure()
+        for trace in self.trace[:num_traces]:
+            gp = self.generate_gp_model_from_params(trace, i=i)
+            plot_prediction(self, gp, plot_var=False, legend=False)
