@@ -371,4 +371,4 @@ class GPModel(LightcurveModel):
         plt.figure()
         for trace in self.trace[:num_traces]:
             gp = self.generate_gp_model_from_params(trace, i=i)
-            plot_prediction(self, gp, plot_var=False, legend=False)
+            self.plot_prediction(gp, plot_var=False, legend=False)

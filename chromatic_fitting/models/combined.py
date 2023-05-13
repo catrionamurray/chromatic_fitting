@@ -772,7 +772,7 @@ class CombinedModel(LightcurveModel):
 
         return gp
 
-    def plot_gp_prediction(self, gp, i=0, plot_var=True, legend=True):
+    def plot_prediction(self, gp, i=0, plot_var=True, legend=True):
         if self.has_gp:
             GPModel.plot_prediction(self, gp=gp, i=i, plot_var=plot_var, legend=legend)
 
