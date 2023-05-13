@@ -81,6 +81,7 @@ setup(
         "chromatic-lightcurves>=0.2.2",
         "pymc>=3.11.1",
         "pymc3_ext",
+        "arviz==0.14.0",
         "corner",
         "exoplanet>=0.5.0",
         "tqdm",
