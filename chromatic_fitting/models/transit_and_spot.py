@@ -3,6 +3,9 @@ from ..imports import *
 from .lightcurve import *
 
 import starry
+starry.config.lazy = True
+starry.config.quiet = True
+
 import theano
 theano.config.gcc__cxxflags += " -fexceptions"
 
@@ -93,11 +96,16 @@ class TransitSpotModel(LightcurveModel):
         if store_models == True:
             self.store_models = store_models
 
-        parameters_to_loop_over = {
-            f"{name}A": [],
-            f"{name}decay_time": [],
-            f"{name}baseline": [],
-        }
+        # parameters_to_loop_over = {
+        #     f"{name}A": [],
+        #     f"{name}decay_time": [],
+        #     f"{name}baseline": [],
+        # }
+
+        parameters_to_loop_over = {}
+        for p in self.parameters.keys():
+            parameters_to_loop_over[p] = []
+
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j
@@ -108,23 +116,8 @@ class TransitSpotModel(LightcurveModel):
                         self.parameters[pname].get_prior_vector(**kw)
                     )
 
-                # get the independent variable from the Rainbow object:
-                x = data.get(self.independant_variable)
-                # if the independant variable is time, convert to days:
-                if self.independant_variable == "time":
-                    x = x.to_value("day")
-                else:
-                    try:
-                        x = x.to_value()
-                    except AttributeError:
-                        pass
-
                 flux_model, initial_guess = [], []
                 for i, w in enumerate(data.wavelength):
-                    if len(np.shape(x)) > 1:
-                        xi = x[i, :]
-                    else:
-                        xi = x
 
                     param_i = {}
                     for pname, param in parameters_to_loop_over.items():
@@ -135,35 +128,35 @@ class TransitSpotModel(LightcurveModel):
 
                     star = starry.Primary(
                         starry.Map(ydeg=5, udeg=2, amp=1),
-                        r=param_i["rs"],
-                        m=param_i["ms"],
-                        prot=param_i['prot'],
+                        r=param_i[f"{name}rs"],
+                        m=param_i[f"{name}ms"],
+                        prot=param_i[f"{name}prot"],
                         length_unit=u.R_sun,
                         mass_unit=u.M_sun,
                     )
-                    star.map[1:] = param_i["u"]
+                    star.map[1:] = param_i[f"{name}u"]
 
-                    star.map.spot(contrast=param_i['spot_contrast'],
-                                  radius=param_i['spot_radius'],
-                                  lat=param_i['spot_latitude'],
-                                  lon=param_i['spot_longitude'])
+                    star.map.spot(contrast=param_i[f"{name}spot_contrast"],
+                                  radius=param_i[f"{name}spot_radius"],
+                                  lat=param_i[f"{name}spot_latitude"],
+                                  lon=param_i[f"{name}spot_longitude"])
 
                     planet = starry.kepler.Secondary(
                         starry.Map(ydeg=5, amp=5e-3),  # the surface map
-                        m=param_i['mp'],  # mass in solar masses
-                        r=param_i['rp'],  # radius
-                        inc=param_i["inc"],
+                        m=param_i[f"{name}mp"],  # mass in solar masses
+                        r=param_i[f"{name}rp"],  # radius
+                        inc=param_i[f"{name}inc"],
                         length_unit=u.R_earth,
                         mass_unit=u.M_earth,
-                        porb=param_i['period'],  # orbital period in days
-                        prot=param_i['period'],  # rotation period in days (synchronous)
-                        omega=param_i['omega'],  # longitude of ascending node in degrees
-                        ecc=param_i['ecc'],  # eccentricity
-                        t0=param_i['t0'],  # time of transit in days
+                        porb=param_i[f"{name}period"],  # orbital period in days
+                        prot=param_i[f"{name}period"],  # rotation period in days (synchronous)
+                        omega=param_i[f"{name}omega"],  # longitude of ascending node in degrees
+                        ecc=param_i[f"{name}ecc"],  # eccentricity
+                        t0=param_i[f"{name}t0"],  # time of transit in days
                     )
 
                     sys = starry.System(star, planet)
-                    flux_model.append(param_i['A'] * sys.flux(data.time.to_value('d')))
+                    flux_model.append(param_i[f"{name}A"] * sys.flux(data.time.to_value('d')))
 
                     # exp.append(
                     #     param_i[f"{name}A"]
