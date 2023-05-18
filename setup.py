@@ -103,7 +103,9 @@ setup(
             #         "twine",
             #         "pre-commit",
         ],
-        "gp": ["celerite2"]
+        "gp": ["celerite2"],
+        "eclipse": ["starry"],
+        "spot": ["starry"]
         #     "cartoons": ["rainbow-connection>=0.0.7"],
     },
     # (I think just leave this set to False)

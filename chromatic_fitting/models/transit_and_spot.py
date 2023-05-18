@@ -2,6 +2,10 @@ from ..imports import *
 
 from .lightcurve import *
 
+import starry
+import theano
+theano.config.gcc__cxxflags += " -fexceptions"
+
 
 class TransitSpotModel(LightcurveModel):
     """
