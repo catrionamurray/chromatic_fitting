@@ -50,7 +50,9 @@ class TransitModel(LightcurveModel):
     A transit model for the lightcurve.
     """
 
-    def __init__(self, name: str = "transit", **kw: object) -> None:
+    def __init__(
+        self, name: str = "transit", type_of_model: str = "planet", **kw: object
+    ) -> None:
         """
         Initialise the transit model.
 
@@ -73,9 +75,17 @@ class TransitModel(LightcurveModel):
         ]
 
         super().__init__(**kw)
+        # self.xlims = xlims
         self.set_defaults()
         self.set_name(name)
         self.model = self.transit_model
+
+        if type_of_model in allowed_types_of_models:
+            self.type_of_model = type_of_model
+        else:
+            warnings.warn(
+                f"{type_of_model} is not a valid type of model. Please select one of: {allowed_types_of_models}"
+            )
 
     def __repr__(self):
         """
@@ -190,6 +200,9 @@ class TransitModel(LightcurveModel):
         # if the .every_light_curve attribute (final lc model) is not already present then create it now
         if not hasattr(self, "every_light_curve"):
             self.every_light_curve = {}
+        # if the .every_light_curve attribute (final lc model) is not already present then create it now
+        if not hasattr(self, "initial_guess"):
+            self.initial_guess = {}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -198,84 +211,132 @@ class TransitModel(LightcurveModel):
 
         # stored_a_r = False
 
-        limb_darkening, planet_radius, baseline = [], [], []
+        # limb_darkening, planet_radius, baseline = [], [], []
+        parameters_to_loop_over = {
+            f"{name}limb_darkening": [],
+            f"{name}radius_ratio": [],
+            f"{name}stellar_radius": [],
+            f"{name}baseline": [],
+        }
 
         for j, (mod, data, orbit) in enumerate(zip(models, datas, orbits)):
             if self.optimization == "separate":
                 kw["i"] = j
 
             with mod:
-                # if not stored_a_r:
+                for pname in parameters_to_loop_over.keys():
+                    if pname != f"{name}planet_radius":
+                        parameters_to_loop_over[pname] = self.parameters[
+                            pname
+                        ].get_prior_vector(**kw)
+
                 # store Deterministic parameter {a/R*} for use later
                 Deterministic(
                     f"{name}a_R*",
-                    orbit.a
-                    / self.parameters[name + "stellar_radius"].get_prior_vector(**kw),
+                    orbit.a / parameters_to_loop_over[name + "stellar_radius"],
                 )
                 # stored_a_r = True
 
+                planet_radius = Deterministic(
+                    f"{name}planet_radius",
+                    parameters_to_loop_over[name + "radius_ratio"]
+                    * parameters_to_loop_over[name + "stellar_radius"],
+                )
+                parameters_to_loop_over[f"{name}planet_radius"] = planet_radius
                 # for each wavelength create a quadratic limb-darkening lightcurve model from Exoplanet
-                limb_darkening.append(
-                    self.parameters[name + "limb_darkening"].get_prior_vector(**kw)
-                )
+                # limb_darkening.append(
+                #     self.parameters[name + "limb_darkening"].get_prior_vector(**kw)
+                # )
+                #
+                # planet_radius.append(
+                #     self.parameters[name + "radius_ratio"].get_prior_vector(**kw)
+                #     * self.parameters[name + "stellar_radius"].get_prior_vector(**kw)
+                # )
+                #
+                # baseline.append(
+                #     self.parameters[name + "baseline"].get_prior_vector(**kw)
+                # )
 
-                planet_radius.append(
-                    self.parameters[name + "radius_ratio"].get_prior_vector(**kw)
-                    * self.parameters[name + "stellar_radius"].get_prior_vector(**kw)
-                )
+                # x = data.time.to_value("day")
 
-                baseline.append(
-                    self.parameters[name + "baseline"].get_prior_vector(**kw)
-                )
-
-                light_curves = []
+                light_curves, initial_guess = [], []
                 for i, w in enumerate(data.wavelength):
-                    if isinstance(
-                        self.parameters[name + "limb_darkening"], WavelikeFitted
-                    ):
-                        ld = limb_darkening[j][i]
-                    else:
-                        ld = limb_darkening[j]
+                    param_i = {}
+                    for pname, param in parameters_to_loop_over.items():
+                        if pname == f"{name}planet_radius":
+                            try:
+                                param_i[pname] = param[i]
+                            except:
+                                param_i[pname] = param
+                        else:
+                            if isinstance(self.parameters[pname], WavelikeFitted):
+                                param_i[pname] = param[i]
+                            else:
+                                param_i[pname] = param
 
-                    if isinstance(
-                        self.parameters[name + "radius_ratio"], WavelikeFitted
-                    ):
-                        pr = planet_radius[j][i]
-                    else:
-                        pr = planet_radius[j]
+                    # if isinstance(
+                    #     self.parameters[name + "limb_darkening"], WavelikeFitted
+                    # ):
+                    #     ld = limb_darkening[j][i]
+                    # else:
+                    #     ld = limb_darkening[j]
+                    #
+                    # if isinstance(
+                    #     self.parameters[name + "radius_ratio"], WavelikeFitted
+                    # ):
+                    #     pr = planet_radius[j][i]
+                    # else:
+                    #     pr = planet_radius[j]
 
                     # extract light curve from Exoplanet model at given times
                     light_curves.append(
-                        xo.LimbDarkLightCurve(ld).get_light_curve(
+                        xo.LimbDarkLightCurve(
+                            param_i[f"{name}limb_darkening"]
+                        ).get_light_curve(
                             orbit=orbit,
-                            r=pr,
+                            r=param_i[f"{name}planet_radius"],
                             t=list(data.time.to_value("day")),
                         )
+                        + param_i[f"{name}baseline"]
+                    )
+
+                    initial_guess.append(
+                        eval_in_model(pm.math.sum(light_curves, axis=-1)[-1])
                     )
 
                 ## calculate the transit + flux (out-of-transit) baseline model
-                if isinstance(self.parameters[name + "baseline"], WavelikeFitted):
-                    lc = [light_curves[i] + baseline[j][i] for i in range(data.nwave)]
-                else:
-                    lc = light_curves + baseline[j]
+                # if isinstance(self.parameters[name + "baseline"], WavelikeFitted):
+                #     lc = [light_curves[i] + baseline[j][i] for i in range(data.nwave)]
+                # else:
+                #     lc = light_curves + baseline[j]
 
-                mu = pm.math.sum(lc, axis=-1)
+                # mu = pm.math.sum(lc, axis=-1)
                 # mu = pm.math.sum(np.array(light_curves), axis=-1) + baseline[j]  # [i]
 
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
                 if self.store_models:
-                    Deterministic(f"{name}model", mu)
+                    Deterministic(f"{name}model", pm.math.sum(light_curves, axis=-1))
 
                 # add the transit to the final light curve
                 if f"wavelength_{j}" not in self.every_light_curve.keys():
-                    self.every_light_curve[f"wavelength_{j}"] = mu  # [i]
+                    self.every_light_curve[f"wavelength_{j}"] = pm.math.sum(
+                        light_curves, axis=-1
+                    )  # [i]
                 else:
-                    self.every_light_curve[f"wavelength_{j}"] += mu  # [i]
+                    self.every_light_curve[f"wavelength_{j}"] += pm.math.sum(
+                        light_curves, axis=-1
+                    )  # [i]
 
-                self.model_chromatic_transit_flux = [
-                    self.every_light_curve[k] for k in tqdm(self.every_light_curve)
-                ]
+                # self.model_chromatic_transit_flux = [
+                #     self.every_light_curve[k] for k in tqdm(self.every_light_curve)
+                # ]
+
+                # add the initial guess to the final light curve
+                if f"wavelength_{j}" not in self.initial_guess.keys():
+                    self.initial_guess[f"wavelength_{j}"] = np.array(initial_guess)
+                else:
+                    self.initial_guess[f"wavelength_{j}"] += initial_guess
 
     def transit_model(
         self, transit_params: dict, i: int = 0, time: list = None

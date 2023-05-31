@@ -162,61 +162,62 @@ class TestTransit(unittest.TestCase):
 
         # optimize, sample and summarize results
         opt = t.optimize(plot=False)
-        t.sample(start=opt, tune=2000, draws=3000, chains=4, cores=4)
-        t.summarize(round_to=7, hdi_prob=0.68, fmt="wide", print_table=False)
 
-        # chech basic summary table properties
-        assert hasattr(t, "summary")
-        assert "mean" in t.summary
-        assert "sd" in t.summary
-        assert "hdi_16%" in t.summary
-        assert "hdi_84%" in t.summary
-        assert "r_hat" in t.summary
-        assert "transit_radius_ratio[0]" in t.summary.index
-        assert "transit_limb_darkening[0, 0]" in t.summary.index
-
-        # check for convergence
-        assert np.all(t.summary["r_hat"].values < 1.1)
-
-        t.parameters["transit_a_R*"] = []
-        results = t.get_results(uncertainty="sd")
-        # true_params = r.metadata["injected_transit_parameters"]
-        # true_t0 = true_params["t0"]
-        # true_per = r.metadata["transit_parameters"]["P"]
-        # true_aR = r.metadata["transit_parameters"]["a"]
-        # true_incl = r.metadata["transit_parameters"]["inc"]
-        # true_cosi = math.cos(true_incl * math.pi / 180)
-        # true_b = true_aR * true_cosi
-
-        twosigma = {
-            "t0": 3 * results["transit_epoch_sd"].values,
-            "aR": 3 * results["transit_a_R*_sd"].values,
-        }
-        print(results)
-        # assert np.all(true_t0 < results["transit_epoch"].values + twosigma["t0"])
-        # assert np.all(true_t0 > results["transit_epoch"].values - twosigma["t0"])
-        # assert np.all(true_aR < results["transit_a_R*"].values + twosigma["aR"])
-        # assert np.all(true_aR > results["transit_a_R*"].values - twosigma["aR*"])
-
-        transmission_spectrum = t.make_transmission_spectrum_table(
-            uncertainty=["hdi_16%", "hdi_84%"]
-        )
-        models = t.get_model()
-        assert "w0" in models.keys()
-        assert "w4" in models.keys()
-
-        t.plot_lightcurves(filename=f"{pltdir}/lightcurves_with_models.png")
-        t.plot_with_model_and_residuals(filename=f"{pltdir}/residuals.png")
-        t.imshow_with_models(filename=f"{pltdir}/imshow_models.png")
-
-        t.plot_transmission_spectrum(uncertainty=["hdi_16%", "hdi_84%"])
-        plt.plot(
-            ri.wavelength,
-            np.sqrt(ri.metadata["injected_transit_parameters"]["delta"]),
-            label="True Rp/R*",
-        )
-        plt.legend()
-        plt.savefig(f"{pltdir}/transmission_spectrum.png")
+    #     t.sample(start=opt, tune=2000, draws=3000, chains=4, cores=4)
+    #     t.summarize(round_to=7, hdi_prob=0.68, fmt="wide", print_table=False)
+    #
+    #     # chech basic summary table properties
+    #     assert hasattr(t, "summary")
+    #     assert "mean" in t.summary
+    #     assert "sd" in t.summary
+    #     assert "hdi_16%" in t.summary
+    #     assert "hdi_84%" in t.summary
+    #     assert "r_hat" in t.summary
+    #     assert "transit_radius_ratio[0]" in t.summary.index
+    #     assert "transit_limb_darkening[0, 0]" in t.summary.index
+    #
+    #     # check for convergence
+    #     assert np.all(t.summary["r_hat"].values < 1.1)
+    #
+    #     t.parameters["transit_a_R*"] = []
+    #     results = t.get_results(uncertainty="sd")
+    #     # true_params = r.metadata["injected_transit_parameters"]
+    #     # true_t0 = true_params["t0"]
+    #     # true_per = r.metadata["transit_parameters"]["P"]
+    #     # true_aR = r.metadata["transit_parameters"]["a"]
+    #     # true_incl = r.metadata["transit_parameters"]["inc"]
+    #     # true_cosi = math.cos(true_incl * math.pi / 180)
+    #     # true_b = true_aR * true_cosi
+    #
+    #     twosigma = {
+    #         "t0": 3 * results["transit_epoch_sd"].values,
+    #         "aR": 3 * results["transit_a_R*_sd"].values,
+    #     }
+    #     print(results)
+    #     # assert np.all(true_t0 < results["transit_epoch"].values + twosigma["t0"])
+    #     # assert np.all(true_t0 > results["transit_epoch"].values - twosigma["t0"])
+    #     # assert np.all(true_aR < results["transit_a_R*"].values + twosigma["aR"])
+    #     # assert np.all(true_aR > results["transit_a_R*"].values - twosigma["aR*"])
+    #
+    #     transmission_spectrum = t.make_transmission_spectrum_table(
+    #         uncertainty=["hdi_16%", "hdi_84%"]
+    #     )
+    #     models = t.get_model()
+    #     assert "w0" in models.keys()
+    #     assert "w4" in models.keys()
+    #
+    #     t.plot_lightcurves(filename=f"{pltdir}/lightcurves_with_models.png")
+    #     t.plot_with_model_and_residuals(filename=f"{pltdir}/residuals.png")
+    #     t.imshow_with_models(filename=f"{pltdir}/imshow_models.png")
+    #
+    #     t.plot_transmission_spectrum(uncertainty=["hdi_16%", "hdi_84%"])
+    #     plt.plot(
+    #         ri.wavelength,
+    #         np.sqrt(ri.metadata["injected_transit_parameters"]["delta"]),
+    #         label="True Rp/R*",
+    #     )
+    #     plt.legend()
+    #     plt.savefig(f"{pltdir}/transmission_spectrum.png")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ class TrapezoidModel(LightcurveModel):
     def __init__(
         self,
         name: str = "trapezoid",
+        type_of_model: str = "planet",
         **kw: object,
     ) -> None:
         """
@@ -29,6 +30,13 @@ class TrapezoidModel(LightcurveModel):
         self.set_name(name)
         self.metadata = {}
         self.model = self.trapezoid_model
+
+        if type_of_model in allowed_types_of_models:
+            self.type_of_model = type_of_model
+        else:
+            warnings.warn(
+                f"{type_of_model} is not a valid type of model. Please select one of: {allowed_types_of_models}"
+            )
 
     def __repr__(self):
         """
