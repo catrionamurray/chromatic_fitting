@@ -52,7 +52,7 @@ class EclipseModel(LightcurveModel):
     A eclipse model for the lightcurve.
     """
 
-    def __init__(self, name: str = "eclipse", **kw: object) -> None:
+    def __init__(self, name: str = "eclipse",type_of_model: str = "planet", **kw: object) -> None:
         """
         Initialise the eclipse model.
 
@@ -84,6 +84,10 @@ class EclipseModel(LightcurveModel):
         self.set_name(name)
         self.metadata = {}
         self.model = self.eclipse_model
+
+        if type_of_model in allowed_types_of_models:
+            self.type_of_model = type_of_model
+
 
     def __repr__(self):
         """
