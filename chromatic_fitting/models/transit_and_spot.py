@@ -18,6 +18,7 @@ class TransitSpotModel(LightcurveModel):
     def __init__(
             self,
             name: str = "transitspot",
+            ydeg: int = 20,
             type_of_model: str = "planet",
             **kw: object,
     ) -> None:
@@ -41,6 +42,7 @@ class TransitSpotModel(LightcurveModel):
         self.set_name(name)
         self.metadata = {}
         self.model = self.transit_spot_model
+        self.ydeg = ydeg
 
         if type_of_model in allowed_types_of_models:
             self.type_of_model = type_of_model
@@ -129,7 +131,7 @@ class TransitSpotModel(LightcurveModel):
                             param_i[pname] = param[j][0]
 
                     star = starry.Primary(
-                        starry.Map(ydeg=20, udeg=2, amp=param_i[f"{name}stellar_amp"], inc=param_i[f"{name}stellar_inc"]),
+                        starry.Map(ydeg=self.ydeg, udeg=2, amp=param_i[f"{name}stellar_amp"], inc=param_i[f"{name}stellar_inc"]),
                         r=param_i[f"{name}rs"],
                         m=param_i[f"{name}ms"],
                         prot=param_i[f"{name}prot"],
@@ -217,7 +219,7 @@ class TransitSpotModel(LightcurveModel):
 
         with pm.Model() as temp_model:
             star = starry.Primary(
-                starry.Map(ydeg=20,
+                starry.Map(ydeg=self.ydeg,
                            udeg=2,
                            amp=params[f"{self.name}_stellar_amp"],
                            inc=params[f"{self.name}_stellar_inc"]),
@@ -249,8 +251,39 @@ class TransitSpotModel(LightcurveModel):
             )
 
             sys = starry.System(star, planet)
+            self.keplerian_system = sys
             transit_spot = params[f"{self.name}_A"] * eval_in_model(sys.flux(data.time.to_value('d')))
         return transit_spot
+
+    def multiwavelength_map(self, params: dict):
+
+        for i in range(self.nwave):
+            self.check_and_fill_missing_parameters(params, i)
+
+        with pm.Model() as temp_model:
+            star = starry.Primary(
+                starry.Map(ydeg=self.ydeg,
+                           nw=self.nwave,
+                           udeg=2,
+                           amp=params[f"{self.name}_stellar_amp"],
+                           inc=params[f"{self.name}_stellar_inc"]),
+                r=params[f"{self.name}_rs"],
+                m=params[f"{self.name}_ms"],
+                prot=params[f'{self.name}_prot'],
+                length_unit=u.R_sun,
+                mass_unit=u.M_sun,
+            )
+            star.map[1:] = params[f"{self.name}_u"]
+
+            star.map.spot(contrast=params[f'{self.name}_spot_contrast'],
+                          radius=params[f'{self.name}_spot_radius'],
+                          lat=params[f'{self.name}_spot_latitude'],
+                          lon=params[f'{self.name}_spot_longitude'])
+
+
+    def show(self, **kw):
+        if hasattr(self, 'keplerian_system'):
+            self.keplerian_system.show(**kw)
 
     def add_model_to_rainbow(self):
         """
