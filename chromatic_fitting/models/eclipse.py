@@ -315,10 +315,6 @@ class EclipseModel(LightcurveModel):
         object
         """
 
-        if self.optimization == "separate":
-            data = self.get_data(i)
-        else:
-            data = self.get_data()
 
         # if the model has a name then add this to each parameter"s name
         if hasattr(self, "name"):
@@ -327,6 +323,10 @@ class EclipseModel(LightcurveModel):
             name = ""
 
         if time is None:
+            if self.optimization == "separate":
+                data = self.get_data(i)
+            else:
+                data = self.get_data()
             time = list(data.time.to_value("day"))
 
         self.check_and_fill_missing_parameters(eclipse_params, i)
@@ -347,7 +347,7 @@ class EclipseModel(LightcurveModel):
         star.map[1] = eclipse_params[f"{name}limb_darkening"][0]
         star.map[2] = eclipse_params[f"{name}limb_darkening"][1]
 
-        omega = theano.tensor.arctan2(eclipse_params[f"{name}ecs"][1], eclipse_params[f"{name}ecs"][0])
+        omega = theano.tensor.arctan2(eclipse_params[f"{name}ecs"][1], eclipse_params[f"{name}ecs"][0])*180.0/np.pi
         eccentricity = pm.math.sqrt(eclipse_params[f"{name}ecs"][0]**2+eclipse_params[f"{name}ecs"][1]**2)
 
         planet = starry.kepler.Secondary(
@@ -375,6 +375,95 @@ class EclipseModel(LightcurveModel):
         flux_model = system.flux(time).eval()
 
         return flux_model
+
+    def make_emission_spectrum_table(
+        self, uncertainty=["hdi_16%", "hdi_84%"], svname=None
+    ):
+        """
+        Generate and return a emission spectrum table
+        """
+        results = self.get_results(uncertainty=uncertainty)[
+            [
+                "wavelength",
+                f"{self.name}_planet_log_amplitude",
+                f"{self.name}_planet_log_amplitude_{uncertainty[0]}",
+                f"{self.name}_planet_log_amplitude_{uncertainty[1]}",
+            ]
+        ]
+        trans_table = results[["wavelength"]]
+        trans_table[f"{self.name}_depth"] = 10**results[f"{self.name}_planet_log_amplitude"]
+        if "hdi" in uncertainty[0]:
+            trans_table[f"{self.name}_depth_neg_error"] = (
+                10**results[f"{self.name}_planet_log_amplitude"]
+                - 10**results[f"{self.name}_planet_log_amplitude_{uncertainty[0]}"]
+            )
+            trans_table[f"{self.name}_depth_pos_error"] = (
+                10**results[f"{self.name}_planet_log_amplitude_{uncertainty[1]}"]
+                - 10**results[f"{self.name}_planet_log_amplitude"]
+            )
+        else:
+            trans_table[f"{self.name}_depth_neg_error"] = 10**results[
+                f"{self.name}_planet_log_amplitude_{uncertainty[0]}"
+            ]
+            trans_table[f"{self.name}_depth_pos_error"] = 10**results[
+                f"{self.name}_planet_log_amplitude_{uncertainty[1]}"
+            ]
+
+        if svname is not None:
+            assert isinstance(svname, object)
+            trans_table.to_csv(svname)
+        else:
+            return trans_table
+
+
+    def plot_eclipse_spectrum(
+        self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
+    ):
+        if table is not None:
+            transmission_spectrum = table
+            try:
+                # ensure the correct columns exist in the transmission spectrum table
+                assert transmission_spectrum[f"{self.name}_depth"]
+                assert transmission_spectrum[f"{self.name}_depth_neg_error"]
+                assert transmission_spectrum[f"{self.name}_depth_pos_error"]
+                assert transmission_spectrum["wavelength"]
+            except:
+                print(
+                    f"The given table doesn't have the correct columns 'wavelength', '{self.name}_depth', "
+                    f"{self.name}_depth_pos_error' and '{self.name}_depth_neg_error'"
+                )
+        else:
+            kw["uncertainty"] = uncertainty
+            transmission_spectrum = self.make_emission_spectrum_table(**kw)
+            transmission_spectrum["wavelength"] = [
+                t.to_value("micron") for t in transmission_spectrum["wavelength"].values
+            ]
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 4))
+
+        plt.sca(ax)
+        plt.title("Emission Spectrum")
+        plt.plot(
+            transmission_spectrum["wavelength"],
+            transmission_spectrum[f"{self.name}_depth"],
+            "kx",
+            **plotkw,
+        )
+        plt.errorbar(
+            transmission_spectrum["wavelength"],
+            transmission_spectrum[f"{self.name}_depth"],
+            yerr=[
+                transmission_spectrum[f"{self.name}_depth_neg_error"],
+                transmission_spectrum[f"{self.name}_depth_pos_error"],
+            ],
+            color="k",
+            capsize=2,
+            linestyle="None",
+            **plotkw,
+        )
+        plt.xlabel("Wavelength (microns)")
+        plt.ylabel("Eclipse depth")
 
 
 
