@@ -371,6 +371,7 @@ class EclipseModel(LightcurveModel):
             mass_unit=u.M_jup,
         )
 
+        planet.theta0 = 180.0
         system = starry.System(star, planet)
         flux_model = system.flux(time).eval()
 
@@ -390,43 +391,43 @@ class EclipseModel(LightcurveModel):
                 f"{self.name}_planet_log_amplitude_{uncertainty[1]}",
             ]
         ]
-        trans_table = results[["wavelength"]]
-        trans_table[f"{self.name}_depth"] = 10**results[f"{self.name}_planet_log_amplitude"]
+        emiss_table = results[["wavelength"]]
+        emiss_table[f"{self.name}_depth"] = 10**results[f"{self.name}_planet_log_amplitude"]
         if "hdi" in uncertainty[0]:
-            trans_table[f"{self.name}_depth_neg_error"] = (
+            emiss_table[f"{self.name}_depth_neg_error"] = (
                 10**results[f"{self.name}_planet_log_amplitude"]
                 - 10**results[f"{self.name}_planet_log_amplitude_{uncertainty[0]}"]
             )
-            trans_table[f"{self.name}_depth_pos_error"] = (
+            emiss_table[f"{self.name}_depth_pos_error"] = (
                 10**results[f"{self.name}_planet_log_amplitude_{uncertainty[1]}"]
                 - 10**results[f"{self.name}_planet_log_amplitude"]
             )
         else:
-            trans_table[f"{self.name}_depth_neg_error"] = 10**results[
+            emiss_table[f"{self.name}_depth_neg_error"] = 10**results[
                 f"{self.name}_planet_log_amplitude_{uncertainty[0]}"
             ]
-            trans_table[f"{self.name}_depth_pos_error"] = 10**results[
+            emiss_table[f"{self.name}_depth_pos_error"] = 10**results[
                 f"{self.name}_planet_log_amplitude_{uncertainty[1]}"
             ]
 
         if svname is not None:
             assert isinstance(svname, object)
-            trans_table.to_csv(svname)
+            emiss_table.to_csv(svname)
         else:
-            return trans_table
+            return emiss_table
 
 
     def plot_eclipse_spectrum(
         self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
     ):
         if table is not None:
-            transmission_spectrum = table
+            emission_spectrum = table
             try:
-                # ensure the correct columns exist in the transmission spectrum table
-                assert transmission_spectrum[f"{self.name}_depth"]
-                assert transmission_spectrum[f"{self.name}_depth_neg_error"]
-                assert transmission_spectrum[f"{self.name}_depth_pos_error"]
-                assert transmission_spectrum["wavelength"]
+                # ensure the correct columns exist in the emission spectrum table
+                assert emission_spectrum[f"{self.name}_depth"]
+                assert emission_spectrum[f"{self.name}_depth_neg_error"]
+                assert emission_spectrum[f"{self.name}_depth_pos_error"]
+                assert emission_spectrum["wavelength"]
             except:
                 print(
                     f"The given table doesn't have the correct columns 'wavelength', '{self.name}_depth', "
@@ -434,9 +435,9 @@ class EclipseModel(LightcurveModel):
                 )
         else:
             kw["uncertainty"] = uncertainty
-            transmission_spectrum = self.make_emission_spectrum_table(**kw)
-            transmission_spectrum["wavelength"] = [
-                t.to_value("micron") for t in transmission_spectrum["wavelength"].values
+            emission_spectrum = self.make_emission_spectrum_table(**kw)
+            emission_spectrum["wavelength"] = [
+                t.to_value("micron") for t in emission_spectrum["wavelength"].values
             ]
 
         if ax is None:
@@ -445,17 +446,17 @@ class EclipseModel(LightcurveModel):
         plt.sca(ax)
         plt.title("Emission Spectrum")
         plt.plot(
-            transmission_spectrum["wavelength"],
-            transmission_spectrum[f"{self.name}_depth"],
+            emission_spectrum["wavelength"],
+            emission_spectrum[f"{self.name}_depth"],
             "kx",
             **plotkw,
         )
         plt.errorbar(
-            transmission_spectrum["wavelength"],
-            transmission_spectrum[f"{self.name}_depth"],
+            emission_spectrum["wavelength"],
+            emission_spectrum[f"{self.name}_depth"],
             yerr=[
-                transmission_spectrum[f"{self.name}_depth_neg_error"],
-                transmission_spectrum[f"{self.name}_depth_pos_error"],
+                emission_spectrum[f"{self.name}_depth_neg_error"],
+                emission_spectrum[f"{self.name}_depth_pos_error"],
             ],
             color="k",
             capsize=2,
@@ -516,86 +517,4 @@ class EclipseModel(LightcurveModel):
                 plt.ylim(-1, 1)
                 plt.show()
                 plt.close()
-
-    def make_transmission_spectrum_table(
-        self, uncertainty=["hdi_3%", "hdi_97%"], svname=None
-    ):
-        """
-        Generate and return a transmission spectrum table
-        """
-        results = self.get_results(uncertainty=uncertainty)[
-            [
-                "wavelength",
-                f"{self.name}_radius_ratio",
-                f"{self.name}_radius_ratio_{uncertainty[0]}",
-                f"{self.name}_radius_ratio_{uncertainty[1]}",
-            ]
-        ]
-        trans_table = results[["wavelength", f"{self.name}_radius_ratio"]]
-        if "hdi" in uncertainty[0]:
-            trans_table[f"{self.name}_radius_ratio_neg_error"] = (
-                results[f"{self.name}_radius_ratio"]
-                - results[f"{self.name}_radius_ratio_{uncertainty[0]}"]
-            )
-            trans_table[f"{self.name}_radius_ratio_pos_error"] = (
-                results[f"{self.name}_radius_ratio_{uncertainty[1]}"]
-                - results[f"{self.name}_radius_ratio"]
-            )
-        else:
-            trans_table[f"{self.name}_radius_ratio_neg_error"] = results[
-                f"{self.name}_radius_ratio_{uncertainty[0]}"
-            ]
-            trans_table[f"{self.name}_radius_ratio_pos_error"] = results[
-                f"{self.name}_radius_ratio_{uncertainty[1]}"
-            ]
-
-        if svname is not None:
-            assert isinstance(svname, object)
-            trans_table.to_csv(svname)
-        else:
-            return trans_table
-
-    def plot_transmission_spectrum(
-        self, table=None, uncertainty=["hdi_3%", "hdi_97%"], **kw
-    ):
-        if table is not None:
-            transmission_spectrum = table
-            try:
-                # ensure the correct columns exist in the transmission spectrum table
-                assert transmission_spectrum[f"{self.name}_radius_ratio"]
-                assert transmission_spectrum[f"{self.name}_radius_ratio_neg_error"]
-                assert transmission_spectrum[f"{self.name}_radius_ratio_pos_error"]
-                assert transmission_spectrum["wavelength"]
-            except:
-                print(
-                    f"The given table doesn't have the correct columns 'wavelength', '{self.name}_radius_ratio', "
-                    f"{self.name}_radius_ratio_pos_error' and '{self.name}_radius_ratio_neg_error'"
-                )
-        else:
-            kw["uncertainty"] = uncertainty
-            transmission_spectrum = self.make_transmission_spectrum_table(**kw)
-            transmission_spectrum["wavelength"] = [
-                t.to_value("micron") for t in transmission_spectrum["wavelength"].values
-            ]
-
-        plt.figure(figsize=(10, 4))
-        plt.title("Transmission Spectrum")
-        plt.plot(
-            transmission_spectrum["wavelength"],
-            transmission_spectrum[f"{self.name}_radius_ratio"],
-            "kx",
-        )
-        plt.errorbar(
-            transmission_spectrum["wavelength"],
-            transmission_spectrum[f"{self.name}_radius_ratio"],
-            yerr=[
-                transmission_spectrum[f"{self.name}_radius_ratio_neg_error"],
-                transmission_spectrum[f"{self.name}_radius_ratio_pos_error"],
-            ],
-            color="k",
-            capsize=2,
-            linestyle="None",
-        )
-        plt.xlabel("Wavelength (microns)")
-        plt.ylabel("Radius Ratio")
 '''
