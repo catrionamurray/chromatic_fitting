@@ -1,3 +1,4 @@
+
 import warnings
 
 from ..imports import *
@@ -1580,6 +1581,9 @@ class LightcurveModel:
                 Please run [self].add_model_to_rainbow() or one of the plotting methods
                 with models before rerunning this method."""
             )
+
+    def write_chromatic_model(self, filename):
+        pickle.dump(self, open(filename, 'wb'))
 
 
 from .combined import *

@@ -188,7 +188,7 @@ class EclipseModel(LightcurveModel):
                 for i, w in enumerate(data.wavelength):
                     param_i = {}
                     for param_name, param in parameters_to_loop_over.items():
-                        if isinstance(self.parameters[param_name],WavelikeFitted):
+                        if isinstance(self.parameters[param_name], WavelikeFitted):
                             param_i[param_name] = param[j][i]
                         else:
                             param_i[param_name] = param[j]
@@ -343,7 +343,7 @@ class EclipseModel(LightcurveModel):
             r=eclipse_params[f"{name}stellar_radius"],
             prot=eclipse_params[f"{name}stellar_prot"],
         )
-        
+
         star.map[1] = eclipse_params[f"{name}limb_darkening"][0]
         star.map[2] = eclipse_params[f"{name}limb_darkening"][1]
 
@@ -370,6 +370,7 @@ class EclipseModel(LightcurveModel):
             length_unit=u.R_jup,
             mass_unit=u.M_jup,
         )
+        planet.theta0 = 180.0
 
         system = starry.System(star, planet)
         flux_model = system.flux(time).eval()
@@ -390,43 +391,43 @@ class EclipseModel(LightcurveModel):
                 f"{self.name}_planet_log_amplitude_{uncertainty[1]}",
             ]
         ]
-        trans_table = results[["wavelength"]]
-        trans_table[f"{self.name}_depth"] = 10**results[f"{self.name}_planet_log_amplitude"]
+        emission_table = results[["wavelength"]]
+        emission_table[f"{self.name}_depth"] = 10**results[f"{self.name}_planet_log_amplitude"]
         if "hdi" in uncertainty[0]:
-            trans_table[f"{self.name}_depth_neg_error"] = (
+            emission_table[f"{self.name}_depth_neg_error"] = (
                 10**results[f"{self.name}_planet_log_amplitude"]
                 - 10**results[f"{self.name}_planet_log_amplitude_{uncertainty[0]}"]
             )
-            trans_table[f"{self.name}_depth_pos_error"] = (
+            emission_table[f"{self.name}_depth_pos_error"] = (
                 10**results[f"{self.name}_planet_log_amplitude_{uncertainty[1]}"]
                 - 10**results[f"{self.name}_planet_log_amplitude"]
             )
         else:
-            trans_table[f"{self.name}_depth_neg_error"] = 10**results[
+            emission_table[f"{self.name}_depth_neg_error"] = 10**results[
                 f"{self.name}_planet_log_amplitude_{uncertainty[0]}"
             ]
-            trans_table[f"{self.name}_depth_pos_error"] = 10**results[
+            emission_table[f"{self.name}_depth_pos_error"] = 10**results[
                 f"{self.name}_planet_log_amplitude_{uncertainty[1]}"
             ]
 
         if svname is not None:
             assert isinstance(svname, object)
-            trans_table.to_csv(svname)
+            emission_table.to_csv(svname)
         else:
-            return trans_table
+            return emission_table
 
 
     def plot_eclipse_spectrum(
         self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
     ):
         if table is not None:
-            transmission_spectrum = table
+            emission_spectrum = table
             try:
                 # ensure the correct columns exist in the transmission spectrum table
-                assert transmission_spectrum[f"{self.name}_depth"]
-                assert transmission_spectrum[f"{self.name}_depth_neg_error"]
-                assert transmission_spectrum[f"{self.name}_depth_pos_error"]
-                assert transmission_spectrum["wavelength"]
+                assert emission_spectrum[f"{self.name}_depth"]
+                assert emission_spectrum[f"{self.name}_depth_neg_error"]
+                assert emission_spectrum[f"{self.name}_depth_pos_error"]
+                assert emission_spectrum["wavelength"]
             except:
                 print(
                     f"The given table doesn't have the correct columns 'wavelength', '{self.name}_depth', "
@@ -434,9 +435,9 @@ class EclipseModel(LightcurveModel):
                 )
         else:
             kw["uncertainty"] = uncertainty
-            transmission_spectrum = self.make_emission_spectrum_table(**kw)
-            transmission_spectrum["wavelength"] = [
-                t.to_value("micron") for t in transmission_spectrum["wavelength"].values
+            emission_spectrum = self.make_emission_spectrum_table(**kw)
+            emission_spectrum["wavelength"] = [
+                t.to_value("micron") for t in emission_spectrum["wavelength"].values
             ]
 
         if ax is None:
@@ -445,17 +446,17 @@ class EclipseModel(LightcurveModel):
         plt.sca(ax)
         plt.title("Emission Spectrum")
         plt.plot(
-            transmission_spectrum["wavelength"],
-            transmission_spectrum[f"{self.name}_depth"],
+            emission_spectrum["wavelength"],
+            emission_spectrum[f"{self.name}_depth"],
             "kx",
             **plotkw,
         )
         plt.errorbar(
-            transmission_spectrum["wavelength"],
-            transmission_spectrum[f"{self.name}_depth"],
+            emission_spectrum["wavelength"],
+            emission_spectrum[f"{self.name}_depth"],
             yerr=[
-                transmission_spectrum[f"{self.name}_depth_neg_error"],
-                transmission_spectrum[f"{self.name}_depth_pos_error"],
+                emission_spectrum[f"{self.name}_depth_neg_error"],
+                emission_spectrum[f"{self.name}_depth_pos_error"],
             ],
             color="k",
             capsize=2,
