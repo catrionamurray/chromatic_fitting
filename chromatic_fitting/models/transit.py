@@ -93,6 +93,26 @@ class TransitModel(LightcurveModel):
         """
         return f"<chromatic transit model '{self.name}' 🌈>"
 
+    def what_are_parameters(self):
+        """
+        Print a summary of what each parameter is
+        # """
+        self.parameter_descriptions = dict(
+            stellar_radius="The stellar radius [R_sun].",
+            stellar_mass="The stellar mass [M_sun].",
+            radius_ratio="The radius ratio between planet and star.",
+            period="Orbital period [d].",
+            epoch="Epoch of transit center [d].",
+            baseline="Out-of-transit baseline",
+            impact_parameter="The impact parameter of the planet, b.",
+            eccentricity="The eccentricity of the planet (THIS IS INACTIVE AS OF V0.10.1.2)",
+            omega="The argument of periapse [degrees].",
+            limb_darkening="Quadratic limb-darkening coefficients.",
+        )
+
+        for k, v in self.parameter_descriptions.items():
+            print(f"{k}: {v}")
+
     def set_defaults(self):
         """
         Set the default parameters for the model.

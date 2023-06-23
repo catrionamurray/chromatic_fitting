@@ -95,6 +95,27 @@ class EclipseModel(LightcurveModel):
         """
         return f"<chromatic eclipse model '{self.name}' 🌈>"
 
+    def what_are_parameters(self):
+        """
+        Print a summary of what each parameter is
+        # """
+        self.parameter_descriptions = dict(
+            stellar_radius="The stellar radius [R_sun].",
+            stellar_mass="The stellar mass [M_sun].",
+            stellar_amplitude="The stellar amplitude, or the out-of-transit baseline.",
+            stellar_prot="The rotational period of the star [d].",
+            period="Orbital period [d].",
+            t0="Epoch of transit center [d].",
+            planet_log_amplitude="The log-amplitude of the planet (determines the depth of the eclipse).",
+            inclination="The inclination of the planet [degrees].",
+            planet_mass="The mass of the planet [M_jupiter].",
+            planet_radius="The radius of the planet [R_jupiter].",
+            ecs="[ecosw, esinw], where e is eccentricity.",
+            limb_darkening="2-d Quadratic limb-darkening coefficients.",
+        )
+
+        for k, v in self.parameter_descriptions.items():
+            print(f"{k}: {v}")
     def set_defaults(self):
         """
         Set the default parameters for the model.
