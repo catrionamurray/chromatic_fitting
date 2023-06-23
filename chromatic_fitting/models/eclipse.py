@@ -370,8 +370,8 @@ class EclipseModel(LightcurveModel):
             length_unit=u.R_jup,
             mass_unit=u.M_jup,
         )
-        planet.theta0 = 180.0
 
+        planet.theta0 = 180.0
         system = starry.System(star, planet)
         flux_model = system.flux(time).eval()
 
@@ -391,30 +391,30 @@ class EclipseModel(LightcurveModel):
                 f"{self.name}_planet_log_amplitude_{uncertainty[1]}",
             ]
         ]
-        emission_table = results[["wavelength"]]
-        emission_table[f"{self.name}_depth"] = 10**results[f"{self.name}_planet_log_amplitude"]
+        emiss_table = results[["wavelength"]]
+        emiss_table[f"{self.name}_depth"] = 10**results[f"{self.name}_planet_log_amplitude"]
         if "hdi" in uncertainty[0]:
-            emission_table[f"{self.name}_depth_neg_error"] = (
+            emiss_table[f"{self.name}_depth_neg_error"] = (
                 10**results[f"{self.name}_planet_log_amplitude"]
                 - 10**results[f"{self.name}_planet_log_amplitude_{uncertainty[0]}"]
             )
-            emission_table[f"{self.name}_depth_pos_error"] = (
+            emiss_table[f"{self.name}_depth_pos_error"] = (
                 10**results[f"{self.name}_planet_log_amplitude_{uncertainty[1]}"]
                 - 10**results[f"{self.name}_planet_log_amplitude"]
             )
         else:
-            emission_table[f"{self.name}_depth_neg_error"] = 10**results[
+            emiss_table[f"{self.name}_depth_neg_error"] = 10**results[
                 f"{self.name}_planet_log_amplitude_{uncertainty[0]}"
             ]
-            emission_table[f"{self.name}_depth_pos_error"] = 10**results[
+            emiss_table[f"{self.name}_depth_pos_error"] = 10**results[
                 f"{self.name}_planet_log_amplitude_{uncertainty[1]}"
             ]
 
         if svname is not None:
             assert isinstance(svname, object)
-            emission_table.to_csv(svname)
+            emiss_table.to_csv(svname)
         else:
-            return emission_table
+            return emiss_table
 
 
     def plot_eclipse_spectrum(
