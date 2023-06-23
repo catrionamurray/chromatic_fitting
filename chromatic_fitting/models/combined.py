@@ -344,6 +344,15 @@ class CombinedModel(LightcurveModel):
         )
         self.apply_operation_to_constituent_models("summarize_parameters")
 
+    def what_are_parameters(self):
+        """
+        Print a summary of what each parameter is for each model in CombinedModel
+        # """
+        print(
+            "A CombinedModel itself does not have any parameters, however each of its constituent models do:\n"
+        )
+        self.apply_operation_to_constituent_models("what_are_parameters")
+
     def attach_data(self, r: chromatic.Rainbow):
         """
         Connect a `chromatic` Rainbow dataset to this object and the constituent models.

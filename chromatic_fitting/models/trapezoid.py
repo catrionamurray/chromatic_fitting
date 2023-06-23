@@ -50,6 +50,22 @@ class TrapezoidModel(LightcurveModel):
         """
         self.defaults = dict(delta=0.01, P=1, t0=0, T=0.1, tau=0.01, baseline=1.0)
 
+    def what_are_parameters(self):
+        """
+        Print a summary of what each parameter is
+        # """
+        self.parameter_descriptions = dict(
+            delta="",
+            P="The orbital period [d].",
+            t0="The epoch of the mid-transit time [d].",
+            T="The duration of the transit [d].",
+            tau="The duration of the ingress/egress [d].",
+            baseline="The out-of-transit flux.",
+        )
+
+        for k, v in self.parameter_descriptions.items():
+            print(f"{k}: {v}")
+
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create a trapezoid model, given the stored parameters.
