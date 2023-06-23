@@ -63,25 +63,25 @@ def noise_calculator(data, maxnbins=None, binstep=1, figname=None):
 
         # bin data - contains the different arrays of the residuals binned down by binz
         for j in range(nbins[i]):
-            bindata[j] = np.mean(data[j * binz[i] : (j + 1) * binz[i]])
+            bindata[j] = np.mean(data[j * binz[i]: (j + 1) * binz[i]])
 
         # get root_mean_square statistic
-        root_mean_square[i] = np.sqrt(np.mean(bindata**2))
+        root_mean_square[i] = np.sqrt(np.mean(bindata ** 2))
         root_mean_square_err[i] = root_mean_square[i] / np.sqrt(2.0 * nbins[i])
 
     expected_noise = (np.std(data) / np.sqrt(binz)) * np.sqrt(nbins / (nbins - 1.0))
 
     final_noise = np.mean(root_mean_square[midbin:])
-    base_noise = np.sqrt(final_noise**2 - root_mean_square[0] ** 2 / nbins[midbin])
+    base_noise = np.sqrt(final_noise ** 2 - root_mean_square[0] ** 2 / nbins[midbin])
 
     # Calculate the random noise level of the data
-    white_noise = np.sqrt(root_mean_square[0] ** 2 - base_noise**2)
+    white_noise = np.sqrt(root_mean_square[0] ** 2 - base_noise ** 2)
     # Determine if there is correlated noise in the data
-    red_noise = np.sqrt(final_noise**2 - white_noise**2 / nbins[midbin])
+    red_noise = np.sqrt(final_noise ** 2 - white_noise ** 2 / nbins[midbin])
     # Calculate the beta scaling factor
     beta = (
-        np.sqrt(root_mean_square[0] ** 2 + nbins[midbin] * red_noise**2)
-        / root_mean_square[0]
+            np.sqrt(root_mean_square[0] ** 2 + nbins[midbin] * red_noise ** 2)
+            / root_mean_square[0]
     )
 
     # If White, Red, or Beta return NaN's replace with 0, 0, 1
@@ -121,6 +121,46 @@ def noise_calculator(data, maxnbins=None, binstep=1, figname=None):
     )
 
     return white_noise, red_noise, beta
+
+
+@u.quantity_input
+def eclipse_duration(transit_duration, e, omega: u.Unit("radian")):
+    """
+    Calculate the duration of a planetary eclipse from Winn 2010, Equation 34
+
+    Parameters
+    ----------
+    transit_duration: duration of the transit, units are not important (the function will return the eclipse duration
+    in the same units as the transit_duration)
+    e: eccentricity
+    omega: Argument of periapse (radians)
+
+    Returns
+    -------
+    eclipse duration
+    """
+    func = transit_duration * (1 + e * np.sin(omega.to_value("radian"))) / (
+            1 - e * np.sin(omega.to_value("radian")))  ##Eq 34 in Winn 2010
+    return func
+
+
+@u.quantity_input
+def eclipse_center_epoch(P, e, omega: u.Unit("radian")):
+    """
+    Calculate the time of the center of a planetary eclipse from Winn 2010, Equation 33
+
+    Parameters
+    ----------
+    P: orbital period (the function will return the center of eclipse in the same units as P)
+    e: eccentricity
+    omega: Argument of periapse (radians)
+
+    Returns
+    -------
+    Center time of the eclipse
+    """
+    tc = P * (1 + 4 * (e * np.cos(omega.to_value("radian"))) / np.pi) / 2  ##Eq 33 in Winn 2010
+    return tc
 
 
 def rainbow_to_vector(r, timeformat="h"):
@@ -310,6 +350,7 @@ def get_data_outlier_mask(r, clip_axis="time", **kw):
         data_outliers_mask = np.transpose(data_outliers_mask)
 
     return data_outliers_mask
+
 
 def read_chromatic_model(filename):
     rainbow_with_model = pickle.load(open(filename, 'rb'))
