@@ -311,6 +311,11 @@ def get_data_outlier_mask(r, clip_axis="time", **kw):
 
     return data_outliers_mask
 
+def read_chromatic_model(filename):
+    rainbow_with_model = pickle.load(open(filename, 'rb'))
+    rainbow_with_model.data.fluxlike['flux'] = np.array(rainbow_with_model.data.fluxlike['flux'])
+    return rainbow_with_model
+
 
 def import_patricio_model():
     """Import spectral model

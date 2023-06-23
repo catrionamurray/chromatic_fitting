@@ -8,6 +8,7 @@ import operator
 
 from .transit import *
 from .polynomial import *
+from .eclipse import *
 
 """
 Example of setting up a CombinedModel:
@@ -467,6 +468,20 @@ class CombinedModel(LightcurveModel):
                     Deterministic(
                         f"{self.name}_model", self.every_light_curve[f"wavelength_{i}"]
                     )
+
+    def sample(
+        self,
+        **kw,
+    ):
+        if "sampling_method" not in kw.keys():
+            sampling_method = sample
+            for m in self._chromatic_models.values():
+                if isinstance(m, EclipseModel):
+                    sampling_method = sample_ext
+        else:
+            sampling_method = kw["sampling_method"]
+
+        LightcurveModel.sample(self, sampling_method=sampling_method, **kw)
 
     def get_results(self, **kw):
         """
