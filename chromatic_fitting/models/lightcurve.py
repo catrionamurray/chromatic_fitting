@@ -220,9 +220,19 @@ class LightcurveModel:
             print("❌ The chromatic model does not have data attached")
         if hasattr(self, "every_light_curve"):
             setup_lightcurves_done = True
-            print("✅ The lightcurve PyMC3 model has been set up")
+            print("✅ The PyMC3 lightcurve model has been set up")
         else:
             print("❌ The PyMC3 model lightcurve has not been set up")
+        if hasattr(self, "_pymc3_model"):
+            if len(self._pymc3_model.observed_RVs) > 0:
+                if self._pymc3_model.observed_RVs[0].name == "data":
+                    print("✅ The likelihood function has been set up")
+                else:
+                    print("❌ The likelihood function has not been set up")
+            else:
+                print("❌ The likelihood function has not been set up")
+        else:
+            print("❌ The likelihood function has not been set up")
         if hasattr(self, "summary"):
             sampling_done = True
             print("✅ The PyMC3 model has been sampled")
