@@ -99,6 +99,21 @@ class PolynomialModel(LightcurveModel):
                 # for Python < 3.9 add dictionaries using a different method
                 self.defaults = {**self.defaults, **{f"p_{d}": 0.0}}
 
+    def what_are_parameters(self):
+        """
+        Print a summary of what each parameter is
+        # """
+        for d in range(self.degree + 1):
+            try:
+                # the | dictionary addition is only in Python 3.9
+                self.parameter_descriptions = self.parameter_descriptions | {f"p_{d}": f"The coefficient of the {d}-degree polynomial"}
+            except TypeError:
+                # for Python < 3.9 add dictionaries using a different method
+                self.parameter_descriptions = {**self.parameter_descriptions, **{f"p_{d}": f"The coefficient of the {d}-degree polynomial"}}
+
+        for k, v in self.parameter_descriptions.items():
+            print(f"{k}: {v}")
+
     def setup_lightcurves(
         self, store_models: bool = False, normalize: bool = True, **kwargs
     ):

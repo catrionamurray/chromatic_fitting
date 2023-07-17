@@ -53,6 +53,19 @@ class StepModel(LightcurveModel):
         """
         self.defaults = dict(df=0.01, f0=1.0, t0=0.0)
 
+    def what_are_parameters(self):
+        """
+        Print a summary of what each parameter is
+        # """
+        self.parameter_descriptions = dict(
+            df="The height of the step function.",
+            f0="The initial flux before the step function.",
+            t0="The epoch of the step function",
+        )
+
+        for k, v in self.parameter_descriptions.items():
+            print(f"{k}: {v}")
+
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create a polynomial model, given the stored parameters.

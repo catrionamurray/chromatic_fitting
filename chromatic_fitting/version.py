@@ -1,4 +1,4 @@
-__version__ = "0.11.1"
+__version__ = "0.10.0"
 
 
 def version():
@@ -27,5 +27,7 @@ def version():
 #    v 0.9.7 - added a simple check for attaching Rainbow objects and setting up WLC (nw>0, nt>0)
 #    v 0.9.8 - fixed exponential bug
 # v 0.10.0 - added several features from restructure branch and new tests. Added xlim arg.
+#   v 0.10.1 - added eclipse model
+#       v 0.10.1.2 - added some helper functions
 # v 0.11.0 - added spot model
 #    v 0.11.1 - added multiple spot model

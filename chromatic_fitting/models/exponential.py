@@ -64,6 +64,19 @@ class ExponentialModel(LightcurveModel):
         """
         self.defaults = dict(A=0.01, decay_time=0.01, baseline=1.0)
 
+    def what_are_parameters(self):
+        """
+        Print a summary of what each parameter is
+        # """
+        self.parameter_descriptions = dict(
+            A="The amplitude of the exponential at t0 (defined by the user when initializing).",
+            decay_time="The time it takes for the amplitude to decay by 1/e [d].",
+            baseline="The baseline flux before the exponential.",
+        )
+
+        for k, v in self.parameter_descriptions.items():
+            print(f"{k}: {v}")
+
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
         Create an exponential model, given the stored parameters.

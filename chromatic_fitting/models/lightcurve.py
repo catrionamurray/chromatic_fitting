@@ -1,3 +1,4 @@
+
 import warnings
 
 from ..imports import *
@@ -1107,9 +1108,8 @@ class LightcurveModel:
                         more_than_one_input = True
                 elif v.inputs["shape"] != (self.data.nwave, 1):
                     more_than_one_input = True
-
             if more_than_one_input:
-                if f"{k}[{i}]" in posterior_means.index and "limb_darkening" not in k:
+                if f"{k}[{i}]" in posterior_means.index and np.logical_and("limb_darkening" not in k, "ecs" not in k):
                     fv[k] = posterior_means[f"{k}[{i}]"]
                 elif f"{k}[0]" in posterior_means.index:
                     n = 0
@@ -1266,7 +1266,6 @@ class LightcurveModel:
                         params = params_dict
                     else:
                         params = params_dict[f"w{i}"]
-
                 model_i = self.model(params, i)
                 model[f"w{i}"] = model_i
 
