@@ -319,15 +319,13 @@ def remove_data_outliers(r, data_mask):
     """
     # from astropy.stats import sigma_clip
 
-    # data_outliers_removed_list = []
-    # for r in rs:
     data_outliers_removed = r._create_copy()
+
     # for each wavelength, sigma clip in time:
     for w in range(data_outliers_removed.nwave):
         data_outliers_removed.flux[w, :] = np.ma.masked_where(
             data_mask[w] == True, data_outliers_removed.flux[w, :]
         ).filled(np.nan)
-    # data_outliers_removed_list.append(data_outliers_removed)
 
     return data_outliers_removed
 

@@ -548,7 +548,7 @@ class LightcurveModel:
                 if mask_outliers:
                     flux = np.array(
                         [
-                            self.data_without_outliers.flux[i+j, :]
+                            self.data_without_outliers.flux[i + j, :]
                             for i in range(data.nwave)
                         ]
                     )
@@ -1078,10 +1078,10 @@ class LightcurveModel:
                 )
 
         if "filename" in kw.keys():
-        #     plt.show()
-        # else:
+            plt.show()
+        else:
             plt.savefig(kw["filename"])
-        # plt.close()
+        plt.close()
 
         return ax
 
