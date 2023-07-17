@@ -330,7 +330,7 @@ def remove_data_outliers(r, data_mask):
     return data_outliers_removed
 
 
-def get_data_outlier_mask(r, clip_axis="time", **kw):
+def get_data_outlier_mask(rs, clip_axis="time", **kw):
     """
     Remove outliers from the data.
     [Ideally to be replaced with some chromatic.flag_outliers() function]
@@ -339,15 +339,16 @@ def get_data_outlier_mask(r, clip_axis="time", **kw):
 
     data_outliers_mask = []
 
-    if clip_axis == "time":
-        # for each wavelength, sigma clip in time:
-        for w in range(r.nwave):
-            data_outliers_mask.append(np.ma.getmask(sigma_clip(r.flux[w, :], **kw)))
-    elif clip_axis == "wavelength":
-        # for each time, sigma clip in wavelength:
-        for t in range(r.ntime):
-            data_outliers_mask.append(np.ma.getmask(sigma_clip(r.flux[:, t], **kw)))
-        data_outliers_mask = np.transpose(data_outliers_mask)
+    for r in rs:
+        if clip_axis == "time":
+            # for each wavelength, sigma clip in time:
+            for w in range(r.nwave):
+                data_outliers_mask.append(np.ma.getmask(sigma_clip(r.flux[w, :], **kw)))
+        elif clip_axis == "wavelength":
+            # for each time, sigma clip in wavelength:
+            for t in range(r.ntime):
+                data_outliers_mask.append(np.ma.getmask(sigma_clip(r.flux[:, t], **kw)))
+            data_outliers_mask = np.transpose(data_outliers_mask)
 
     return data_outliers_mask
 

@@ -518,11 +518,11 @@ class LightcurveModel:
                 # data_mask_wave =  get_data_outlier_mask(data, clip_axis='wavelength', sigma=4.5)
             self.outlier_mask = data_mask
             self.outlier_flag = True
-            self.data_without_outliers = remove_data_outliers(datas, data_mask)
+            self.data_without_outliers = remove_data_outliers(self.get_data(), data_mask)
 
         if inflate_uncertainties:
             self.parameters["nsigma"] = WavelikeFitted(
-                Uniform, lower=1.0, upper=3.0, testval=1.01
+                TruncatedNormal, lower=1.0, mu=1.0, upper=3.0, sigma=0.001
             )
             self.parameters["nsigma"].set_name("nsigma")
 
@@ -1077,13 +1077,13 @@ class LightcurveModel:
                     color="k",
                 )
 
-        if "filename" not in kw.keys():
+        if "filename" in kw.keys():
             plt.show()
         else:
             plt.savefig(kw["filename"])
         plt.close()
 
-        # if add_model and detrend:
+        return ax
 
     def extract_from_posteriors(self, summary, i, op="mean"):
         # there's definitely a sleeker way to do this
