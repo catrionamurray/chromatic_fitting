@@ -197,6 +197,48 @@ class LightcurveModel:
         for k, v in self.parameters.items():
             print(f"{k} =\n  {v}\n")
 
+    def which_steps_have_been_run(self):
+        """
+        Print a summary of which fitting stages have been run
+        """
+        parameters_setup = False
+        data_attached = False
+        setup_lightcurves_done = False
+        setup_likelihood_done = False
+        sampling_done = False
+
+        if hasattr(self, "parameters"):
+            parameters_setup = True
+            print("✅ The chromatic model has parameters")
+        else:
+            print("❌ The chromatic model does not have parameters")
+        if hasattr(self, "data"):
+            data_attached = True
+            print("✅ The chromatic model has data attached")
+        else:
+            print("❌ The chromatic model does not have data attached")
+        if hasattr(self, "every_light_curve"):
+            setup_lightcurves_done = True
+            print("✅ The PyMC3 lightcurve model has been set up")
+        else:
+            print("❌ The PyMC3 model lightcurve has not been set up")
+        if hasattr(self, "_pymc3_model"):
+            if len(self._pymc3_model.observed_RVs) > 0:
+                if self._pymc3_model.observed_RVs[0].name == "data":
+                    print("✅ The likelihood function has been set up")
+                else:
+                    print("❌ The likelihood function has not been set up")
+            else:
+                print("❌ The likelihood function has not been set up")
+        else:
+            print("❌ The likelihood function has not been set up")
+        if hasattr(self, "summary"):
+            sampling_done = True
+            print("✅ The PyMC3 model has been sampled")
+        else:
+            print("❌ The PyMC3 model has not been sampled")
+
+
     def reinitialize(self):
         self.__init__(name=self.name)
         self.reinitialize_parameters()
@@ -1582,6 +1624,9 @@ class LightcurveModel:
                 Please run [self].add_model_to_rainbow() or one of the plotting methods
                 with models before rerunning this method."""
             )
+
+    def write_chromatic_model(self, filename):
+        pickle.dump(self, open(filename, 'wb'))
 
 
 from .combined import *
