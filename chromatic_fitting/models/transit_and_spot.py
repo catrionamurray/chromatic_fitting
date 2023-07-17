@@ -3,10 +3,12 @@ from ..imports import *
 from .lightcurve import *
 
 import starry
+
 starry.config.lazy = True
 starry.config.quiet = True
 
 import theano
+
 theano.config.gcc__cxxflags += " -fexceptions"
 
 
@@ -18,7 +20,9 @@ class TransitSpotModel(LightcurveModel):
     def __init__(
             self,
             name: str = "transitspot",
+            method: str = "starry",
             ydeg: int = 20,
+            nspots: int = 1,
             type_of_model: str = "planet",
             **kw: object,
     ) -> None:
@@ -32,10 +36,23 @@ class TransitSpotModel(LightcurveModel):
         name: the name of the model (default = "exponential")
         kw: keyword arguments for initialising the chromatic model
         """
+        if ydeg >= 25:
+            warnings.warn(
+                "You have selected >=25 spherical harmonic degrees. Starry will be very slow!")
+        elif ydeg >= 35:
+            warnings.warn(
+                "You have selected >=35 spherical harmonic degrees. Starry does not behave nicely at this high a resolution!")
+
+        self.nspots = nspots
+
         # only require a constant (0th order) term:
-        self.required_parameters = ["A", "rs", "ms", "prot", "u", "stellar_amp", "stellar_inc",
-                                    "spot_contrast", "spot_radius", "spot_latitude", "spot_longitude",
+        self.required_parameters = ["A", "rs", "ms", "prot", "u", "stellar_amp", "stellar_inc", "stellar_obl",
                                     "mp", "rp", "inc", "amp", "period", "omega", "ecc", "t0"]
+        for n in range(self.nspots):
+            self.required_parameters.extend([f"spot_{n + 1}_contrast",
+                                             f"spot_{n + 1}_radius",
+                                             f"spot_{n + 1}_latitude",
+                                             f"spot_{n + 1}_longitude"])
 
         super().__init__(**kw)
         self.set_defaults()
@@ -43,6 +60,10 @@ class TransitSpotModel(LightcurveModel):
         self.metadata = {}
         self.model = self.transit_spot_model
         self.ydeg = ydeg
+        self.method = method
+
+        if self.method != "starry":
+            warnings.warn("Only the starry spot method is currently implemented.")
 
         if type_of_model in allowed_types_of_models:
             self.type_of_model = type_of_model
@@ -61,9 +82,57 @@ class TransitSpotModel(LightcurveModel):
         """
         Set the default parameters for the model.
         """
-        self.defaults = dict(A=1, rs=1, ms=1, stellar_amp=1, stellar_inc=90, prot=3, u=[0.1, 0.1],
-                            spot_contrast=0.5, spot_radius=20, spot_latitude=0.0, spot_longitude=0.0,
-                            mp=1, rp=1, inc=90, amp=5e-3, period=3, omega=100, ecc=0.0, t0=0.0)
+        self.defaults = dict(A=1, rs=1, ms=1, stellar_amp=1, stellar_inc=90, stellar_obl=0.0, prot=3, u=[0.1, 0.1],
+                             # spot_contrast=0.5, spot_radius=20, spot_latitude=0.0, spot_longitude=0.0,
+                             mp=1, rp=1, inc=90, amp=5e-3, period=3, omega=100, ecc=0.0, t0=0.0)
+        for n in range(self.nspots):
+            self.defaults[f"spot_{n + 1}_contrast"] = 0.5
+            self.defaults[f"spot_{n + 1}_radius"] = 20
+            self.defaults[f"spot_{n + 1}_latitude"] = 0.0
+            self.defaults[f"spot_{n + 1}_longitude"] = 0.0
+
+    def setup_star_and_planet(self, name, method, param_i, time, flux_model):
+        if method == "starry":
+            star = starry.Primary(
+                starry.Map(ydeg=self.ydeg, udeg=2, amp=param_i[f"{name}stellar_amp"],
+                           inc=param_i[f"{name}stellar_inc"], obl=param_i[f"{name}stellar_obl"]),
+                r=param_i[f"{name}rs"],
+                m=param_i[f"{name}ms"],
+                prot=param_i[f"{name}prot"],
+                length_unit=u.R_sun,
+                mass_unit=u.M_sun,
+            )
+
+            star.map[1:] = param_i[f"{name}u"]
+
+            for spot_i in range(self.nspots):
+                star.map.spot(contrast=param_i[f"{name}spot_{spot_i + 1}_contrast"],
+                              radius=param_i[f"{name}spot_{spot_i + 1}_radius"],
+                              lat=param_i[f"{name}spot_{spot_i + 1}_latitude"],
+                              lon=param_i[f"{name}spot_{spot_i + 1}_longitude"])
+
+            planet = starry.kepler.Secondary(
+                starry.Map(ydeg=5, amp=param_i[f"{name}amp"]),  # the surface map
+                m=param_i[f"{name}mp"],  # mass in solar masses
+                r=param_i[f"{name}rp"],  # radius
+                inc=param_i[f"{name}inc"],
+                length_unit=u.R_earth,
+                mass_unit=u.M_earth,
+                porb=param_i[f"{name}period"],  # orbital period in days
+                prot=param_i[f"{name}period"],  # rotation period in days (synchronous)
+                omega=param_i[f"{name}omega"],  # longitude of ascending node in degrees
+                ecc=param_i[f"{name}ecc"],  # eccentricity
+                t0=param_i[f"{name}t0"],  # time of transit in days
+            )
+
+            sys = starry.System(star, planet)
+            flux_model.append(param_i[f"{name}A"] * sys.flux(time))
+
+        elif method == "fleck":
+            print("fleck method not implemented yet")
+            return None, None
+
+        return flux_model, sys
 
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
@@ -130,38 +199,7 @@ class TransitSpotModel(LightcurveModel):
                         else:
                             param_i[pname] = param[j][0]
 
-                    star = starry.Primary(
-                        starry.Map(ydeg=self.ydeg, udeg=2, amp=param_i[f"{name}stellar_amp"], inc=param_i[f"{name}stellar_inc"]),
-                        r=param_i[f"{name}rs"],
-                        m=param_i[f"{name}ms"],
-                        prot=param_i[f"{name}prot"],
-                        length_unit=u.R_sun,
-                        mass_unit=u.M_sun,
-                    )
-
-                    star.map[1:] = param_i[f"{name}u"]
-
-                    star.map.spot(contrast=param_i[f"{name}spot_contrast"],
-                                  radius=param_i[f"{name}spot_radius"],
-                                  lat=param_i[f"{name}spot_latitude"],
-                                  lon=param_i[f"{name}spot_longitude"])
-
-                    planet = starry.kepler.Secondary(
-                        starry.Map(ydeg=5, amp=param_i[f"{name}amp"]),  # the surface map
-                        m=param_i[f"{name}mp"],  # mass in solar masses
-                        r=param_i[f"{name}rp"],  # radius
-                        inc=param_i[f"{name}inc"],
-                        length_unit=u.R_earth,
-                        mass_unit=u.M_earth,
-                        porb=param_i[f"{name}period"],  # orbital period in days
-                        prot=param_i[f"{name}period"],  # rotation period in days (synchronous)
-                        omega=param_i[f"{name}omega"],  # longitude of ascending node in degrees
-                        ecc=param_i[f"{name}ecc"],  # eccentricity
-                        t0=param_i[f"{name}t0"],  # time of transit in days
-                    )
-
-                    sys = starry.System(star, planet)
-                    flux_model.append(param_i[f"{name}A"] * sys.flux(data.time.to_value('d')))
+                    flux_model, _ = self.setup_star_and_planet(name, self.method, param_i, data.time.to_value('d'), flux_model)
 
                     # exp.append(
                     #     param_i[f"{name}A"]
@@ -218,41 +256,46 @@ class TransitSpotModel(LightcurveModel):
         self.check_and_fill_missing_parameters(params, i)
 
         with pm.Model() as temp_model:
-            star = starry.Primary(
-                starry.Map(ydeg=self.ydeg,
-                           udeg=2,
-                           amp=params[f"{self.name}_stellar_amp"],
-                           inc=params[f"{self.name}_stellar_inc"]),
-                r=params[f"{self.name}_rs"],
-                m=params[f"{self.name}_ms"],
-                prot=params[f'{self.name}_prot'],
-                length_unit=u.R_sun,
-                mass_unit=u.M_sun,
-            )
-            star.map[1:] = params[f"{self.name}_u"]
+            flux_model, sys = self.setup_star_and_planet(f"{self.name}_", self.method, params, data.time.to_value('d'), [])
+            # star = starry.Primary(
+            #     starry.Map(ydeg=self.ydeg,
+            #                udeg=2,
+            #                amp=params[f"{self.name}_stellar_amp"],
+            #                inc=params[f"{self.name}_stellar_inc"],
+            #                obl=params[f"{self.name}_stellar_obl"],
+            #                ),
+            #     r=params[f"{self.name}_rs"],
+            #     m=params[f"{self.name}_ms"],
+            #     prot=params[f'{self.name}_prot'],
+            #     length_unit=u.R_sun,
+            #     mass_unit=u.M_sun,
+            # )
+            # star.map[1:] = params[f"{self.name}_u"]
+            #
+            # for spot_i in range(self.nspots):
+            #     star.map.spot(contrast=params[f"{self.name}_spot_{spot_i + 1}_contrast"],
+            #                   radius=params[f"{self.name}_spot_{spot_i + 1}_radius"],
+            #                   lat=params[f"{self.name}_spot_{spot_i + 1}_latitude"],
+            #                   lon=params[f"{self.name}_spot_{spot_i + 1}_longitude"])
+            #
+            # planet = starry.kepler.Secondary(
+            #     starry.Map(ydeg=5, amp=params[f"{self.name}_amp"]),  # the surface map
+            #     m=params[f'{self.name}_mp'],  # mass in solar masses
+            #     r=params[f'{self.name}_rp'],  # radius
+            #     inc=params[f"{self.name}_inc"],
+            #     length_unit=u.R_earth,
+            #     mass_unit=u.M_earth,
+            #     porb=params[f'{self.name}_period'],  # orbital period in days
+            #     prot=params[f'{self.name}_period'],  # rotation period in days (synchronous)
+            #     omega=params[f'{self.name}_omega'],  # longitude of ascending node in degrees
+            #     ecc=params[f'{self.name}_ecc'],  # eccentricity
+            #     t0=params[f'{self.name}_t0'],  # time of transit in days
+            # )
 
-            star.map.spot(contrast=params[f'{self.name}_spot_contrast'],
-                          radius=params[f'{self.name}_spot_radius'],
-                          lat=params[f'{self.name}_spot_latitude'],
-                          lon=params[f'{self.name}_spot_longitude'])
-
-            planet = starry.kepler.Secondary(
-                starry.Map(ydeg=5, amp=params[f"{self.name}_amp"]),  # the surface map
-                m=params[f'{self.name}_mp'],  # mass in solar masses
-                r=params[f'{self.name}_rp'],  # radius
-                inc=params[f"{self.name}_inc"],
-                length_unit=u.R_earth,
-                mass_unit=u.M_earth,
-                porb=params[f'{self.name}_period'],  # orbital period in days
-                prot=params[f'{self.name}_period'],  # rotation period in days (synchronous)
-                omega=params[f'{self.name}_omega'],  # longitude of ascending node in degrees
-                ecc=params[f'{self.name}_ecc'],  # eccentricity
-                t0=params[f'{self.name}_t0'],  # time of transit in days
-            )
-
-            sys = starry.System(star, planet)
+            # sys = starry.System(star, planet)
             self.keplerian_system = sys
-            transit_spot = params[f"{self.name}_A"] * eval_in_model(sys.flux(data.time.to_value('d')))
+            transit_spot = eval_in_model(flux_model[0])
+            # transit_spot = params[f"{self.name}_A"] * eval_in_model(sys.flux(data.time.to_value('d')))
         return transit_spot
 
     def multiwavelength_map(self, params: dict):
@@ -266,7 +309,8 @@ class TransitSpotModel(LightcurveModel):
                            nw=self.nwave,
                            udeg=2,
                            amp=params[f"{self.name}_stellar_amp"],
-                           inc=params[f"{self.name}_stellar_inc"]),
+                           inc=params[f"{self.name}_stellar_inc"],
+                           obl=params[f"{self.name}_stellar_obl"]),
                 r=params[f"{self.name}_rs"],
                 m=params[f"{self.name}_ms"],
                 prot=params[f'{self.name}_prot'],
@@ -275,15 +319,21 @@ class TransitSpotModel(LightcurveModel):
             )
             star.map[1:] = params[f"{self.name}_u"]
 
-            star.map.spot(contrast=params[f'{self.name}_spot_contrast'],
-                          radius=params[f'{self.name}_spot_radius'],
-                          lat=params[f'{self.name}_spot_latitude'],
-                          lon=params[f'{self.name}_spot_longitude'])
+            # star.map.spot(contrast=params[f'{self.name}_spot_contrast'],
+            #               radius=params[f'{self.name}_spot_radius'],
+            #               lat=params[f'{self.name}_spot_latitude'],
+            #               lon=params[f'{self.name}_spot_longitude'])
 
+            for spot_i in range(self.nspots):
+                star.map.spot(contrast=params[f"{self.name}_spot_{spot_i + 1}_contrast"],
+                              radius=params[f"{self.name}_spot_{spot_i + 1}_radius"],
+                              lat=params[f"{self.name}_spot_{spot_i + 1}_latitude"],
+                              lon=params[f"{self.name}_spot_{spot_i + 1}_longitude"])
 
     def show(self, **kw):
-        if hasattr(self, 'keplerian_system'):
-            self.keplerian_system.show(**kw)
+        if self.method == "starry":
+            if hasattr(self, 'keplerian_system'):
+                self.keplerian_system.show(**kw)
 
     def add_model_to_rainbow(self):
         """

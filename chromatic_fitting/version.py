@@ -1,4 +1,4 @@
-__version__ = "0.11.0"
+__version__ = "0.11.1"
 
 
 def version():
@@ -28,3 +28,4 @@ def version():
 #    v 0.9.8 - fixed exponential bug
 # v 0.10.0 - added several features from restructure branch and new tests. Added xlim arg.
 # v 0.11.0 - added spot model
+#    v 0.11.1 - added multiple spot model
