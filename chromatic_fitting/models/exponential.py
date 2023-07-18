@@ -181,13 +181,13 @@ class ExponentialModel(LightcurveModel):
                 else:
                     self.initial_guess[f"wavelength_{j}"] += initial_guess
 
-    def exponential_model(self, exponential_params: dict, i: int = 0) -> np.array:
+    def exponential_model(self, params: dict, i: int = 0) -> np.array:
         """
         Return a exponential model, given a dictionary of parameters.
 
         Parameters
         ----------
-        exponential_params: dictionary with the parameters of the exponential model
+        params: dictionary with the parameters of the exponential model
         i: number of the wavelength to fit (default=0)
 
         Returns
@@ -210,12 +210,12 @@ class ExponentialModel(LightcurveModel):
         if len(np.shape(x)) > 1:
             x = x[i, :]
 
-        self.check_and_fill_missing_parameters(exponential_params, i)
+        self.check_and_fill_missing_parameters(params, i)
 
         exponential = (
-            exponential_params[f"{self.name}_A"]
-            * np.exp(-(x - self.t0) / exponential_params[f"{self.name}_decay_time"])
-            + exponential_params[f"{self.name}_baseline"]
+            params[f"{self.name}_A"]
+            * np.exp(-(x - self.t0) / params[f"{self.name}_decay_time"])
+            + params[f"{self.name}_baseline"]
         )
         return exponential
 

@@ -870,7 +870,7 @@ class LightcurveModel:
         opt = self.optimize(start=self._pymc3_model.test_point)
         opt = self.optimize(start=opt)
         self.sample(start=opt)
-        self.summarize(round_to=7, fmt="wide")
+        # self.summarize(round_to=7, fmt="wide")
 
     def plot_priors(self, n=3, quantity="data", plot_all=True):
         """
@@ -911,7 +911,7 @@ class LightcurveModel:
                                 i_dict = {**i_dict, **{k: v[i][0]}}
                             else:
                                 i_dict = {**i_dict, **{k: v[i][w]}}
-                        model_for_this_sample.append(self.model(i_dict))
+                        model_for_this_sample.append(self.model(params=i_dict))
                     model_for_this_sample = np.array(model_for_this_sample)
 
                 # add posterior model and draw from posterior distribution to the Rainbow quantities:
@@ -968,13 +968,19 @@ class LightcurveModel:
                     for w in range(data.nwave):
                         i_dict = {}
                         for k, v in posterior_predictive_trace.items():
-                            if np.shape(v) == 1:
-                                i_dict = {**i_dict, **{k: v[i]}}
-                            elif np.shape(v)[1] == 1:
+                            # if np.shape(v) == 1:
+                            #     i_dict = {**i_dict, **{k: v[i]}}
+                            # elif np.shape(v)[1] == 1:
+                            #     i_dict = {**i_dict, **{k: v[i][0]}}
+                            # else:
+                            #     i_dict = {**i_dict, **{k: v[i][w]}}
+                            if np.shape(v)[1] == 1:
                                 i_dict = {**i_dict, **{k: v[i][0]}}
-                            else:
+                            elif np.shape(v)[1] == data.nwave:
                                 i_dict = {**i_dict, **{k: v[i][w]}}
-                        model_for_this_sample.append(self.model(i_dict))
+                            else:
+                                i_dict = {**i_dict, **{k: v[i]}}
+                        model_for_this_sample.append(self.model(params=i_dict))
                     model_for_this_sample = np.array(model_for_this_sample)
 
                 # add posterior model and draw from posterior distribution to the Rainbow quantities:
@@ -1077,7 +1083,7 @@ class LightcurveModel:
                     color="k",
                 )
 
-        if "filename" in kw.keys():
+        if "filename" not in kw.keys():
             plt.show()
         else:
             plt.savefig(kw["filename"])
