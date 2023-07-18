@@ -31,3 +31,4 @@ def version():
 #       v 0.10.1.2 - added some helper functions
 # v 0.11.0 - added spot model
 #    v 0.11.1 - added multiple spot model
+#    v 0.11.2 - added overwrite kw to summarize() to allow az.summary() kws to be changed

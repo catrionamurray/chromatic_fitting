@@ -742,7 +742,6 @@ class LightcurveModel:
 
             for i, mod in enumerate(self._pymc3_model):
                 if self.optimization == "separate":
-                    print(f"\nSampling for Wavelength: {i}")
                 check_initial_guess(mod)
                 with mod:
                     if len(starts) > 0:
@@ -773,7 +772,7 @@ class LightcurveModel:
 
         self.summarize(**summarize_kw)
 
-    def summarize(self, hdi_prob=0.68, round_to=10, print_table=True, **kw):
+    def summarize(self, hdi_prob=0.68, round_to=10, print_table=True, overwrite=False, **kw):
         """
         Wrapper for arviz summary
         """
@@ -781,11 +780,12 @@ class LightcurveModel:
             print("Sampling has not been run yet! Running now with defaults...")
             self.sample()
 
-        if hasattr(self, "summary"):
-            print("Summarize has already been run")
-            if print_table:
-                print(self.summary)
-            return
+        if overwrite==False:
+            if hasattr(self, "summary"):
+                print("Summarize has already been run. If you want to overwrite the table include the `overwrite` kw: `{self}.summarize(..., overwrite=True)`")
+                if print_table:
+                    print(self.summary)
+                return
 
         if self.optimization == "separate":
             self.summary = []
