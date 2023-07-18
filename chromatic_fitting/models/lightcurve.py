@@ -742,8 +742,7 @@ class LightcurveModel:
 
             for i, mod in enumerate(self._pymc3_model):
                 if self.optimization == "separate":
-                    print(f"\nSampling for Wavelength: {i}")
-                check_initial_guess(mod)
+                    check_initial_guess(mod)
                 with mod:
                     if len(starts) > 0:
                         start = starts[i]
@@ -773,7 +772,7 @@ class LightcurveModel:
 
         self.summarize(**summarize_kw)
 
-    def summarize(self, hdi_prob=0.68, round_to=10, print_table=True, **kw):
+    def summarize(self, hdi_prob=0.68, round_to=10, fmt="wide", print_table=True, overwrite=False, **kw):
         """
         Wrapper for arviz summary
         """
@@ -781,23 +780,24 @@ class LightcurveModel:
             print("Sampling has not been run yet! Running now with defaults...")
             self.sample()
 
-        if hasattr(self, "summary"):
-            print("Summarize has already been run")
-            if print_table:
-                print(self.summary)
-            return
+        if overwrite == False:
+            if hasattr(self, "summary"):
+                print("Summarize has already been run. If you want to overwrite the table include the `overwrite` kw: `{self}.summarize(..., overwrite=True)`")
+                if print_table:
+                    print(self.summary)
+                return
 
         if self.optimization == "separate":
             self.summary = []
             for mod, trace in zip(self._pymc3_model, self.trace):
                 with mod:
                     self.summary.append(
-                        summary(trace, hdi_prob=hdi_prob, round_to=round_to, **kw)
+                        summary(trace, hdi_prob=hdi_prob, round_to=round_to, fmt=fmt, **kw)
                     )
         else:
             with self._pymc3_model:
                 self.summary = summary(
-                    self.trace, hdi_prob=hdi_prob, round_to=round_to, **kw
+                    self.trace, hdi_prob=hdi_prob, round_to=round_to, fmt=fmt, **kw
                 )
 
         if print_table:
@@ -870,7 +870,7 @@ class LightcurveModel:
         opt = self.optimize(start=self._pymc3_model.test_point)
         opt = self.optimize(start=opt)
         self.sample(start=opt)
-        self.summarize(round_to=7, fmt="wide")
+        # self.summarize(round_to=7, fmt="wide")
 
     def plot_priors(self, n=3, quantity="data", plot_all=True):
         """
@@ -911,7 +911,7 @@ class LightcurveModel:
                                 i_dict = {**i_dict, **{k: v[i][0]}}
                             else:
                                 i_dict = {**i_dict, **{k: v[i][w]}}
-                        model_for_this_sample.append(self.model(i_dict))
+                        model_for_this_sample.append(self.model(params=i_dict))
                     model_for_this_sample = np.array(model_for_this_sample)
 
                 # add posterior model and draw from posterior distribution to the Rainbow quantities:
@@ -968,13 +968,19 @@ class LightcurveModel:
                     for w in range(data.nwave):
                         i_dict = {}
                         for k, v in posterior_predictive_trace.items():
-                            if np.shape(v) == 1:
-                                i_dict = {**i_dict, **{k: v[i]}}
-                            elif np.shape(v)[1] == 1:
+                            # if np.shape(v) == 1:
+                            #     i_dict = {**i_dict, **{k: v[i]}}
+                            # elif np.shape(v)[1] == 1:
+                            #     i_dict = {**i_dict, **{k: v[i][0]}}
+                            # else:
+                            #     i_dict = {**i_dict, **{k: v[i][w]}}
+                            if np.shape(v)[1] == 1:
                                 i_dict = {**i_dict, **{k: v[i][0]}}
-                            else:
+                            elif np.shape(v)[1] == data.nwave:
                                 i_dict = {**i_dict, **{k: v[i][w]}}
-                        model_for_this_sample.append(self.model(i_dict))
+                            else:
+                                i_dict = {**i_dict, **{k: v[i]}}
+                        model_for_this_sample.append(self.model(params=i_dict))
                     model_for_this_sample = np.array(model_for_this_sample)
 
                 # add posterior model and draw from posterior distribution to the Rainbow quantities:
@@ -1077,7 +1083,7 @@ class LightcurveModel:
                     color="k",
                 )
 
-        if "filename" in kw.keys():
+        if "filename" not in kw.keys():
             plt.show()
         else:
             plt.savefig(kw["filename"])

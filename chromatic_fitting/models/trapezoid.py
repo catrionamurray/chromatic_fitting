@@ -194,13 +194,13 @@ class TrapezoidModel(LightcurveModel):
                         trap, axis=0
                     )
 
-    def trapezoid_model(self, trap_params: dict, i: int = 0) -> np.array:
+    def trapezoid_model(self, params: dict, i: int = 0) -> np.array:
         """
         Return a step model, given a dictionary of parameters.
 
         Parameters
         ----------
-        step_params: dictionary with the parameters of the step model
+        params: dictionary with the parameters of the step model
         i: number of the wavelength to fit (default=0)
 
         Returns
@@ -214,14 +214,14 @@ class TrapezoidModel(LightcurveModel):
         else:
             data = self.get_data()
 
-        self.check_and_fill_missing_parameters(trap_params, i)
+        self.check_and_fill_missing_parameters(params, i)
 
-        P = trap_params[f"{self.name}_P"]
-        t0 = trap_params[f"{self.name}_t0"]
-        tau = trap_params[f"{self.name}_tau"]
-        T = trap_params[f"{self.name}_T"]
-        delta = trap_params[f"{self.name}_delta"]
-        baseline = trap_params[f"{self.name}_baseline"]
+        P = params[f"{self.name}_P"]
+        t0 = params[f"{self.name}_t0"]
+        tau = params[f"{self.name}_tau"]
+        T = params[f"{self.name}_T"]
+        delta = params[f"{self.name}_delta"]
+        baseline = params[f"{self.name}_baseline"]
 
         # calculate a phase-folded time (still in units of days)
         x = (data.time.to_value(u.day) - t0 + 0.5 * P) % P - 0.5 * P

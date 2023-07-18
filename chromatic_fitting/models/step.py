@@ -176,13 +176,13 @@ class StepModel(LightcurveModel):
                 else:
                     self.initial_guess[f"wavelength_{j}"] += initial_guess
 
-    def step_model(self, step_params: dict, i: int = 0) -> np.array:
+    def step_model(self, params: dict, i: int = 0) -> np.array:
         """
         Return a step model, given a dictionary of parameters.
 
         Parameters
         ----------
-        step_params: dictionary with the parameters of the step model
+        params: dictionary with the parameters of the step model
         i: number of the wavelength to fit (default=0)
 
         Returns
@@ -213,19 +213,19 @@ class StepModel(LightcurveModel):
         if len(np.shape(x)) > 1:
             x = x[i, :]
 
-        self.check_and_fill_missing_parameters(step_params, i)
+        self.check_and_fill_missing_parameters(params, i)
 
         try:
             #             for d in range(self.degree + 1)
-            step = np.ones(len(x)) * step_params[f"{self.name}_f0"]
-            step[x >= step_params[f"{self.name}_t0"]] = (
-                step_params[f"{self.name}_f0"] + step_params[f"{self.name}_df"]
+            step = np.ones(len(x)) * params[f"{self.name}_f0"]
+            step[x >= params[f"{self.name}_t0"]] = (
+                params[f"{self.name}_f0"] + params[f"{self.name}_df"]
             )
             return step
         except KeyError:
-            step = np.ones(len(x)) * step_params[f"{self.name}_f0_w0"]
-            step[x >= step_params[f"{self.name}_t0_w0"]] = (
-                step_params[f"{self.name}_f0_w0"] + step_params[f"{self.name}_df_w0"]
+            step = np.ones(len(x)) * params[f"{self.name}_f0_w0"]
+            step[x >= params[f"{self.name}_t0_w0"]] = (
+                params[f"{self.name}_f0_w0"] + params[f"{self.name}_df_w0"]
             )
             return step
 

@@ -1,4 +1,4 @@
-__version__ = "0.10.0"
+__version__ = "0.11.3"
 
 
 def version():
@@ -31,3 +31,5 @@ def version():
 #       v 0.10.1.2 - added some helper functions
 # v 0.11.0 - added spot model
 #    v 0.11.1 - added multiple spot model
+#    v 0.11.2 - added overwrite kw to summarize() to allow az.summary() kws to be changed
+#    v 0.11.3 - fixed bug in plot_priors and plot_posteriors
