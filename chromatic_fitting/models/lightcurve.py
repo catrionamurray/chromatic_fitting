@@ -772,7 +772,7 @@ class LightcurveModel:
 
         self.summarize(**summarize_kw)
 
-    def summarize(self, hdi_prob=0.68, round_to=10, print_table=True, overwrite=False, **kw):
+    def summarize(self, hdi_prob=0.68, round_to=10, fmt="wide", print_table=True, overwrite=False, **kw):
         """
         Wrapper for arviz summary
         """
@@ -780,7 +780,7 @@ class LightcurveModel:
             print("Sampling has not been run yet! Running now with defaults...")
             self.sample()
 
-        if overwrite==False:
+        if overwrite == False:
             if hasattr(self, "summary"):
                 print("Summarize has already been run. If you want to overwrite the table include the `overwrite` kw: `{self}.summarize(..., overwrite=True)`")
                 if print_table:
@@ -792,12 +792,12 @@ class LightcurveModel:
             for mod, trace in zip(self._pymc3_model, self.trace):
                 with mod:
                     self.summary.append(
-                        summary(trace, hdi_prob=hdi_prob, round_to=round_to, **kw)
+                        summary(trace, hdi_prob=hdi_prob, round_to=round_to, fmt=fmt, **kw)
                     )
         else:
             with self._pymc3_model:
                 self.summary = summary(
-                    self.trace, hdi_prob=hdi_prob, round_to=round_to, **kw
+                    self.trace, hdi_prob=hdi_prob, round_to=round_to, fmt=fmt, **kw
                 )
 
         if print_table:
