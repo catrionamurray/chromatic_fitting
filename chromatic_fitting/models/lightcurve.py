@@ -742,7 +742,7 @@ class LightcurveModel:
 
             for i, mod in enumerate(self._pymc3_model):
                 if self.optimization == "separate":
-                check_initial_guess(mod)
+                    check_initial_guess(mod)
                 with mod:
                     if len(starts) > 0:
                         start = starts[i]
