@@ -21,7 +21,7 @@ class TransitSpotModel(LightcurveModel):
             self,
             name: str = "transitspot",
             method: str = "starry",
-            ydeg: int = 20,
+            ydeg: int = 15,
             nspots: int = 1,
             type_of_model: str = "planet",
             **kw: object,
