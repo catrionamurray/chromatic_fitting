@@ -7,6 +7,7 @@ from .trapezoid import *
 from .step import *
 from .exponential import *
 from .transit_and_spot import *
+from .phase_curve import *
 
 # from .spot import *
 
