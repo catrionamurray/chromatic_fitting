@@ -567,14 +567,17 @@ class CombinedModel(LightcurveModel):
         models = self.apply_operation_to_constituent_models("model", **kw)
 
         if models is not None:
-            for i in len(self._chromatic_models.keys()):
+            for j in range(len(self._chromatic_models.keys())):
                 # add this model to the total model:
                 # total_model = combination_options[self.how_to_combine[i - 1]](
                 #     total_model, models[i]
                 # )
-                total_model = combination_options[self.how_to_combine[i - 1]](
-                    total_model, models[i]
-                )
+                if j == 0:
+                    total_model = models[j]
+                else:
+                    total_model = combination_options_array[self.how_to_combine[j - 1]](
+                        total_model, models[j]
+                    )
 
         return total_model
 

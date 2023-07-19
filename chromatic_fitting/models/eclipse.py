@@ -320,14 +320,14 @@ class EclipseModel(LightcurveModel):
         self.data_with_model = r_with_model
 
     def eclipse_model(
-        self, eclipse_params: dict, i: int = 0, time: list = None
+        self, params: dict, i: int = 0, time: list = None
     ) -> np.array:
         """
         Create a eclipse model given the passed parameters.
 
         Parameters
         ----------
-        eclipse_params: A dictionary of parameters to be used in the eclipse model.
+        params: A dictionary of parameters to be used in the eclipse model.
         i: wavelength index
         time: If we don't want to use the default time then the user can pass a time array on which to calculate the model
 
@@ -350,44 +350,44 @@ class EclipseModel(LightcurveModel):
                 data = self.get_data()
             time = list(data.time.to_value("day"))
 
-        self.check_and_fill_missing_parameters(eclipse_params, i)
+        self.check_and_fill_missing_parameters(params, i)
 
         star = starry.Primary(
             starry.Map(
                 ydeg=0,
                 udeg=2,
-                amp=eclipse_params[f"{name}stellar_amplitude"],
+                amp=params[f"{name}stellar_amplitude"],
                 inc=90.0,
                 obl=0.0,
             ),
-            m=eclipse_params[f"{name}stellar_mass"],
-            r=eclipse_params[f"{name}stellar_radius"],
-            prot=eclipse_params[f"{name}stellar_prot"],
+            m=params[f"{name}stellar_mass"],
+            r=params[f"{name}stellar_radius"],
+            prot=params[f"{name}stellar_prot"],
         )
 
-        star.map[1] = eclipse_params[f"{name}limb_darkening"][0]
-        star.map[2] = eclipse_params[f"{name}limb_darkening"][1]
+        star.map[1] = params[f"{name}limb_darkening"][0]
+        star.map[2] = params[f"{name}limb_darkening"][1]
 
-        omega = theano.tensor.arctan2(eclipse_params[f"{name}ecs"][1], eclipse_params[f"{name}ecs"][0])*180.0/np.pi
-        eccentricity = pm.math.sqrt(eclipse_params[f"{name}ecs"][0]**2+eclipse_params[f"{name}ecs"][1]**2)
+        omega = theano.tensor.arctan2(params[f"{name}ecs"][1], params[f"{name}ecs"][0])*180.0/np.pi
+        eccentricity = pm.math.sqrt(params[f"{name}ecs"][0]**2 + params[f"{name}ecs"][1]**2)
 
         planet = starry.kepler.Secondary(
             starry.Map(
                 ydeg=0,
                 udeg=0,
-                amp=10 ** eclipse_params[f"{name}planet_log_amplitude"],
+                amp=10 ** params[f"{name}planet_log_amplitude"],
                 inc=90.0,
                 obl=0.0,
             ),
             # the surface map
-            inc=eclipse_params[f"{name}inclination"],
-            m=eclipse_params[f"{name}planet_mass"],  # mass in Jupiter masses
-            r=eclipse_params[f"{name}planet_radius"],  # radius in Jupiter radii
-            porb=eclipse_params[f"{name}period"],  # orbital period in days
-            prot=eclipse_params[f"{name}period"],  # orbital period in days
+            inc=params[f"{name}inclination"],
+            m=params[f"{name}planet_mass"],  # mass in Jupiter masses
+            r=params[f"{name}planet_radius"],  # radius in Jupiter radii
+            porb=params[f"{name}period"],  # orbital period in days
+            prot=params[f"{name}period"],  # orbital period in days
             ecc=eccentricity,  # eccentricity
             w=omega,  # longitude of pericenter in degrees
-            t0=eclipse_params[f"{name}t0"],  # time of transit in days
+            t0=params[f"{name}t0"],  # time of transit in days
             length_unit=u.R_jup,
             mass_unit=u.M_jup,
         )

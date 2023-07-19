@@ -242,13 +242,13 @@ class PolynomialModel(LightcurveModel):
                 else:
                     self.initial_guess[f"wavelength_{j}"] += initial_guess
 
-    def polynomial_model(self, poly_params: dict, i: int = 0) -> np.array:
+    def polynomial_model(self, params: dict, i: int = 0) -> np.array:
         """
         Return a polynomial model, given a dictionary of parameters.
 
         Parameters
         ----------
-        poly_params: dictionary with the parameters of the polynomial model
+        params: dictionary with the parameters of the polynomial model
         i: number of the wavelength to fit (default=0)
 
         Returns
@@ -282,15 +282,15 @@ class PolynomialModel(LightcurveModel):
             else:
                 x = x[0, :]
 
-        self.check_and_fill_missing_parameters(poly_params, i)
+        self.check_and_fill_missing_parameters(params, i)
 
         try:
             for d in range(self.degree + 1):
-                poly.append(poly_params[f"{self.name}_p_{d}"] * (x**d))
+                poly.append(params[f"{self.name}_p_{d}"] * (x**d))
             return np.sum(poly, axis=0)
         except KeyError:
             for d in range(self.degree + 1):
-                poly.append(poly_params[f"{self.name}_p_{d}_w0"] * (x**d))
+                poly.append(params[f"{self.name}_p_{d}_w0"] * (x**d))
             return np.sum(poly, axis=0)
 
     def add_model_to_rainbow(self):
