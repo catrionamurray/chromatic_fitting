@@ -243,6 +243,8 @@ class PhaseCurveModel(LightcurveModel):
                     for param_name, param in parameters_to_loop_over.items():
                         if isinstance(self.parameters[param_name], WavelikeFitted):
                             param_i[param_name] = param[j][i]
+                        elif isinstance(self.parameters[param_name], Fitted) and eval_in_model(np.shape(param[j]))[0] == 1:
+                            param_i[param_name] = param[j][0]
                         else:
                             param_i[param_name] = param[j]
                     # **FUNCTION TO MODEL - MAKE SURE IT MATCHES self.temp_model()!**
