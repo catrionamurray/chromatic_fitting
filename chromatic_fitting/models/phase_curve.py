@@ -54,7 +54,8 @@ class PhaseCurveModel(LightcurveModel):
 
     def __init__(self,
                  name: str = "phasecurve",
-                 ydeg: int = 15,
+                 n_spherical_harmonics: int = 1,
+                 spherical_harmonics_coeffs = [1.0, 0.0, 0.5, 0.0],
                  source_npts: int = 1,
                  type_of_model: str = "planet",
                  **kw: object) -> None:
@@ -64,7 +65,8 @@ class PhaseCurveModel(LightcurveModel):
         Parameters
         ----------
         name: the name of the model ('phasecurve' by default)
-        ydeg: Number of spherical harmonic orders to use to model the star (higher value = resolving smaller features)
+        n_spherical_harmonics: Number of spherical harmonic orders to use to model the star (higher value = resolving smaller features)
+        spherical_harmonics_coeffs: Coefficients for each spherical harmonic order: [Y_0,0, Y_1,-1, Y_1,0, Y_1,1, Y_2,-2, ...]. Default is a simple dipole map.
         source_npts: Number of points to model illumination source, 1=a point source, so for close-in planets we want this to be >30-50
         type_of_model: is this a planet or systematic model?
         kw: any keywords to pass to the lightcurve model
@@ -96,7 +98,9 @@ class PhaseCurveModel(LightcurveModel):
             warnings.warn(
                 "You have selected >=35 spherical harmonic degrees. Starry does not behave nicely at this high a resolution!")
 
-        self.ydeg = ydeg
+        # self.ydeg = ydeg
+        self.n_spherical_harmonics = n_spherical_harmonics
+        self.spherical_harmonics_coeffs = spherical_harmonics_coeffs
         self.source_npts = source_npts
 
         super().__init__(**kw)
@@ -268,7 +272,7 @@ class PhaseCurveModel(LightcurveModel):
 
                     planet = starry.kepler.Secondary(
                         starry.Map(
-                            ydeg=self.ydeg,
+                            ydeg=self.n_spherical_harmonics,
                             udeg=0,
                             amp=10 ** param_i[f"{name}planet_log_amplitude"],
                             inc=90.0,
@@ -286,7 +290,10 @@ class PhaseCurveModel(LightcurveModel):
                         length_unit=u.R_jup,
                         mass_unit=u.M_jup,
                     )
-                    planet.map[1, 0] = 0.5
+                    # for s in range(self.n_spherical_harmonics):
+                    #     planet.map[s, 0] = self.spherical_harmonics[s]
+                    planet.map = self.spherical_harmonics_coeffs
+
                     planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
                     # planet.roughness = param_i[f"{name}roughness"]
 
@@ -411,7 +418,7 @@ class PhaseCurveModel(LightcurveModel):
 
         planet = starry.kepler.Secondary(
             starry.Map(
-                ydeg=1,
+                ydeg=self.n_spherical_harmonics,
                 udeg=0,
                 amp=10 ** params[f"{name}planet_log_amplitude"],
                 inc=90,
