@@ -264,10 +264,16 @@ class TrapezoidModel(LightcurveModel):
         val_a = 1 - slope * (x - x1)
         val_b = 1 - delta
         val_c = 1 - slope * (x4 - x)
-        flux = (
-            np.select([range_a, range_b, range_c], [val_a, val_b, val_c], default=1)
-            * baseline
-        )
+        if self.is_it_secondary_eclipse:
+            flux = (
+                np.select([range_a, range_b, range_c], [val_a, val_b, val_c], default=1)
+                * (baseline+delta)
+            )
+        else:
+            flux = (
+                np.select([range_a, range_b, range_c], [val_a, val_b, val_c], default=1)
+                * (baseline)
+            )
         return flux
 
     def add_model_to_rainbow(self):
