@@ -290,7 +290,8 @@ class PhaseCurveModel(LightcurveModel):
                     planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
                     # planet.roughness = param_i[f"{name}roughness"]
 
-                    rr = Deterministic(f"{name}radius_ratio[{i+j}]", param_i[f"{name}planet_radius"]/param_i[f"{name}stellar_radius"])
+                    rr = Deterministic(f"{name}radius_ratio[{i+j}]",
+                                       (param_i[f"{name}planet_radius"] * (1*u.R_jup).to_value("R_sun")) / param_i[f"{name}stellar_radius"])
 
                     system = starry.System(star, planet)
                     flux_model = system.flux(data.time.to_value("day"))
