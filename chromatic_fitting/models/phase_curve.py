@@ -91,6 +91,7 @@ class PhaseCurveModel(LightcurveModel):
             "limb_darkening",
         ]
 
+
         if n_spherical_harmonics >= 25:
             warnings.warn(
                 "You have selected >=25 spherical harmonic degrees. Starry will be very slow!")
@@ -98,17 +99,23 @@ class PhaseCurveModel(LightcurveModel):
             warnings.warn(
                 "You have selected >=35 spherical harmonic degrees. Starry does not behave nicely at this high a resolution!")
 
-        n_coeffs = 0
-        for degree in range(n_spherical_harmonics+1):
-            n_coeffs = n_coeffs + (2 * degree) + 1
-        if len(spherical_harmonics_coeffs) == n_coeffs:
-            self.n_spherical_harmonics = n_spherical_harmonics
-            self.spherical_harmonics_coeffs = spherical_harmonics_coeffs
+        if n_spherical_harmonics == 1 and spherical_harmonics_coeffs==[1.0, 0.0, 0.5, 0.0]:
+            warnings.warn("You are running the PhaseCurveModel with default planet map = a simple dipole model.")
         else:
-            warnings.warn(f"""Number of spherical harmonics does not match number of coeffs.\nIf deg=0, n_coeffs=1 (Y_0,0), if deg=1, n_coeffs=4 (Y_0,0, Y_1,-1, Y_1,0, Y_1,1) etc.
-                    \nYou've passed {n_spherical_harmonics} degrees therefore you should have an array for `spherical_harmonics_coeffs` of length={n_coeffs}
-                 """)
-            return
+            n_coeffs = 0
+            for degree in range(n_spherical_harmonics+1):
+                n_coeffs = n_coeffs + (2 * degree) + 1
+            if len(spherical_harmonics_coeffs) != n_coeffs:
+                warnings.warn(f"""Number of spherical harmonics does not match number of coeffs.\nIf deg=0, n_coeffs=1 (Y_0,0), if deg=1, n_coeffs=4 (Y_0,0, Y_1,-1, Y_1,0, Y_1,1) etc.
+                        \nYou've passed {n_spherical_harmonics} degrees therefore you should have an array for `spherical_harmonics_coeffs` of length={n_coeffs}
+                     """)
+                return
+
+        self.n_spherical_harmonics = n_spherical_harmonics
+        self.spherical_harmonics_coeffs = spherical_harmonics_coeffs
+
+        if spherical_harmonics_coeffs[0] != 1.0:
+            warnings.warn("The Y{0,0} coefficient has been changed. Starry does not let you change this coeff directly - you need to change the planet map's amplitude")
 
         self.source_npts = source_npts
 
@@ -301,9 +308,16 @@ class PhaseCurveModel(LightcurveModel):
                     )
                     # for s in range(self.n_spherical_harmonics):
                     #     planet.map[s, 0] = self.spherical_harmonics[s]
-                    for degree in range(self.n_spherical_harmonics+1):
-                        for harmonic_order in range((degree*2) + 1):
-                            planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[degree, harmonic_order]
+                    # for degree in range(self.n_spherical_harmonics+1):
+                    #     for harmonic_order in range((degree*2) + 1):
+                    #         planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[degree, harmonic_order]
+                    count = 0
+                    if self.n_spherical_harmonics > 0:
+                        for degree in range(1, self.n_spherical_harmonics + 1):
+                            for harmonic_order in range(-degree, degree + 1):
+                                planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[count+1]
+                                count = count + 1
+                    print(eval_in_model(planet.map.y), self.spherical_harmonics_coeffs)
 
                     planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
                     # planet.roughness = param_i[f"{name}roughness"]
@@ -451,13 +465,21 @@ class PhaseCurveModel(LightcurveModel):
 
         # planet.theta0 = 180.0
         # planet.map[1, 0] = 0.5
-        for degree in range(self.n_spherical_harmonics+1):
-            for harmonic_order in range((degree * 2) + 1):
-                planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[degree, harmonic_order]
+        # for degree in range(self.n_spherical_harmonics+1):
+        #     for harmonic_order in range((degree * 2) + 1):
+        #         planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[degree, harmonic_order]
+        count = 0
+        if self.n_spherical_harmonics > 0:
+            for degree in range(1, self.n_spherical_harmonics + 1):
+                for harmonic_order in range(-degree, degree + 1):
+                    planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[count+1]
+                    count = count + 1
 
         planet.theta0 = 180.0 + params[f"{name}phase_offset"]
         system = starry.System(star, planet)
         flux_model = system.flux(time).eval()
+
+        self.keplerian_system = system
 
         return flux_model
 
