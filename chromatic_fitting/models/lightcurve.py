@@ -522,7 +522,7 @@ class LightcurveModel:
 
         if inflate_uncertainties:
             self.parameters["nsigma"] = WavelikeFitted(
-                TruncatedNormal, lower=1.0, mu=1.0, upper=3.0, sigma=0.001
+                Uniform, lower=1.0, upper=3.0, testval=1.01
             )
             self.parameters["nsigma"].set_name("nsigma")
 
