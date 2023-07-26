@@ -55,7 +55,7 @@ class PhaseCurveModel(LightcurveModel):
     def __init__(self,
                  name: str = "phasecurve",
                  n_spherical_harmonics: int = 1,
-                 spherical_harmonics_coeffs = [1.0, 0.0, 0.5, 0.0],
+                 spherical_harmonics_coeffs=[1.0, 0.0, 0.5, 0.0],
                  source_npts: int = 1,
                  type_of_model: str = "planet",
                  **kw: object) -> None:
@@ -91,16 +91,25 @@ class PhaseCurveModel(LightcurveModel):
             "limb_darkening",
         ]
 
-        if ydeg >= 25:
+        if n_spherical_harmonics >= 25:
             warnings.warn(
                 "You have selected >=25 spherical harmonic degrees. Starry will be very slow!")
-        elif ydeg >= 35:
+        elif n_spherical_harmonics >= 35:
             warnings.warn(
                 "You have selected >=35 spherical harmonic degrees. Starry does not behave nicely at this high a resolution!")
 
-        # self.ydeg = ydeg
-        self.n_spherical_harmonics = n_spherical_harmonics
-        self.spherical_harmonics_coeffs = spherical_harmonics_coeffs
+        n_coeffs = 0
+        for degree in range(n_spherical_harmonics+1):
+            n_coeffs = n_coeffs + (2 * degree) + 1
+        if len(spherical_harmonics_coeffs) == n_coeffs:
+            self.n_spherical_harmonics = n_spherical_harmonics
+            self.spherical_harmonics_coeffs = spherical_harmonics_coeffs
+        else:
+            warnings.warn(f"""Number of spherical harmonics does not match number of coeffs.\nIf deg=0, n_coeffs=1 (Y_0,0), if deg=1, n_coeffs=4 (Y_0,0, Y_1,-1, Y_1,0, Y_1,1) etc.
+                    \nYou've passed {n_spherical_harmonics} degrees therefore you should have an array for `spherical_harmonics_coeffs` of length={n_coeffs}
+                 """)
+            return
+
         self.source_npts = source_npts
 
         super().__init__(**kw)
@@ -160,7 +169,7 @@ class PhaseCurveModel(LightcurveModel):
             t0=1.0,
             planet_log_amplitude=-2.8,
             # roughness=0,
-            phase_offset = 0.0,
+            phase_offset=0.0,
             inclination=90.0,
             planet_mass=0.01,
             planet_radius=0.01,
@@ -292,13 +301,16 @@ class PhaseCurveModel(LightcurveModel):
                     )
                     # for s in range(self.n_spherical_harmonics):
                     #     planet.map[s, 0] = self.spherical_harmonics[s]
-                    planet.map = self.spherical_harmonics_coeffs
+                    for degree in range(self.n_spherical_harmonics+1):
+                        for harmonic_order in range((degree*2) + 1):
+                            planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[degree, harmonic_order]
 
                     planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
                     # planet.roughness = param_i[f"{name}roughness"]
 
-                    rr = Deterministic(f"{name}radius_ratio[{i+j}]",
-                                       (param_i[f"{name}planet_radius"] * (1*u.R_jup).to_value("R_sun")) / param_i[f"{name}stellar_radius"])
+                    rr = Deterministic(f"{name}radius_ratio[{i + j}]",
+                                       (param_i[f"{name}planet_radius"] * (1 * u.R_jup).to_value("R_sun")) / param_i[
+                                           f"{name}stellar_radius"])
 
                     system = starry.System(star, planet)
                     flux_model = system.flux(data.time.to_value("day"))
@@ -438,7 +450,11 @@ class PhaseCurveModel(LightcurveModel):
         )
 
         # planet.theta0 = 180.0
-        planet.map[1, 0] = 0.5
+        # planet.map[1, 0] = 0.5
+        for degree in range(self.n_spherical_harmonics+1):
+            for harmonic_order in range((degree * 2) + 1):
+                planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[degree, harmonic_order]
+
         planet.theta0 = 180.0 + params[f"{name}phase_offset"]
         system = starry.System(star, planet)
         flux_model = system.flux(time).eval()
@@ -475,7 +491,6 @@ class PhaseCurveModel(LightcurveModel):
         EclipseModel.plot_eclipse_spectrum(self, table=table, uncertainty=uncertainty, ax=ax, plotkw=plotkw, **kw)
 
     def plot_transmission_spectrum(
-        self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
+            self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
     ):
         TransitModel.plot_transmission_spectrum(self, table=table, uncertainty=uncertainty, ax=ax, plotkw=plotkw, **kw)
-
