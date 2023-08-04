@@ -1,49 +1,48 @@
 import astropy.units.quantity
-
 from ..imports import *
-
 from .lightcurve import *
 
-
-class ExponentialModel(LightcurveModel):
+class SinusoidModel(LightcurveModel):
     """
     An exponential model for the lightcurve.
     """
 
     def __init__(
-        self,
-        t0: float,
-        independant_variable: str = "time",
-        name: str = "exponential",
-        type_of_model: str = "systematic",
-        **kw: object,
+            self,
+            sinusoid: str,
+            independant_variable: str = "time",
+            type_of_model: str = "systematic",
+            **kw: object,
     ) -> None:
         """
-        Initialize the exponential model.
+        Initialize the cosine model.
 
         Parameters
         ----------
-        t0: where the exponential = the amplitude (traditionally the first data point)
+        sinusoid: {sine/sin/s} or {cosine/cos/c}?
         independant_variable: the independant variable of the exponential (default = time)
-        name: the name of the model (default = "exponential")
         kw: keyword arguments for initialising the chromatic model
         """
         # only require a constant (0th order) term:
-        self.required_parameters = ["A", "decay_time", "baseline"]
+        self.required_parameters = ["A", "w", "phase", "baseline"]
+
+        if sinusoid == "sine" or sinusoid == "sin" or sinusoid == "s":
+            self.sinusoid_function = np.sin
+            name = "sin"
+        elif sinusoid == "cosine" or sinusoid == "cos" or sinusoid == "c":
+            self.sinusoid_function = np.cos
+            name = "cos"
+        else:
+            warnings.warn(f"The value for sinusoid entered ({sinusoid}) is not one of 'sin' or 'cos'!")
+            return
+        self.model = self.sinusoid_model
 
         super().__init__(**kw)
         self.independant_variable = independant_variable
-        if (
-            type(t0) == astropy.units.quantity.Quantity
-            and independant_variable == "time"
-        ):
-            self.t0 = t0.to_value("day")
-        else:
-            self.t0 = t0
         self.set_defaults()
         self.set_name(name)
         self.metadata = {}
-        self.model = self.exponential_model
+        self.model = self.sinusoid_model
 
         if type_of_model in allowed_types_of_models:
             self.type_of_model = type_of_model
@@ -62,7 +61,7 @@ class ExponentialModel(LightcurveModel):
         """
         Set the default parameters for the model.
         """
-        self.defaults = dict(A=0.01, decay_time=0.01, baseline=1.0)
+        self.defaults = dict(A=0.01, w=0.1, phase=0.0, baseline=1.0)
 
     def what_are_parameters(self):
         """
@@ -112,7 +111,8 @@ class ExponentialModel(LightcurveModel):
 
         parameters_to_loop_over = {
             f"{name}A": [],
-            f"{name}decay_time": [],
+            f"{name}w": [],
+            f"{name}phase": [],
             f"{name}baseline": [],
         }
         for j, (mod, data) in enumerate(zip(models, datas)):
@@ -136,7 +136,7 @@ class ExponentialModel(LightcurveModel):
                     except AttributeError:
                         pass
 
-                exp, initial_guess = [], []
+                sinusoid, initial_guess = [], []
                 for i, w in enumerate(data.wavelength):
                     if len(np.shape(x)) > 1:
                         xi = x[i, :]
@@ -150,29 +150,31 @@ class ExponentialModel(LightcurveModel):
                         else:
                             param_i[pname] = param[j]
 
-                    exp.append(
-                        param_i[f"{name}A"]
-                        * np.exp(-(xi - self.t0) / param_i[f"{name}decay_time"])
-                        + param_i[f"{name}baseline"]
-                    )
+                    #                     exp.append(
+                    #                         param_i[f"{name}A"]
+                    #                         * np.exp(-(xi - self.t0) / param_i[f"{name}decay_time"])
+                    #                         + param_i[f"{name}baseline"]
+                    #                     )
+                    sinusoid.append(param_i[f"{name}baseline"] + param_i[f"{name}A"]
+                                    * self.sinusoid_function((param_i[f"{name}w"] * xi) + param_i[f"{name}phase"]))
 
-                    initial_guess.append(eval_in_model(exp[-1]))
+                    initial_guess.append(eval_in_model(sinusoid[-1]))
 
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
                 if self.store_models:
                     Deterministic(
-                        f"{name}model", pm.math.stack(exp, axis=0)
+                        f"{name}model", pm.math.stack(sinusoid, axis=0)
                     )  # pm.math.sum(poly, axis=0))
 
                 # add the exponential model to the overall lightcurve:
                 if f"wavelength_{j}" not in self.every_light_curve.keys():
                     self.every_light_curve[f"wavelength_{j}"] = pm.math.stack(
-                        exp, axis=0
+                        sinusoid, axis=0
                     )
                 else:
                     self.every_light_curve[f"wavelength_{j}"] += pm.math.stack(
-                        exp, axis=0
+                        sinusoid, axis=0
                     )
 
                 # add the initial guess to the model:
@@ -181,7 +183,7 @@ class ExponentialModel(LightcurveModel):
                 else:
                     self.initial_guess[f"wavelength_{j}"] += initial_guess
 
-    def exponential_model(self, params: dict, i: int = 0) -> np.array:
+    def sinusoid_model(self, params: dict, i: int = 0) -> np.array:
         """
         Return a exponential model, given a dictionary of parameters.
 
@@ -194,7 +196,7 @@ class ExponentialModel(LightcurveModel):
         -------
         np.array: exponential model with the given parameters
         """
-        exponential = []
+        # cosine = []
 
         # if the optimization method is "separate" then extract wavelength {i}'s data
         if self.optimization == "separate":
@@ -212,12 +214,10 @@ class ExponentialModel(LightcurveModel):
 
         self.check_and_fill_missing_parameters(params, i)
 
-        exponential = (
-            params[f"{self.name}_A"]
-            * np.exp(-(x - self.t0) / params[f"{self.name}_decay_time"])
-            + params[f"{self.name}_baseline"]
-        )
-        return exponential
+        cosine = params[f"{self.name}_baseline"] + params[f"{self.name}_A"] \
+                 * self.sinusoid_function((params[f"{self.name}_w"] * x) + params[f"{self.name}_phase"])
+
+        return cosine
 
     def add_model_to_rainbow(self):
         """

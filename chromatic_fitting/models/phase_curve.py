@@ -54,8 +54,8 @@ class PhaseCurveModel(LightcurveModel):
 
     def __init__(self,
                  name: str = "phasecurve",
-                 n_spherical_harmonics: int = 1,
-                 spherical_harmonics_coeffs=[1.0, 0.0, 0.5, 0.0],
+                 n_spherical_harmonics: int = 1,  # simple dipole map
+                 spherical_harmonics_coeffs=[1.0, 0.0, 0.5, 0.0],  # simple dipole map
                  source_npts: int = 1,
                  type_of_model: str = "planet",
                  **kw: object) -> None:
@@ -67,6 +67,7 @@ class PhaseCurveModel(LightcurveModel):
         name: the name of the model ('phasecurve' by default)
         n_spherical_harmonics: Number of spherical harmonic orders to use to model the star (higher value = resolving smaller features)
         spherical_harmonics_coeffs: Coefficients for each spherical harmonic order: [Y_0,0, Y_1,-1, Y_1,0, Y_1,1, Y_2,-2, ...]. Default is a simple dipole map.
+        See https://starry.readthedocs.io/en/latest/notebooks/Basics/ for more info on how to define the coefficients.
         source_npts: Number of points to model illumination source, 1=a point source, so for close-in planets we want this to be >30-50
         type_of_model: is this a planet or systematic model?
         kw: any keywords to pass to the lightcurve model
@@ -91,7 +92,6 @@ class PhaseCurveModel(LightcurveModel):
             "limb_darkening",
         ]
 
-
         if n_spherical_harmonics >= 25:
             warnings.warn(
                 "You have selected >=25 spherical harmonic degrees. Starry will be very slow!")
@@ -99,11 +99,11 @@ class PhaseCurveModel(LightcurveModel):
             warnings.warn(
                 "You have selected >=35 spherical harmonic degrees. Starry does not behave nicely at this high a resolution!")
 
-        if n_spherical_harmonics == 1 and spherical_harmonics_coeffs==[1.0, 0.0, 0.5, 0.0]:
+        if n_spherical_harmonics == 1 and spherical_harmonics_coeffs == [1.0, 0.0, 0.5, 0.0]:
             warnings.warn("You are running the PhaseCurveModel with default planet map = a simple dipole model.")
         else:
             n_coeffs = 0
-            for degree in range(n_spherical_harmonics+1):
+            for degree in range(n_spherical_harmonics + 1):
                 n_coeffs = n_coeffs + (2 * degree) + 1
             if len(spherical_harmonics_coeffs) != n_coeffs:
                 warnings.warn(f"""Number of spherical harmonics does not match number of coeffs.\nIf deg=0, n_coeffs=1 (Y_0,0), if deg=1, n_coeffs=4 (Y_0,0, Y_1,-1, Y_1,0, Y_1,1) etc.
@@ -115,7 +115,8 @@ class PhaseCurveModel(LightcurveModel):
         self.spherical_harmonics_coeffs = spherical_harmonics_coeffs
 
         if spherical_harmonics_coeffs[0] != 1.0:
-            warnings.warn("The Y{0,0} coefficient has been changed. Starry does not let you change this coeff directly - you need to change the planet map's amplitude")
+            warnings.warn(
+                "The Y{0,0} coefficient has been changed. Starry does not let you change this coeff directly - you need to change the planet map's amplitude")
 
         self.source_npts = source_npts
 
@@ -149,7 +150,7 @@ class PhaseCurveModel(LightcurveModel):
             period="Orbital period [d].",
             t0="Epoch of transit center [d].",
             planet_log_amplitude="The log-amplitude of the planet (determines the depth of the eclipse). Equivalent to log(albedo)",
-            phase_offset="",
+            phase_offset="The phase offset for maximum reflection, this can be caused by hot spots on the planet [degrees].",
             # roughness="How 'rough' the surface of a planet is according to Oren and Nayar (1994). Default=0 for fully Lambertian scattering. [degrees]",
             inclination="The inclination of the planet [degrees].",
             planet_mass="The mass of the planet [M_jupiter].",
@@ -263,7 +264,8 @@ class PhaseCurveModel(LightcurveModel):
                     for param_name, param in parameters_to_loop_over.items():
                         if isinstance(self.parameters[param_name], WavelikeFitted):
                             param_i[param_name] = param[j][i]
-                        elif isinstance(self.parameters[param_name], Fitted) and eval_in_model(np.shape(param[j]))[0] == 1:
+                        elif isinstance(self.parameters[param_name], Fitted) and eval_in_model(np.shape(param[j]))[
+                            0] == 1:
                             param_i[param_name] = param[j][0]
                         else:
                             param_i[param_name] = param[j]
@@ -306,22 +308,18 @@ class PhaseCurveModel(LightcurveModel):
                         length_unit=u.R_jup,
                         mass_unit=u.M_jup,
                     )
-                    # for s in range(self.n_spherical_harmonics):
-                    #     planet.map[s, 0] = self.spherical_harmonics[s]
-                    # for degree in range(self.n_spherical_harmonics+1):
-                    #     for harmonic_order in range((degree*2) + 1):
-                    #         planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[degree, harmonic_order]
                     count = 0
                     if self.n_spherical_harmonics > 0:
                         for degree in range(1, self.n_spherical_harmonics + 1):
                             for harmonic_order in range(-degree, degree + 1):
-                                planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[count+1]
+                                planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[count + 1]
                                 count = count + 1
-                    print(eval_in_model(planet.map.y), self.spherical_harmonics_coeffs)
+                    # print(eval_in_model(planet.map.y), self.spherical_harmonics_coeffs)
 
                     planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
                     # planet.roughness = param_i[f"{name}roughness"]
 
+                    # save the radius ratio for generating the transmission spectrum later:
                     rr = Deterministic(f"{name}radius_ratio[{i + j}]",
                                        (param_i[f"{name}planet_radius"] * (1 * u.R_jup).to_value("R_sun")) / param_i[
                                            f"{name}stellar_radius"])
@@ -463,16 +461,11 @@ class PhaseCurveModel(LightcurveModel):
             mass_unit=u.M_jup,
         )
 
-        # planet.theta0 = 180.0
-        # planet.map[1, 0] = 0.5
-        # for degree in range(self.n_spherical_harmonics+1):
-        #     for harmonic_order in range((degree * 2) + 1):
-        #         planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[degree, harmonic_order]
         count = 0
         if self.n_spherical_harmonics > 0:
             for degree in range(1, self.n_spherical_harmonics + 1):
                 for harmonic_order in range(-degree, degree + 1):
-                    planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[count+1]
+                    planet.map[degree, harmonic_order] = self.spherical_harmonics_coeffs[count + 1]
                     count = count + 1
 
         planet.theta0 = 180.0 + params[f"{name}phase_offset"]

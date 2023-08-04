@@ -684,6 +684,20 @@ class CombinedModel(LightcurveModel):
         """
         self.apply_operation_to_constituent_models("plot_transmission_spectrum", **kw)
 
+    def plot_eclipse_spectrum(self, **kw: object) -> object:
+        """
+        Return an eclipse spectrum plot using the best fit parameters
+
+        Parameters
+        ----------
+        kw: keywords to pass to 'plot_eclipse_spectrum' methods
+
+        Returns
+        -------
+        object
+        """
+        self.apply_operation_to_constituent_models("plot_eclipse_spectrum", **kw)
+
     # def plot_all_models(
     #     self,
     #     wavelength=None,
