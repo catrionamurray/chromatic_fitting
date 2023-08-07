@@ -330,7 +330,7 @@ class TransitSpotModel(LightcurveModel):
                               lat=params[f"{self.name}_spot_{spot_i + 1}_latitude"],
                               lon=params[f"{self.name}_spot_{spot_i + 1}_longitude"])
 
-    def show(self, **kw):
+    def show_system(self, **kw):
         if self.method == "starry":
             if hasattr(self, 'keplerian_system'):
                 self.keplerian_system.show(**kw)

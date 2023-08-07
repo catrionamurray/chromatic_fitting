@@ -402,7 +402,18 @@ class EclipseModel(LightcurveModel):
         self, uncertainty=["hdi_16%", "hdi_84%"], svname=None
     ):
         """
-        Generate and return a emission spectrum table
+        Generate and return an emission spectrum table
+
+        Parameters
+        ----------
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%",
+         "hdi_84%", "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        svname: [Optional] String csv filename to save the emission table. Default = None (do not save)
+
+        Returns
+        -------
+
         """
         results = self.get_results(uncertainty=uncertainty)[
             [
@@ -441,6 +452,24 @@ class EclipseModel(LightcurveModel):
     def plot_eclipse_spectrum(
         self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
     ):
+        """
+        Plot the eclipse spectrum (specifically the planet amplitude as a function of wavelength).
+
+        Parameters
+        ----------
+        table: [Optional] Table to use as eclipse spectrum (otherwise the default is to use the MCMC sampling results.
+        The table must have the following columns: "{self.name}_depth", "{self.name}_depth_neg_error",
+        "{self.name}_depth_pos_error", "wavelength".
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%", "hdi_84%",
+        "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        ax: [Optional] Pass a preexisting matplotlib axis is to be used instead of creating a new one.Default = None.
+        plotkw: [Optional] Dict of kw to pass to the transmission specrum plotting function.
+        kw: [Optional] kw to pass to the TransitModel.plot_transmission_spectrum.
+
+        Returns
+        -------
+
+        """
         if table is not None:
             emission_spectrum = table
             try:

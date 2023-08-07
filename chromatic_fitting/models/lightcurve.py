@@ -484,6 +484,7 @@ class LightcurveModel:
         sigma_wavelength=5,
         data_mask=None,
         inflate_uncertainties=False,
+        inflate_uncertainties_prior=WavelikeFitted(Uniform, lower=1.0, upper=3.0, testval=1.01),
         setup_lightcurves_kw={},
         **kw,
     ):
@@ -521,9 +522,7 @@ class LightcurveModel:
             self.data_without_outliers = remove_data_outliers(self.get_data(), data_mask)
 
         if inflate_uncertainties:
-            self.parameters["nsigma"] = WavelikeFitted(
-                Uniform, lower=1.0, upper=3.0, testval=1.01
-            )
+            self.parameters["nsigma"] = inflate_uncertainties_prior
             self.parameters["nsigma"].set_name("nsigma")
 
         nsigma = []
@@ -1115,7 +1114,7 @@ class LightcurveModel:
                 elif v.inputs["shape"] != (self.data.nwave, 1):
                     more_than_one_input = True
             if more_than_one_input:
-                if f"{k}[{i}]" in posterior_means.index and np.logical_and("limb_darkening" not in k, "ecs" not in k):
+                if f"{k}[{i}]" in posterior_means.index and "limb_darkening" not in k and "ecs" not in k and "planet_surface_map" not in k:
                     fv[k] = posterior_means[f"{k}[{i}]"]
                 elif f"{k}[0]" in posterior_means.index:
                     n = 0
