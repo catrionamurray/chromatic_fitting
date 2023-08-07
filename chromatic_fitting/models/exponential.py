@@ -115,6 +115,7 @@ class ExponentialModel(LightcurveModel):
             f"{name}decay_time": [],
             f"{name}baseline": [],
         }
+
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j

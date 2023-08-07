@@ -489,6 +489,7 @@ class CombinedModel(LightcurveModel):
                     sampling_method = sample_ext
         else:
             sampling_method = kw["sampling_method"]
+            kw.pop("sampling_method")
 
         LightcurveModel.sample(self, sampling_method=sampling_method, **kw)
 

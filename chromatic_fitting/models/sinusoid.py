@@ -36,6 +36,7 @@ class SinusoidModel(LightcurveModel):
             warnings.warn(f"The value for sinusoid entered ({sinusoid}) is not one of 'sin' or 'cos'!")
             return
         self.model = self.sinusoid_model
+        self.sinusoid = sinusoid
 
         super().__init__(**kw)
         self.independant_variable = independant_variable

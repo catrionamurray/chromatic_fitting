@@ -472,6 +472,16 @@ class TransitModel(LightcurveModel):
     ):
         """
         Generate and return a transmission spectrum table
+
+        Parameters
+        ----------
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%",
+        "hdi_84%", "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        svname: [Optional] String csv filename to save the transmission table. Default = None (do not save)
+
+        Returns
+        -------
+
         """
         results = self.get_results(uncertainty=uncertainty)[
             [
@@ -508,6 +518,24 @@ class TransitModel(LightcurveModel):
     def plot_transmission_spectrum(
         self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
     ):
+        """
+        Plot the transmission spectrum (specifically the planet size as a function of wavelength).
+
+        Parameters
+        ----------
+        table: [Optional] Table to use as transmssion spectrum (otherwise the default is to use the MCMC sampling results.
+        The table must have the following columns: "{self.name}_radius_ratio", "{self.name}_radius_ratio_neg_error",
+        "{self.name}_radius_ratio_pos_error", "wavelength".
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%", "hdi_84%",
+        "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        ax: [Optional] Pass a preexisting matplotlib axis is to be used instead of creating a new one.Default = None.
+        plotkw: [Optional] Dict of kw to pass to the transmission specrum plotting function.
+        kw: [Optional] kw to pass to the TransitModel.make_transmission_spectrum_table
+
+        Returns
+        -------
+
+        """
         if table is not None:
             transmission_spectrum = table
             try:
