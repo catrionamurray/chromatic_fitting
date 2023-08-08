@@ -593,7 +593,8 @@ class PhaseCurveModel(LightcurveModel):
 
         Parameters
         ----------
-        kw
+        i: Integer corresponding to the wavelength to plot. Default = 0.
+        kw: Additional keywords to pass to Starry.system.show()
 
         Returns
         -------
@@ -611,7 +612,8 @@ class PhaseCurveModel(LightcurveModel):
         Parameters
         ----------
         secondary_i: [not used at the moment]
-        kw: keywords to pass to Starry.map.show()
+        i: Integer corresponding to the wavelength to plot. Default = 0.
+        kw: Additional keywords to pass to Starry.secondary.map.show()
 
         Returns
         -------
@@ -632,7 +634,8 @@ class PhaseCurveModel(LightcurveModel):
 
         Parameters
         ----------
-        kw
+        i: Integer corresponding to the wavelength to plot. Default = 0.
+        kw: Additional keywords to pass to Starry.primary.map.show()
 
         Returns
         -------
@@ -640,3 +643,135 @@ class PhaseCurveModel(LightcurveModel):
         """
         if hasattr(self, 'star_map'):
             self.star_map[f'w{i}'].show(**kw)
+
+
+    def animate_phase_curve(self, i=0, svname=None, interval=30, fps=20, res=300, **kw):
+        """
+        Function to make and display/save an animation showing the orbital Starry system in time. Copied closely from
+        https://starry.readthedocs.io/en/latest/notebooks/OrbitViz/ [credit: Rodrigo Luger]
+
+        Parameters
+        ----------
+        i: Integer corresponding to the wavelength to plot. Default = 0.
+        svname: [Optional] string of the save name for the animation. By default the animation is dislayed not saved.
+        interval: Default=30
+        fps: frames per second. Default = 20
+        res: Resolution of the plots. Default=300
+        kw: ?
+
+        Returns
+        -------
+
+        """
+        from matplotlib import animation
+        # from matplotlib.animation import FuncAnimation
+        from IPython.display import HTML
+        # from matplotlib.animation import HTMLWriter as HTML
+        # Set up the plot
+
+        if not hasattr(self, "keplerian_system"):
+            print("The Starry system has not been stored. Please run {self}.get_model() or a similar function to generate" \
+                  "the keplerian system and store it.")
+            return
+
+        with self._pymc3_model:
+            t = self.data.time.to_value('d')
+            flux = self.get_data(i).flux[i]
+            npts = len(t)
+            sys = self.keplerian_system[f'w{i}']
+
+            x, y, z = eval_in_model(sys.position(t))
+
+            theta_sec = [360.0 / sec.prot * (t - sec.t0) - sec.theta0 for sec in sys.secondaries]
+            img = np.array(
+                [np.tile(eval_in_model(sys.primary.map.render(res=res)), (npts, 1, 1))]
+                + [
+                    eval_in_model(sec.map.render(theta=theta_sec[i], res=res))
+                    for i, sec in enumerate(sys.secondaries)
+                ]
+            )
+
+            fig, ax = plt.subplots(1, figsize=(6.5, 7))
+            ax_xz = fig.add_axes([0.275, 0.8, 0.2, 0.2])
+            ax_xz.annotate(
+                "Top", fontsize=12, xy=(0, 0), xycoords="axes fraction", ha="left", va="bottom"
+            )
+            ax_zy = fig.add_axes([0.525, 0.8, 0.2, 0.2])
+            ax_zy.annotate(
+                "Side", fontsize=12, xy=(0, 0), xycoords="axes fraction", ha="left", va="bottom"
+            )
+            ax_lc = fig.add_axes([0.125, 0.05, 0.775, 0.2])
+
+            xz = [None] + [None for sec in sys.secondaries]
+            xy = [None] + [None for sec in sys.secondaries]
+            zy = [None] + [None for sec in sys.secondaries]
+            circ = [None] + [None for sec in sys.secondaries]
+            maps = [sys.primary.map] + [sec.map for sec in sys.secondaries]
+            radii = np.array([sys.primary.r * (1 * u.R_sun).to_value("R_jup")] + [sec.r for sec in sys.secondaries])
+            radii = [eval_in_model(r) for r in radii]
+
+            for axis, arrs in zip([ax, ax_xz, ax_zy], [(x, y), (x, z), (z, y)]):
+                axis.axis("off")
+                R = 1.2 * max(-np.min(arrs), np.max(arrs))
+                axis.set_xlim(-R, R)
+                axis.set_ylim(-R, R)
+
+            # Plot the light curve
+            ax_lc.plot(t, flux, "k-")
+            (lc,) = ax_lc.plot(t[0], flux[0], "o", color="k")
+            ax_lc.axis("off")
+
+            # Plot the first frame
+            for i, xi, yi, zi, map, r in zip(range(1 + len(sys.secondaries)), x, y, z, maps, radii):
+                # Orbit outlines
+                ax_xz.plot(xi, zi)
+                ax_zy.plot(zi, yi)
+
+                # Body positions
+                xz[i] = ax_xz.scatter(xi[0], zi[0])
+                zy[i] = ax_zy.scatter(zi[0], yi[0])
+
+                # Maps
+                extent = np.array([xi[0], xi[0], yi[0], yi[0]]) + np.array([-1, 1, -1, 1]) * r
+                xy[i] = ax.imshow(
+                    img[i][0],
+                    origin="lower",
+                    cmap="plasma",
+                    extent=extent,
+                    clip_on=False,
+                    zorder=zi[0],
+                )
+
+                circ[i] = plt.Circle(
+                    (xi[0], yi[0]), r, color="k", fill=False, zorder=zi[0] + 1e-3, lw=3
+                )
+                ax.add_artist(circ[i])
+
+            #     Animation
+            def updatefig(k):
+                with self._pymc3_model:
+                    for i, xi, yi, zi, map, r in zip(
+                            range(1 + len(sys.secondaries)), x, y, z, maps, radii
+                    ):
+                        xz[i].set_offsets((xi[k], zi[k]))
+                        zy[i].set_offsets((zi[k], yi[k]))
+                        xy[i].set_extent(
+                            np.array([xi[k], xi[k], yi[k], yi[k]]) + np.array([-1, 1, -1, 1]) * r
+                        )
+                        xy[i].set_zorder(zi[k])
+                        xy[i].set_data(img[i][k])
+                        circ[i].center = (xi[k], yi[k])
+                        circ[i].set_zorder(zi[k] + 1e-3)
+                    lc.set_xdata(t[k])
+                    lc.set_ydata(flux[k])
+                    return xz + xy + zy + circ + [lc]
+
+            ani = animation.FuncAnimation(fig, updatefig, interval=interval, blit=False, frames=npts)
+
+            if svname is None:
+                plt.close()
+                display(HTML(ani.to_html5_video()))
+            else:
+                writervideo = animation.FFMpegWriter(fps=fps)
+                ani.save(svname, writer=writervideo)
+
