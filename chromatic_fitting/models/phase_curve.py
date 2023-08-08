@@ -644,6 +644,23 @@ class PhaseCurveModel(LightcurveModel):
         if hasattr(self, 'star_map'):
             self.star_map[f'w{i}'].show(**kw)
 
+    def make_multiwavelength_map(self):
+        """
+
+        Returns
+        -------
+
+        """
+        if not hasattr(self, "planet_map"):
+            print("The planet surface map has not been generated. You will need to run {self}.get_model() or equivalent before running this function!")
+            return
+
+        starry.config.lazy = False
+        nw = self.get_data().nwave
+        map = starry.Map(ydeg=self.n_spherical_harmonics, nw=nw)
+        for i in range(nw):
+            map[1, :, i] = eval_in_model(phasecurve.planet_map[f'w{i}'].y, model=self._pymc3_model)[1:]
+        return map
 
     def animate_phase_curve(self, i=0, svname=None, interval=30, fps=20, res=300, **kw):
         """
