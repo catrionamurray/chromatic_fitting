@@ -532,7 +532,8 @@ class PhaseCurveModel(LightcurveModel):
         """
 
         # THIS IS 100% A HACK TO INCLUDE RADIUS_RATIO IN THE RESULTS TABLE:
-        with self._pymc3_model:
+        _, pm_models = self.choose_model_based_on_optimization_method()
+        with pm_models[0]:
             try:
                 self.parameters[f'{self.name}_radius_ratio'] = Normal('radius_ratio', mu=0.1, sigma=0.1)
             except:
