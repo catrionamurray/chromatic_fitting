@@ -163,7 +163,7 @@ class PhaseCurveModel(LightcurveModel):
             planet_mass="The mass of the planet [M_jupiter].",
             planet_radius="The radius of the planet [R_jupiter].",
             ecs="[ecosw, esinw], where e is eccentricity.",
-            obliquity="The obliquity of the planet [degrees]"
+            obliquity="The obliquity of the planet [degrees]",
             limb_darkening="2-d Quadratic limb-darkening coefficients.",
             planet_surface_map="",
         )
