@@ -94,6 +94,9 @@ class PhaseCurveModel(LightcurveModel):
             "planet_surface_map"
         ]
 
+        warnings.warn("""PhaseCurveModel is currently set up for a tidally locked planet! The orientation of the map 
+                        will be incorrect if the rotation of the planet and orbit need to be decoupled.""")
+
         if n_spherical_harmonics >= 25:
             warnings.warn(
                 "You have selected >=25 spherical harmonic degrees. Starry will be very slow!")
@@ -160,6 +163,7 @@ class PhaseCurveModel(LightcurveModel):
             planet_mass="The mass of the planet [M_jupiter].",
             planet_radius="The radius of the planet [R_jupiter].",
             ecs="[ecosw, esinw], where e is eccentricity.",
+            obliquity="The obliquity of the planet [degrees]"
             limb_darkening="2-d Quadratic limb-darkening coefficients.",
             planet_surface_map="",
         )
@@ -184,14 +188,12 @@ class PhaseCurveModel(LightcurveModel):
             # roughness=0,
             phase_offset=0.0,
             inclination=90.0,
+            obliquity=0.0,
             planet_mass=0.01,
             planet_radius=0.01,
             ecs=np.array([0.0, 0.0]),
             limb_darkening=np.array([0.4, 0.2]),
             # planet_surface_map=np.array([0.0, 0.5, 0.0])
-            # map1_1=0.0,
-            # map10=0.5,
-            # map11=0.0
         )
 
         if self.n_spherical_harmonics > 0:
@@ -256,6 +258,7 @@ class PhaseCurveModel(LightcurveModel):
             self.every_light_curve = {}
         if not hasattr(self, "initial_guess"):
             self.initial_guess = {}
+            self.initial_keplerian_system = {}
 
         # we can decide to store the LC models during the fit (useful for plotting later, however, uses large amounts
         # of RAM)
@@ -320,7 +323,7 @@ class PhaseCurveModel(LightcurveModel):
                             udeg=0,
                             amp=10 ** param_i[f"{name}planet_log_amplitude"],
                             inc=param_i[f"{name}inclination"],
-                            obl=0.0,
+                            obl=param_i[f"{name}obliquity"],
                         ),
                         # the surface map
                         inc=param_i[f"{name}inclination"],
@@ -330,31 +333,27 @@ class PhaseCurveModel(LightcurveModel):
                         prot=param_i[f"{name}period"],  # orbital period in days
                         ecc=eccentricity,  # eccentricity
                         w=omega,  # longitude of pericenter in degrees
+                        Omega=param_i[f"{name}obliquity"],
                         t0=param_i[f"{name}t0"],  # time of transit in days
                         length_unit=u.R_jup,
                         mass_unit=u.M_jup,
                     )
-                    # count = 0
-                    if self.n_spherical_harmonics > 0:
-                        planet.map[1:, :] = param_i[f'{name}planet_surface_map']
-                        # for degree in range(1, self.n_spherical_harmonics + 1):
-                        #     for harmonic_order in range(-degree, degree + 1):
-                        #         planet.map[degree, harmonic_order] = param_i[f'{name}map{degree}{str(harmonic_order).replace("-", "_")}']
-
                     planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
-
-                    print("spherical harmonic coeffs:", eval_in_model(planet.map.y))
-                    # planet.roughness = param_i[f"{name}roughness"]
 
                     # save the radius ratio for generating the transmission spectrum later:
                     rr = Deterministic(f"{name}radius_ratio[{i + j}]",
                                        (param_i[f"{name}planet_radius"] * (1 * u.R_jup).to_value("R_sun")) / param_i[
                                            f"{name}stellar_radius"])
 
-                    system = starry.System(star, planet)
-                    flux_model = system.flux(data.time.to_value("day"))
-                    y_model.append(flux_model)
+                    if self.n_spherical_harmonics > 0:
+                        planet.map[1:, :] = param_i[f'{name}planet_surface_map']
 
+                    system = starry.System(star, planet)
+                    self.initial_keplerian_system[f'w{i+j}'] = system
+                    flux_model = system.flux(data.time.to_value("day"))
+                    # planet.roughness = param_i[f"{name}roughness"]
+
+                    y_model.append(flux_model)
                     initial_guess.append(eval_in_model(flux_model))
 
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
@@ -381,6 +380,117 @@ class PhaseCurveModel(LightcurveModel):
                 self.model_chromatic_eclipse_flux = [
                     self.every_light_curve[k] for k in tqdm(self.every_light_curve)
                 ]
+
+    def setup_likelihood(
+        self,
+        marginalize_map_analytically=False,
+        mask_outliers=False,
+        mask_wavelength_outliers=False,
+        sigma_wavelength=5,
+        data_mask=None,
+        inflate_uncertainties=False,
+        inflate_uncertainties_prior=WavelikeFitted(Uniform, lower=1.0, upper=3.0, testval=1.01),
+        setup_lightcurves_kw={},
+        **kw,
+    ):
+        """
+        Connect the light curve model to the actual data it aims to explain.
+        """
+
+        if hasattr(self, "every_light_curve"):
+            if f"wavelength_0" not in self.every_light_curve.keys():
+                print(".setup_lightcurves() has not been run yet, running now...")
+                self.setup_lightcurves(**setup_lightcurves_kw)
+        else:
+            print(".setup_lightcurves() has not been run yet, running now...")
+            self.setup_lightcurves(**setup_lightcurves_kw)
+
+        datas, models = self.choose_model_based_on_optimization_method()
+
+        # if the data has outliers, then mask them out
+        if mask_outliers:
+            # if the user has specified a mask, then use that
+            if data_mask is None:
+                # sigma-clip in time
+                data_mask = np.array(get_data_outlier_mask(datas, **kw))
+                if mask_wavelength_outliers:
+                    # sigma-clip in wavelength
+                    data_mask[
+                        get_data_outlier_mask(
+                            datas, clip_axis="wavelength", sigma=sigma_wavelength
+                        )
+                        == True
+                    ] = True
+                # data_mask_wave =  get_data_outlier_mask(data, clip_axis='wavelength', sigma=4.5)
+            self.outlier_mask = data_mask
+            self.outlier_flag = True
+            self.data_without_outliers = remove_data_outliers(self.get_data(), data_mask)
+
+        if inflate_uncertainties:
+            self.parameters["nsigma"] = inflate_uncertainties_prior
+            self.parameters["nsigma"].set_name("nsigma")
+
+        nsigma = []
+        for j, (mod, data) in enumerate(zip(models, datas)):
+            with mod:
+                if inflate_uncertainties:
+                    nsigma.append(
+                        self.parameters["nsigma"].get_prior_vector(
+                            i=j, shape=datas[0].nwave
+                        )
+                    )
+                    uncertainty = [
+                        np.array(data.uncertainty[i, :]) * nsigma[j][i]
+                        for i in range(data.nwave)
+                    ]
+                    uncertainties = pm.math.stack(uncertainty)
+                else:
+                    uncertainties = np.array(data.uncertainty)
+                #                     uncertainties.append(data.uncertainty[i, :])
+
+                # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
+                if mask_outliers:
+                    flux = np.array(
+                        [
+                            self.data_without_outliers.flux[i + j, :]
+                            for i in range(data.nwave)
+                        ]
+                    )
+                else:
+                    flux = np.array(data.flux)
+
+                try:
+                    data_name = f"data"
+                    light_curve_name = f"wavelength_{j}"
+
+                    if marginalize_map_analytically:
+                        print("TESTING TESTING TESTING: THIS WILL NOT WORK!")
+                        self.marginalize_map_analytically = True
+
+                        sys = self.initial_keplerian_system[f"w{j}"]
+                        planet = sys.secondaries[0]
+                        sys.set_data(flux[0], C=uncertainties[0]**2)
+                        # Prior on planet map
+                        sec_mu = np.zeros(planet.map.Ny)
+                        sec_mu[0] = 10**eval_in_model(mod['phasecurve_planet_log_amplitude']) #.get_prior_vector(i=j, shape=data.nwave)
+                        sec_mu[1:] = eval_in_model(mod['phasecurve_planet_surface_map'])
+                        sec_L = np.zeros(planet.map.Ny)
+                        sec_L[0] = 1e-4
+                        sec_L[1:] = 1e-4
+                        planet.map.set_prior(mu=sec_mu, L=sec_L)
+                        pm.Potential("marginal", sys.lnlike(t=data.time.to_value('d')))
+
+                    else:
+                        self.marginalize_map_analytically = False
+
+                        pm.Normal(
+                            data_name,
+                            mu=self.every_light_curve[light_curve_name],
+                            sd=uncertainties,
+                            observed=flux,
+                        )
+                except Exception as e:
+                    print(e)
 
     def sample(
             self,
@@ -474,7 +584,7 @@ class PhaseCurveModel(LightcurveModel):
                 amp=10 ** params[f"{name}planet_log_amplitude"],
                 # inc=90,
                 inc=params[f"{name}inclination"],
-                obl=0.0,
+                obl=params[f"{name}obliquity"],
             ),
             # the surface map
             inc=params[f"{name}inclination"],
@@ -484,6 +594,7 @@ class PhaseCurveModel(LightcurveModel):
             prot=params[f"{name}period"],  # orbital period in days
             ecc=eccentricity,  # eccentricity
             w=omega,  # longitude of pericenter in degrees
+            Omega=params[f"{name}obliquity"],
             t0=params[f"{name}t0"],  # time of transit in days
             length_unit=u.R_jup,
             mass_unit=u.M_jup,

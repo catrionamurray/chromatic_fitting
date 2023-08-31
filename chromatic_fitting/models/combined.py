@@ -9,6 +9,7 @@ import operator
 from .transit import *
 from .polynomial import *
 from .eclipse import *
+from .phase_curve import *
 
 """
 Example of setting up a CombinedModel:
@@ -421,6 +422,9 @@ class CombinedModel(LightcurveModel):
         for i, mod in enumerate(self._chromatic_models.values()):
             # for each lightcurve in the combined model, add/subtract/multiply/divide their lightcurve into the combined
             # model
+            if hasattr(mod, "initial_keplerian_system"):
+                self.initial_keplerian_system = mod.initial_keplerian_system
+
             if i == 0:
                 if hasattr(mod, "every_light_curve"):
                     self.every_light_curve = mod.every_light_curve
@@ -429,6 +433,7 @@ class CombinedModel(LightcurveModel):
 
                 if hasattr(mod, "initial_guess"):
                     self.initial_guess = mod.initial_guess
+
                 else:
                     print(f"No initial guess saved for chromatic model {mod}")
                 # self.every_light_curve = add_dicts(
@@ -477,6 +482,20 @@ class CombinedModel(LightcurveModel):
                     Deterministic(
                         f"{self.name}_model", self.every_light_curve[f"wavelength_{i}"]
                     )
+
+    def setup_likelihood(
+        self,
+        **kw,
+    ):
+        if "marginalize_map_analytically" in kw.keys():
+            if kw["marginalize_map_analytically"]:
+                PhaseCurveModel.setup_likelihood(self, **kw)
+            else:
+                kw.pop("marginalize_map_analytically")
+                LightcurveModel.setup_likelihood(self, **kw)
+        else:
+            LightcurveModel.setup_likelihood(self, **kw)
+
 
     def sample(
         self,
