@@ -10,6 +10,7 @@ from .transit import *
 from .polynomial import *
 from .eclipse import *
 from .phase_curve import *
+from .gp import *
 
 """
 Example of setting up a CombinedModel:
@@ -171,6 +172,7 @@ class CombinedModel(LightcurveModel):
         self.parameters = {}
         self.model = self.combined_model
         self.type_of_model = "combined"
+        self.has_gp = False
 
     def __repr__(self):
         """
@@ -303,6 +305,10 @@ class CombinedModel(LightcurveModel):
         # set up parameters in new combined model
         self._chromatic_models = new_models
 
+        for mod in self._chromatic_models.values():
+            if isinstance(mod, GPModel):
+                self.has_gp = True
+
     def apply_operation_to_constituent_models(
         self, operation: str, *args: object, **kwargs: object
     ) -> object:
@@ -419,6 +425,7 @@ class CombinedModel(LightcurveModel):
         # for each constituent model set-up the lightcurves according to their model type:
         self.apply_operation_to_constituent_models("setup_lightcurves", **kw)
 
+        i_gp =0
         for i, mod in enumerate(self._chromatic_models.values()):
             # for each lightcurve in the combined model, add/subtract/multiply/divide their lightcurve into the combined
             # model
@@ -436,15 +443,6 @@ class CombinedModel(LightcurveModel):
 
                 else:
                     print(f"No initial guess saved for chromatic model {mod}")
-                # self.every_light_curve = add_dicts(
-                #     self.every_light_curve, mod.every_light_curve
-                # )
-                # if hasattr(mod, "initial_guess"):
-                #     self.initial_guess = add_dicts(
-                #         self.initial_guess, mod.initial_guess
-                #     )
-                # else:
-                #     print(f"No initial guess saved for chromatic model {mod}")
             else:
                 if hasattr(mod, "every_light_curve"):
                     self.every_light_curve = combination_options[
@@ -459,16 +457,47 @@ class CombinedModel(LightcurveModel):
                     ](self.initial_guess, mod.initial_guess)
                 else:
                     print(f"No initial guess saved for chromatic model {mod}")
-                # self.every_light_curve = combination_options[
-                #     self.how_to_combine[i - 1]
-                # ](self.every_light_curve, mod.every_light_curve)
-                #
-                # if hasattr(mod, "initial_guess"):
-                #     self.initial_guess = combination_options[
-                #         self.how_to_combine[i - 1]
-                #     ](self.initial_guess, mod.initial_guess)
-                # else:
-                #     print(f"No initial guess saved for chromatic model {mod}")
+
+            if i_gp == 0:
+                # if hasattr(mod, "kernel_func"):
+                #     self.kernel_func = [mod.kernel_func]
+
+                if hasattr(mod, "covar"):
+                    self.independant_variable = mod.independant_variable
+                    self.covar = mod.covar
+
+            else:
+                # if hasattr(mod, "kernel_func"):
+                #     self.kernel_func.append(mod.kernel_func)
+
+                if hasattr(mod, "covar"):
+                    if type(self.independant_variable) is not list:
+                        if mod.independant_variable == self.independant_variable:
+                            self.covar = combination_options[self.how_to_combine[i - 1]](
+                                self.covar, mod.covar
+                            )
+                        else:
+                            warnings.warn("GPs using different independent variables! This has not been tested!!")
+                            self.independant_variable = [self.independant_variable]
+                            self.independant_variable.append(mod.independant_variable)
+                            self.covar = [self.covar]
+                            self.covar.append(mod.covar)
+                    else:
+                        warnings.warn("GPs using different independent variables! This has not been tested!!")
+                        matches_any_variable = False
+                        for num_mod, iv in enumerate(self.independant_variable):
+                            if mod.independant_variable == iv:
+                                self.covar[num_mod] = combination_options[self.how_to_combine[i - 1]](
+                                    self.covar[num_mod], mod.covar
+                                )
+                                matches_any_variable = True
+
+                        if not matches_any_variable:
+                            self.independant_variable.append(mod.independant_variable)
+                            self.covar.append(mod.covar)
+
+            if isinstance(mod, GPModel):
+                i_gp += 1
 
         datas, models = self.choose_model_based_on_optimization_method()
 
@@ -490,11 +519,33 @@ class CombinedModel(LightcurveModel):
         if "marginalize_map_analytically" in kw.keys():
             if kw["marginalize_map_analytically"]:
                 PhaseCurveModel.setup_likelihood(self, **kw)
+                return
             else:
                 kw.pop("marginalize_map_analytically")
                 LightcurveModel.setup_likelihood(self, **kw)
-        else:
-            LightcurveModel.setup_likelihood(self, **kw)
+                return
+
+        if self.has_gp:
+            if not hasattr(self, "mean"):
+                warnings.warn(
+                    "\nYou have not provided a mean to the GP. Are you sure this is right?\nIf you want to "
+                    "add a mean please run {self}.add_mean. We will proceed assuming a mean of 0.\n"
+                )
+                self.mean = Fixed(0.0)
+            if not hasattr(self, "log_jitter"):
+                warnings.warn(
+                    "\nYou have not provided a jitter to the GP. Are you sure this is right?\nIf you want to "
+                    "add a mean please run {self}.add_jitter. We will proceed assuming a jitter of 0.\n"
+                )
+                self.log_jitter = Fixed(np.log(0.0))
+
+            if type(self.independant_variable) is not list:
+                GPModel.setup_likelihood(self, **kw)
+                return
+            else:
+                warnings.warn("GP models use different independent variables - this does not work yet!!")
+                return
+        LightcurveModel.setup_likelihood(self, **kw)
 
 
     def sample(
@@ -511,6 +562,54 @@ class CombinedModel(LightcurveModel):
             kw.pop("sampling_method")
 
         LightcurveModel.sample(self, sampling_method=sampling_method, **kw)
+
+    def add_jitter(self, log_jitter_parameter):
+        if self.has_gp:
+            self.apply_operation_to_constituent_models("add_jitter", log_jitter_parameter=log_jitter_parameter)
+            GPModel.add_jitter(self, log_jitter_parameter=log_jitter_parameter)
+        else:
+            warnings.warn("You can't add jitter to a non-GP model")
+
+    def add_mean(self, mean_parameter):
+        if self.has_gp:
+            self.apply_operation_to_constituent_models("add_mean", mean_parameter=mean_parameter)
+            GPModel.add_mean(self, mean_parameter=mean_parameter)
+        else:
+            # TO DO - expand this for all models!
+            warnings.warn("You can't add a mean to a non-GP model")
+
+    def kernel_func(self, i=0, **params):
+
+        for imod, mod in enumerate(self._chromatic_models.values()):
+            new_params = return_only_keys_with_string_at_start_of_dictionary(params, f"{mod.name}_")
+            new_params = remove_all_keys_with_string_from_dictionary(new_params, 'interval')
+            new_params = remove_string_from_each_dictionary_key(new_params, f"{mod.name}_")
+            new_params = remove_string_from_each_dictionary_key(new_params, f"[{i}]")
+            new_params = extract_index_from_each_dictionary_key(new_params, index=i)
+            #         print(new_params)
+
+            model_params_without_name = remove_string_from_each_dictionary_key(mod.parameters, f"{mod.name}_")
+
+            specific_params = {}
+            #         print(new_params.keys(), model_params_without_name.keys())
+            for p in model_params_without_name.keys():
+                if p in new_params.keys():
+                    specific_params[p] = new_params[p]
+                elif isinstance(model_params_without_name[p], WavelikeFixed):
+                    specific_params[p] = model_params_without_name[p].value[i]
+                elif isinstance(model_params_without_name[p], Fixed):
+                    specific_params[p] = model_params_without_name[p].value
+
+            #         print(specific_params)
+            k = mod.kernel_func(**specific_params)
+
+            if imod == 0:
+                k_func = k
+            else:
+                k_func = combination_options_array[self.how_to_combine[imod - 1]](k_func, k)
+
+        return k_func
+
 
     def get_results(self, **kw):
         """
@@ -689,6 +788,39 @@ class CombinedModel(LightcurveModel):
         if len(results) == 1:
             results = results[0]
         return results
+
+    def generate_gp_model_from_params(self, params, i=0, **kw):
+        params = params.copy()
+        for name, default_value in zip(["log_jitter", "mean"], [1.0, 0.0]):
+            if name not in params.keys():
+                params[name] = default_value
+
+        kernel = self.kernel_func(**params)
+
+        x = self.data.get(self.independant_variable)
+        if self.independant_variable == "time":
+            x = x.to_value("day")
+        if len(np.shape(x)) > 1:
+            xi = x[i, :]
+        else:
+            xi = x
+
+        gp = GaussianProcess(
+            kernel,
+            mean=params["mean"],
+            t=xi,
+            diag=self.data.uncertainty[i, :] + np.exp(params["log_jitter"]),
+        )
+
+        return gp
+
+    def plot_prediction(self, gp, i=0, plot_var=True, legend=True):
+        if self.has_gp:
+            GPModel.plot_prediction(self, gp=gp, i=i, plot_var=plot_var, legend=legend)
+
+    def plot_traces(self, num_traces=5, i=0):
+        if self.has_gp:
+            GPModel.plot_traces(self, num_traces=num_traces, i=i)
 
     def plot_transmission_spectrum(self, **kw: object) -> object:
         """
