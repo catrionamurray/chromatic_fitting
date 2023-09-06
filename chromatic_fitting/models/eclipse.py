@@ -208,9 +208,17 @@ class EclipseModel(LightcurveModel):
 
                 for i, w in enumerate(data.wavelength):
                     param_i = {}
+                    # for param_name, param in parameters_to_loop_over.items():
+                    #     if isinstance(self.parameters[param_name], WavelikeFitted):
+                    #         param_i[param_name] = param[j][i]
+                    #     else:
+                    #         param_i[param_name] = param[j]
                     for param_name, param in parameters_to_loop_over.items():
                         if isinstance(self.parameters[param_name], WavelikeFitted):
                             param_i[param_name] = param[j][i]
+                        elif isinstance(self.parameters[param_name], Fitted) and eval_in_model(np.shape(param[j]))[
+                            0] == 1:
+                            param_i[param_name] = param[j][0]
                         else:
                             param_i[param_name] = param[j]
                     # **FUNCTION TO MODEL - MAKE SURE IT MATCHES self.temp_model()!**
@@ -231,13 +239,13 @@ class EclipseModel(LightcurveModel):
                     star.map[2] = param_i[f"{name}limb_darkening"][1]
                     omega = (theano.tensor.arctan2(param_i[f"{name}ecs"][1], param_i[f"{name}ecs"][0])*180.0)/np.pi
                     eccentricity = pm.math.sqrt(param_i[f"{name}ecs"][0]**2+param_i[f"{name}ecs"][1]**2)
-                   
+
                     planet = starry.kepler.Secondary(
                         starry.Map(
                             ydeg=0,
                             udeg=0,
                             amp=10 ** param_i[f"{name}planet_log_amplitude"],
-                            inc=90.0,
+                            inc=param_i[f"{name}inclination"],
                             obl=0.0,
                         ),
                         # the surface map
@@ -245,7 +253,7 @@ class EclipseModel(LightcurveModel):
                         m=param_i[f"{name}planet_mass"],  # mass in Jupiter masses
                         r=param_i[f"{name}planet_radius"],  # radius in Jupiter radii
                         porb=param_i[f"{name}period"],  # orbital period in days
-                        prot=param_i[f"{name}period"],  # orbital period in days
+                        prot=param_i[f"{name}period"],  # rotational period in days (currently assuming tidally locked)
                         ecc=eccentricity,  # eccentricity
                         w=omega,  # longitude of pericenter in degrees
                         t0=param_i[f"{name}t0"],  # time of transit in days

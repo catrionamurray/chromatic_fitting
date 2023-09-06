@@ -168,7 +168,7 @@ class GPModel(LightcurveModel):
                         + pm.math.exp(self.log_jitter.get_prior(i + j)),
                         quiet=True,
                     )
-                    initial_gp_predict = initial_gp.predict(data.flux[i], t=xi)
+                    initial_gp_predict = initial_gp.predict(data.flux[i]-np.nanmean(data.flux[i]), t=xi)
                     initial_guess.append(eval_in_model(initial_gp_predict))
 
                 #                 print(eval_in_model(pm.math.zeros_like(pm.math.stack(initial_guess))))
@@ -189,117 +189,122 @@ class GPModel(LightcurveModel):
                 else:
                     self.initial_guess[f"wavelength_{j}"] += np.array(initial_guess)
 
-    def setup_likelihood(
-        self,
-        mask_outliers=False,
-        mask_wavelength_outliers=False,
-        sigma_wavelength=5,
-        data_mask=None,
-        inflate_uncertainties=False,
-        setup_lightcurves_kw={},
-        **kw,
-    ):
-        """
-        Connect the light curve model to the actual data it aims to explain.
-        """
+    # def setup_likelihood(
+    #     self,
+    #     mask_outliers=False,
+    #     mask_wavelength_outliers=False,
+    #     sigma_wavelength=5,
+    #     data_mask=None,
+    #     inflate_uncertainties=False,
+    #     setup_lightcurves_kw={},
+    #     **kw,
+    # ):
+    #     """
+    #     Connect the light curve model to the actual data it aims to explain.
+    #     """
+    #
+    #     if hasattr(self, "every_light_curve"):
+    #         if f"wavelength_0" not in self.every_light_curve.keys():
+    #             print(".setup_lightcurves() has not been run yet, running now...")
+    #             self.setup_lightcurves(**setup_lightcurves_kw)
+    #     else:
+    #         print(".setup_lightcurves() has not been run yet, running now...")
+    #         self.setup_lightcurves(**setup_lightcurves_kw)
+    #
+    #     datas, models = self.choose_model_based_on_optimization_method()
+    #
+    #     # if the data has outliers, then mask them out
+    #     if mask_outliers:
+    #         # if the user has specified a mask, then use that
+    #         if data_mask is None:
+    #             # sigma-clip in time
+    #             data_mask = np.array(get_data_outlier_mask(datas, **kw))
+    #             if mask_wavelength_outliers:
+    #                 # sigma-clip in wavelength
+    #                 data_mask[
+    #                     get_data_outlier_mask(
+    #                         datas, clip_axis="wavelength", sigma=sigma_wavelength
+    #                     )
+    #                     == True
+    #                 ] = True
+    #             # data_mask_wave =  get_data_outlier_mask(data, clip_axis='wavelength', sigma=4.5)
+    #         self.outlier_mask = data_mask
+    #         self.outlier_flag = True
+    #         self.data_without_outliers = remove_data_outliers(datas, data_mask)
+    #
+    #     if inflate_uncertainties:
+    #         self.parameters["nsigma"] = WavelikeFitted(
+    #             Uniform, lower=1.0, upper=3.0, testval=1.01
+    #         )
+    #         self.parameters["nsigma"].set_name("nsigma")
+    #
+    #     nsigma = []
+    #     for j, (mod, data) in enumerate(zip(models, datas)):
+    #         with mod:
+    #             if inflate_uncertainties:
+    #                 nsigma.append(
+    #                     self.parameters["nsigma"].get_prior_vector(
+    #                         i=j, shape=datas[0].nwave
+    #                     )
+    #                 )
+    #                 uncertainty = [
+    #                     np.array(data.uncertainty[i, :]) * nsigma[j][i]
+    #                     for i in range(data.nwave)
+    #                 ]
+    #                 uncertainties = pm.math.stack(uncertainty)
+    #             else:
+    #                 uncertainties = np.array(data.uncertainty)
+    #
+    #             # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
+    #             if mask_outliers:
+    #                 flux = np.array(
+    #                     [
+    #                         self.data_without_outliers.flux[i + j, :]
+    #                         for i in range(data.nwave)
+    #                     ]
+    #                 )
+    #             else:
+    #                 flux = np.array(data.flux)
+    #
+    #             #                 try:
+    #
+    #             light_curve_name = f"wavelength_{j}"
+    #             self.gp = []
+    #             for i in range(data.nwave):
+    #
+    #                 if type(self.independant_variable) is not list:
+    #                     x = data.get(self.independant_variable)
+    #                     if self.independant_variable == "time":
+    #                         x = x.to_value("day")
+    #                     if len(np.shape(x)) > 1:
+    #                         xi = x[i, :]
+    #                     else:
+    #                         xi = x
+    #
+    #                     self.gp.append(
+    #                         GaussianProcess(
+    #                             self.covar[light_curve_name][i],
+    #                             t=xi,
+    #                             diag=uncertainties[i] ** 2
+    #                             + pm.math.exp(self.log_jitter.get_prior(i + j)),
+    #                             mean=self.mean.get_prior(i + j),
+    #                             quiet=True,
+    #                         )
+    #                     )
+    #
+    #                 self.gp[-1].marginal(
+    #                     f"gp_w{j + i}",
+    #                     observed=flux[i] - self.every_light_curve[light_curve_name][i],
+    #                 )
+    #                 # Deterministic(f"gp_pred_w{j+i}", self.gp.predict(flux[i] - self.every_light_curve[light_curve_name][i]))
 
-        if hasattr(self, "every_light_curve"):
-            if f"wavelength_0" not in self.every_light_curve.keys():
-                print(".setup_lightcurves() has not been run yet, running now...")
-                self.setup_lightcurves(**setup_lightcurves_kw)
-        else:
-            print(".setup_lightcurves() has not been run yet, running now...")
-            self.setup_lightcurves(**setup_lightcurves_kw)
+    # def gp_model(self, y):
+    #     return self.gp.predict(y=y)
 
-        datas, models = self.choose_model_based_on_optimization_method()
+    def gp_model(self, params, i=0):
+        gp = self.generate_gp_model_from_params(params=params, i=i)
+        return gp.predict(y=y)
 
-        # if the data has outliers, then mask them out
-        if mask_outliers:
-            # if the user has specified a mask, then use that
-            if data_mask is None:
-                # sigma-clip in time
-                data_mask = np.array(get_data_outlier_mask(datas, **kw))
-                if mask_wavelength_outliers:
-                    # sigma-clip in wavelength
-                    data_mask[
-                        get_data_outlier_mask(
-                            datas, clip_axis="wavelength", sigma=sigma_wavelength
-                        )
-                        == True
-                    ] = True
-                # data_mask_wave =  get_data_outlier_mask(data, clip_axis='wavelength', sigma=4.5)
-            self.outlier_mask = data_mask
-            self.outlier_flag = True
-            self.data_without_outliers = remove_data_outliers(datas, data_mask)
-
-        if inflate_uncertainties:
-            self.parameters["nsigma"] = WavelikeFitted(
-                Uniform, lower=1.0, upper=3.0, testval=1.01
-            )
-            self.parameters["nsigma"].set_name("nsigma")
-
-        nsigma = []
-        for j, (mod, data) in enumerate(zip(models, datas)):
-            with mod:
-                if inflate_uncertainties:
-                    nsigma.append(
-                        self.parameters["nsigma"].get_prior_vector(
-                            i=j, shape=datas[0].nwave
-                        )
-                    )
-                    uncertainty = [
-                        np.array(data.uncertainty[i, :]) * nsigma[j][i]
-                        for i in range(data.nwave)
-                    ]
-                    uncertainties = pm.math.stack(uncertainty)
-                else:
-                    uncertainties = np.array(data.uncertainty)
-
-                # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
-                if mask_outliers:
-                    flux = np.array(
-                        [
-                            self.data_without_outliers.flux[i + j, :]
-                            for i in range(data.nwave)
-                        ]
-                    )
-                else:
-                    flux = np.array(data.flux)
-
-                #                 try:
-
-                light_curve_name = f"wavelength_{j}"
-                self.gp = []
-                for i in range(data.nwave):
-
-                    if type(self.independant_variable) is not list:
-                        x = data.get(self.independant_variable)
-                        if self.independant_variable == "time":
-                            x = x.to_value("day")
-                        if len(np.shape(x)) > 1:
-                            xi = x[i, :]
-                        else:
-                            xi = x
-
-                        self.gp.append(
-                            GaussianProcess(
-                                self.covar[light_curve_name][i],
-                                t=xi,
-                                diag=uncertainties[i] ** 2
-                                + pm.math.exp(self.log_jitter.get_prior(i + j)),
-                                mean=self.mean.get_prior(i + j),
-                                quiet=True,
-                            )
-                        )
-
-                    self.gp[-1].marginal(
-                        f"gp_w{j + i}",
-                        observed=flux[i] - self.every_light_curve[light_curve_name][i],
-                    )
-                    # Deterministic(f"gp_pred_w{j+i}", self.gp.predict(flux[i] - self.every_light_curve[light_curve_name][i]))
-
-    def gp_model(self, y):
-        return self.gp.predict(y=y)
 
     def generate_gp_model_from_params(self, params, i=0):
         new_params = remove_all_keys_with_string_from_dictionary(params, 'interval')
@@ -351,26 +356,52 @@ class GPModel(LightcurveModel):
 
         return gp
 
-    def plot_prediction(self, gp, i=0, plot_var=True, legend=True):
-        t = self.data.time.to_value('d')
-        sample_t = np.linspace(t[0], t[-1], 1000)
+    def plot_prediction(self, gp, plot_var=True, legend=True, i=None):
+        datas, models = self.choose_model_based_on_optimization_method()
 
-        plt.plot(t, self.data.flux[i], "k", lw=1.5, alpha=0.3, label="data")
-        plt.errorbar(t, self.data.flux[i], yerr=self.data.uncertainty[i], fmt=".k", capsize=0)
+        x = self.data.get(self.independant_variable)
+        if self.independant_variable == "time":
+            x = x.to_value("day")
 
-        if gp:
-            mu, variance = eval_in_model(gp.predict(self.data.flux[i], t=sample_t, return_var=True), model=self._pymc3_model)
-            plt.plot(sample_t, mu, label="prediction", c='C0')
-            if plot_var:
-                sigma = np.sqrt(variance)
-                plt.fill_between(sample_t, mu - sigma, mu + sigma, color="C0", alpha=0.2)
+        for j, (data, model) in enumerate(zip(datas, models)):
+            for l in range(data.nwave):
+                if i is not None:
+                    if i != (j+l):
+                       continue
 
-        plt.xlabel("time [day]")
-        plt.ylabel("flux")
-        # plt.xlim(0, 10)
-        # plt.ylim(-2.5, 2.5)
-        if legend:
-            plt.legend()
+                h = j+l
+                if len(np.shape(x)) > 1:
+                    xi = x[h, :]
+                else:
+                    xi = x
+                sample_x = np.linspace(xi[0], xi[-1], 1000)
+
+                plt.plot(xi, data.flux[h], "k", lw=1.5, alpha=0.3, label="data", zorder=0)
+                plt.errorbar(xi, data.flux[h], yerr=data.uncertainty[h], fmt=".k", capsize=0, zorder=0)
+
+                if gp:
+                    if hasattr(self, "every_light_curve"):
+                        if f"wavelength_{j}" in self.every_light_curve:
+                            y_model = self.every_light_curve[f"wavelength_{j}"][l]
+                            mu, variance = eval_in_model(gp.predict(data.flux[h] - y_model, t=sample_x, return_var=True), model=model)
+                        else:
+                            mu, variance = eval_in_model(gp.predict(data.flux[h]-np.nanmean(data.flux[h]), t=sample_x, return_var=True),
+                                                         model=model)
+                    else:
+                        mu, variance = eval_in_model(gp.predict(data.flux[h]-np.nanmean(data.flux[h]), t=sample_x, return_var=True), model=model)
+
+                    mu = mu + np.nanmean(data.flux[h])
+                    plt.plot(sample_x, mu, label="prediction", c='C0', zorder=2)
+                    if plot_var:
+                        sigma = np.sqrt(variance)
+                        plt.fill_between(sample_x, mu - sigma, mu + sigma, color="C0", alpha=0.2, zorder=1)
+
+                plt.xlabel(self.independant_variable)
+                plt.ylabel("flux")
+                if legend:
+                    plt.legend()
+                plt.show()
+                plt.close()
 
     def plot_traces(self, num_traces, i=0):
         plt.figure()
