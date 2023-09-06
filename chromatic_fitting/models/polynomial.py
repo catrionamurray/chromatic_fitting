@@ -195,7 +195,7 @@ class PolynomialModel(LightcurveModel):
 
                 # compute the polynomial by looping over the coeffs for each degree:
 
-                to_sub = 0
+                # to_sub = 0
                 poly, initial_guess = [], []
                 for i, w in enumerate(data.wavelength):
                     coeff, variable = [], []
@@ -208,12 +208,12 @@ class PolynomialModel(LightcurveModel):
                     for d in range(self.degree + 1):
                         if type(p[d]) == float or type(p[d]) == int:
                             coeff.append(p[d])
-                            to_sub += 1
+                            # to_sub += 1
                         elif eval_in_model(p[d].shape) == 1:
                             coeff.append(p[d][0])
-                            to_sub += 1
+                            # to_sub += 1
                         else:
-                            coeff.append(p[d][i - to_sub])
+                            coeff.append(p[d][i])# - to_sub])
                         variable.append(xi**d)
                     poly.append(pm.math.dot(coeff, variable))
 
