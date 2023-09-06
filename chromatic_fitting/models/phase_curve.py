@@ -1,6 +1,8 @@
 from ..imports import *
 
 from .lightcurve import *
+from .transit import *
+from .eclipse import *
 import warnings
 
 # these are important to hard code in for starry to play nice with pymc3
