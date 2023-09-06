@@ -54,6 +54,7 @@ class LightcurveModel:
         self.name = name
         # by default do not flag outliers
         self.outlier_flag = False
+        self.has_gp = False
 
         self.initialize_empty_model()
 
@@ -526,6 +527,8 @@ class LightcurveModel:
             self.parameters["nsigma"].set_name("nsigma")
 
         nsigma = []
+        if self.has_gp:
+            self.gp = []
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
                 if inflate_uncertainties:
@@ -558,12 +561,42 @@ class LightcurveModel:
                     data_name = f"data"
                     light_curve_name = f"wavelength_{j}"
 
-                    pm.Normal(
-                        data_name,
-                        mu=self.every_light_curve[light_curve_name],
-                        sd=uncertainties,
-                        observed=flux,
-                    )
+                    if self.has_gp == False:
+                        pm.Normal(
+                            data_name,
+                            mu=self.every_light_curve[light_curve_name],
+                            sd=uncertainties,
+                            observed=flux,
+                        )
+                    else:
+                        if type(self.independant_variable) is not list:
+                            x = data.get(self.independant_variable)
+                            if self.independant_variable == "time":
+                                x = x.to_value("day")
+                        else:
+                            warnings.warn("GP models use different independent variables - this does not work yet!!")
+
+                        for i in range(data.nwave):
+                            if len(np.shape(x)) > 1:
+                                xi = x[i, :]
+                            else:
+                                xi = x
+                            self.gp.append(
+                                GaussianProcess(
+                                    self.covar[light_curve_name][i],
+                                    t=xi,
+                                    diag=uncertainties[i] ** 2 + pm.math.exp(self.log_jitter.get_prior(i + j)),
+                                    mean=self.mean.get_prior(i + j),
+                                    quiet=True,
+                                )
+                            )
+
+                            self.gp[-1].marginal(
+                                f"gp_w{i + j}",
+                                observed=flux[i] - self.every_light_curve[light_curve_name][i],
+                            )
+
+
                 except Exception as e:
                     print(e)
 
@@ -673,28 +706,55 @@ class LightcurveModel:
                     if f"wavelength_{i}" in self.initial_guess.keys():
                         plt.plot(
                             self.data.time,
-                            # pmx.eval_in_model(
                             self.initial_guess[f"wavelength_{i}"][j],
-                            # )[j],
                             "C1--",
                             lw=1,
                             alpha=0.7,
                             label="Initial",
                         )
+
                 if hasattr(self, "every_light_curve"):
                     # plot the final MAP-optimized solution (not sampled)
                     if f"wavelength_{i}" in self.every_light_curve.keys():
+                        opt_y = pmx.eval_in_model(
+                            self.every_light_curve[f"wavelength_{i}"],
+                            opt_sep,
+                            model=model,
+                        )[j]
+
                         plt.plot(
                             self.data.time,
-                            pmx.eval_in_model(
-                                self.every_light_curve[f"wavelength_{i}"],
-                                opt_sep,
-                                model=model,
-                            )[j],
+                            opt_y,
                             "C1-",
                             label="MAP optimization",
                             lw=2,
+                            alpha=0.7
                         )
+
+                        if hasattr(self, 'has_gp'):
+                            if self.has_gp:
+                                gp_model = self.generate_gp_model_from_params(params=opt_sep)
+                                mu, variance = eval_in_model(gp_model.predict(data.flux[j] - opt_y,
+                                                                              t=self.data.time,
+                                                                              return_var=True), model=model)
+                                opt_y = opt_y + mu
+
+                                plt.plot(
+                                    self.data.time,
+                                    mu + 1,
+                                    "C0-",
+                                    label="GP_model (+1)",
+                                    lw=2,
+                                    alpha=0.5
+                                )
+
+                                plt.plot(
+                                    self.data.time,
+                                    opt_y,
+                                    "C2-",
+                                    label="MAP optimization (with GP)",
+                                    lw=2,
+                                )
                 plt.legend(fontsize=10, numpoints=5)
                 plt.xlabel("time [days]", fontsize=24)
                 plt.ylabel("relative flux", fontsize=24)

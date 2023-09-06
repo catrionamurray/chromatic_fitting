@@ -381,116 +381,116 @@ class PhaseCurveModel(LightcurveModel):
                     self.every_light_curve[k] for k in tqdm(self.every_light_curve)
                 ]
 
-    def setup_likelihood(
-        self,
-        marginalize_map_analytically=False,
-        mask_outliers=False,
-        mask_wavelength_outliers=False,
-        sigma_wavelength=5,
-        data_mask=None,
-        inflate_uncertainties=False,
-        inflate_uncertainties_prior=WavelikeFitted(Uniform, lower=1.0, upper=3.0, testval=1.01),
-        setup_lightcurves_kw={},
-        **kw,
-    ):
-        """
-        Connect the light curve model to the actual data it aims to explain.
-        """
-
-        if hasattr(self, "every_light_curve"):
-            if f"wavelength_0" not in self.every_light_curve.keys():
-                print(".setup_lightcurves() has not been run yet, running now...")
-                self.setup_lightcurves(**setup_lightcurves_kw)
-        else:
-            print(".setup_lightcurves() has not been run yet, running now...")
-            self.setup_lightcurves(**setup_lightcurves_kw)
-
-        datas, models = self.choose_model_based_on_optimization_method()
-
-        # if the data has outliers, then mask them out
-        if mask_outliers:
-            # if the user has specified a mask, then use that
-            if data_mask is None:
-                # sigma-clip in time
-                data_mask = np.array(get_data_outlier_mask(datas, **kw))
-                if mask_wavelength_outliers:
-                    # sigma-clip in wavelength
-                    data_mask[
-                        get_data_outlier_mask(
-                            datas, clip_axis="wavelength", sigma=sigma_wavelength
-                        )
-                        == True
-                    ] = True
-                # data_mask_wave =  get_data_outlier_mask(data, clip_axis='wavelength', sigma=4.5)
-            self.outlier_mask = data_mask
-            self.outlier_flag = True
-            self.data_without_outliers = remove_data_outliers(self.get_data(), data_mask)
-
-        if inflate_uncertainties:
-            self.parameters["nsigma"] = inflate_uncertainties_prior
-            self.parameters["nsigma"].set_name("nsigma")
-
-        nsigma = []
-        for j, (mod, data) in enumerate(zip(models, datas)):
-            with mod:
-                if inflate_uncertainties:
-                    nsigma.append(
-                        self.parameters["nsigma"].get_prior_vector(
-                            i=j, shape=datas[0].nwave
-                        )
-                    )
-                    uncertainty = [
-                        np.array(data.uncertainty[i, :]) * nsigma[j][i]
-                        for i in range(data.nwave)
-                    ]
-                    uncertainties = pm.math.stack(uncertainty)
-                else:
-                    uncertainties = np.array(data.uncertainty)
-                #                     uncertainties.append(data.uncertainty[i, :])
-
-                # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
-                if mask_outliers:
-                    flux = np.array(
-                        [
-                            self.data_without_outliers.flux[i + j, :]
-                            for i in range(data.nwave)
-                        ]
-                    )
-                else:
-                    flux = np.array(data.flux)
-
-                try:
-                    data_name = f"data"
-                    light_curve_name = f"wavelength_{j}"
-
-                    if marginalize_map_analytically:
-                        print("TESTING TESTING TESTING: THIS WILL NOT WORK!")
-                        self.marginalize_map_analytically = True
-
-                        sys = self.initial_keplerian_system[f"w{j}"]
-                        planet = sys.secondaries[0]
-                        sys.set_data(flux[0], C=uncertainties[0]**2)
-                        # Prior on planet map
-                        sec_mu = np.zeros(planet.map.Ny)
-                        sec_mu[0] = 10**eval_in_model(mod['phasecurve_planet_log_amplitude']) #.get_prior_vector(i=j, shape=data.nwave)
-                        sec_mu[1:] = eval_in_model(mod['phasecurve_planet_surface_map'])
-                        sec_L = np.zeros(planet.map.Ny)
-                        sec_L[0] = 1e-4
-                        sec_L[1:] = 1e-4
-                        planet.map.set_prior(mu=sec_mu, L=sec_L)
-                        pm.Potential("marginal", sys.lnlike(t=data.time.to_value('d')))
-
-                    else:
-                        self.marginalize_map_analytically = False
-
-                        pm.Normal(
-                            data_name,
-                            mu=self.every_light_curve[light_curve_name],
-                            sd=uncertainties,
-                            observed=flux,
-                        )
-                except Exception as e:
-                    print(e)
+    # def setup_likelihood(
+    #     self,
+    #     marginalize_map_analytically=False,
+    #     mask_outliers=False,
+    #     mask_wavelength_outliers=False,
+    #     sigma_wavelength=5,
+    #     data_mask=None,
+    #     inflate_uncertainties=False,
+    #     inflate_uncertainties_prior=WavelikeFitted(Uniform, lower=1.0, upper=3.0, testval=1.01),
+    #     setup_lightcurves_kw={},
+    #     **kw,
+    # ):
+    #     """
+    #     Connect the light curve model to the actual data it aims to explain.
+    #     """
+    #
+    #     if hasattr(self, "every_light_curve"):
+    #         if f"wavelength_0" not in self.every_light_curve.keys():
+    #             print(".setup_lightcurves() has not been run yet, running now...")
+    #             self.setup_lightcurves(**setup_lightcurves_kw)
+    #     else:
+    #         print(".setup_lightcurves() has not been run yet, running now...")
+    #         self.setup_lightcurves(**setup_lightcurves_kw)
+    #
+    #     datas, models = self.choose_model_based_on_optimization_method()
+    #
+    #     # if the data has outliers, then mask them out
+    #     if mask_outliers:
+    #         # if the user has specified a mask, then use that
+    #         if data_mask is None:
+    #             # sigma-clip in time
+    #             data_mask = np.array(get_data_outlier_mask(datas, **kw))
+    #             if mask_wavelength_outliers:
+    #                 # sigma-clip in wavelength
+    #                 data_mask[
+    #                     get_data_outlier_mask(
+    #                         datas, clip_axis="wavelength", sigma=sigma_wavelength
+    #                     )
+    #                     == True
+    #                 ] = True
+    #             # data_mask_wave =  get_data_outlier_mask(data, clip_axis='wavelength', sigma=4.5)
+    #         self.outlier_mask = data_mask
+    #         self.outlier_flag = True
+    #         self.data_without_outliers = remove_data_outliers(self.get_data(), data_mask)
+    #
+    #     if inflate_uncertainties:
+    #         self.parameters["nsigma"] = inflate_uncertainties_prior
+    #         self.parameters["nsigma"].set_name("nsigma")
+    #
+    #     nsigma = []
+    #     for j, (mod, data) in enumerate(zip(models, datas)):
+    #         with mod:
+    #             if inflate_uncertainties:
+    #                 nsigma.append(
+    #                     self.parameters["nsigma"].get_prior_vector(
+    #                         i=j, shape=datas[0].nwave
+    #                     )
+    #                 )
+    #                 uncertainty = [
+    #                     np.array(data.uncertainty[i, :]) * nsigma[j][i]
+    #                     for i in range(data.nwave)
+    #                 ]
+    #                 uncertainties = pm.math.stack(uncertainty)
+    #             else:
+    #                 uncertainties = np.array(data.uncertainty)
+    #             #                     uncertainties.append(data.uncertainty[i, :])
+    #
+    #             # if the user has passed mask_outliers=True then sigma clip and use the outlier mask
+    #             if mask_outliers:
+    #                 flux = np.array(
+    #                     [
+    #                         self.data_without_outliers.flux[i + j, :]
+    #                         for i in range(data.nwave)
+    #                     ]
+    #                 )
+    #             else:
+    #                 flux = np.array(data.flux)
+    #
+    #             try:
+    #                 data_name = f"data"
+    #                 light_curve_name = f"wavelength_{j}"
+    #
+    #                 if marginalize_map_analytically:
+    #                     print("TESTING TESTING TESTING: THIS WILL NOT WORK!")
+    #                     self.marginalize_map_analytically = True
+    #
+    #                     sys = self.initial_keplerian_system[f"w{j}"]
+    #                     planet = sys.secondaries[0]
+    #                     sys.set_data(flux[0], C=uncertainties[0]**2)
+    #                     # Prior on planet map
+    #                     sec_mu = np.zeros(planet.map.Ny)
+    #                     sec_mu[0] = 10**eval_in_model(mod['phasecurve_planet_log_amplitude']) #.get_prior_vector(i=j, shape=data.nwave)
+    #                     sec_mu[1:] = eval_in_model(mod['phasecurve_planet_surface_map'])
+    #                     sec_L = np.zeros(planet.map.Ny)
+    #                     sec_L[0] = 1e-4
+    #                     sec_L[1:] = 1e-4
+    #                     planet.map.set_prior(mu=sec_mu, L=sec_L)
+    #                     pm.Potential("marginal", sys.lnlike(t=data.time.to_value('d')))
+    #
+    #                 else:
+    #                     self.marginalize_map_analytically = False
+    #
+    #                     pm.Normal(
+    #                         data_name,
+    #                         mu=self.every_light_curve[light_curve_name],
+    #                         sd=uncertainties,
+    #                         observed=flux,
+    #                     )
+    #             except Exception as e:
+    #                 print(e)
 
     def sample(
             self,
@@ -904,3 +904,58 @@ class PhaseCurveModel(LightcurveModel):
                 writervideo = animation.FFMpegWriter(fps=fps)
                 ani.save(svname, writer=writervideo)
 
+
+    def show_spherical_harmonics(self):
+        ydeg = self.n_spherical_harmonics
+        fig, ax = plt.subplots(ydeg + 1, 2 * ydeg + 1, figsize=(12, 6))
+        fig.subplots_adjust(hspace=0)
+        for axis in ax.flatten():
+            axis.set_xticks([])
+            axis.set_yticks([])
+            axis.spines["top"].set_visible(False)
+            axis.spines["right"].set_visible(False)
+            axis.spines["bottom"].set_visible(False)
+            axis.spines["left"].set_visible(False)
+        for l in range(ydeg + 1):
+            ax[l, 0].set_ylabel(
+                "l = %d" % l,
+                rotation="horizontal",
+                labelpad=20,
+                y=0.38,
+                fontsize=10,
+                alpha=0.5,
+            )
+        for j, m in enumerate(range(-ydeg, ydeg + 1)):
+            ax[-1, j].set_xlabel("m = %d" % m, labelpad=10, fontsize=10, alpha=0.5)
+
+        # Loop over the orders and degrees
+        # map = starry.Map(ydeg=ydeg)
+        # map.load("earth")
+        map = self.planet_map
+        y = np.abs(np.array(map.y))
+        y[1:] /= np.max(y[1:])
+        n = 0
+        for i, l in enumerate(range(ydeg + 1)):
+            for j, m in enumerate(range(-l, l + 1)):
+
+                # Offset the index for centered plotting
+                j += ydeg - l
+
+                # Compute the spherical harmonic
+                # with no rotation
+                map.reset()
+                if l > 0:
+                    map[l, m] = 1
+
+                # Plot the spherical harmonic
+                ax[i, j].imshow(
+                    map.render(),
+                    cmap="plasma",
+                    interpolation="none",
+                    origin="lower",
+                    extent=(-1, 1, -1, 1),
+                    alpha=y[n],
+                )
+                ax[i, j].set_xlim(-1.1, 1.1)
+                ax[i, j].set_ylim(-1.1, 1.1)
+                n += 1

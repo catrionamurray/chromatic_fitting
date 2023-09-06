@@ -539,12 +539,12 @@ class CombinedModel(LightcurveModel):
                 )
                 self.log_jitter = Fixed(np.log(0.0))
 
-            if type(self.independant_variable) is not list:
-                GPModel.setup_likelihood(self, **kw)
-                return
-            else:
-                warnings.warn("GP models use different independent variables - this does not work yet!!")
-                return
+            # if type(self.independant_variable) is not list:
+            #     GPModel.setup_likelihood(self, **kw)
+            #     return
+            # else:
+            #     warnings.warn("GP models use different independent variables - this does not work yet!!")
+            #     return
         LightcurveModel.setup_likelihood(self, **kw)
 
 
@@ -579,34 +579,37 @@ class CombinedModel(LightcurveModel):
             warnings.warn("You can't add a mean to a non-GP model")
 
     def kernel_func(self, i=0, **params):
-
+        num_gps = 0
         for imod, mod in enumerate(self._chromatic_models.values()):
-            new_params = return_only_keys_with_string_at_start_of_dictionary(params, f"{mod.name}_")
-            new_params = remove_all_keys_with_string_from_dictionary(new_params, 'interval')
-            new_params = remove_string_from_each_dictionary_key(new_params, f"{mod.name}_")
-            new_params = remove_string_from_each_dictionary_key(new_params, f"[{i}]")
-            new_params = extract_index_from_each_dictionary_key(new_params, index=i)
-            #         print(new_params)
+            if isinstance(mod, GPModel):
+                new_params = return_only_keys_with_string_at_start_of_dictionary(params, f"{mod.name}_")
+                new_params = remove_all_keys_with_string_from_dictionary(new_params, 'interval')
+                new_params = remove_string_from_each_dictionary_key(new_params, f"{mod.name}_")
+                new_params = remove_string_from_each_dictionary_key(new_params, f"[{i}]")
+                new_params = extract_index_from_each_dictionary_key(new_params, index=i)
+                #         print(new_params)
 
-            model_params_without_name = remove_string_from_each_dictionary_key(mod.parameters, f"{mod.name}_")
+                model_params_without_name = remove_string_from_each_dictionary_key(mod.parameters, f"{mod.name}_")
 
-            specific_params = {}
-            #         print(new_params.keys(), model_params_without_name.keys())
-            for p in model_params_without_name.keys():
-                if p in new_params.keys():
-                    specific_params[p] = new_params[p]
-                elif isinstance(model_params_without_name[p], WavelikeFixed):
-                    specific_params[p] = model_params_without_name[p].value[i]
-                elif isinstance(model_params_without_name[p], Fixed):
-                    specific_params[p] = model_params_without_name[p].value
+                specific_params = {}
+                #         print(new_params.keys(), model_params_without_name.keys())
+                for p in model_params_without_name.keys():
+                    if p in new_params.keys():
+                        specific_params[p] = new_params[p]
+                    elif isinstance(model_params_without_name[p], WavelikeFixed):
+                        specific_params[p] = model_params_without_name[p].value[i]
+                    elif isinstance(model_params_without_name[p], Fixed):
+                        specific_params[p] = model_params_without_name[p].value
 
-            #         print(specific_params)
-            k = mod.kernel_func(**specific_params)
+                #         print(specific_params)
+                k = mod.kernel_func(**specific_params)
 
-            if imod == 0:
-                k_func = k
-            else:
-                k_func = combination_options_array[self.how_to_combine[imod - 1]](k_func, k)
+                if num_gps == 0:
+                    k_func = k
+                else:
+                    k_func = combination_options_array[self.how_to_combine[imod - 1]](k_func, k)
+
+                num_gps += 1
 
         return k_func
 
