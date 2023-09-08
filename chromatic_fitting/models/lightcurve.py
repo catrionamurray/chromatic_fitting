@@ -293,6 +293,11 @@ class LightcurveModel:
                 for name, model in self._chromatic_models.items():
                     new_model._chromatic_models[name] = model.copy()
 
+                for name, mod in new_model._chromatic_models.items():
+                    mod.__dict__ = self[name].__dict__.copy()
+
+        new_model.__dict__ = self.__dict__.copy()
+
         # new_model._pymc3_model = self._pymc3_model
         model_params = {}
 
@@ -1174,7 +1179,10 @@ class LightcurveModel:
                 elif v.inputs["shape"] != (self.data.nwave, 1):
                     more_than_one_input = True
             if more_than_one_input:
-                if f"{k}[{i}]" in posterior_means.index and "limb_darkening" not in k and "ecs" not in k and "planet_surface_map" not in k:
+                if f"{k}[{i}]" in posterior_means.index and\
+                        "limb_darkening" not in k and\
+                        "ecs" not in k and\
+                        "planet_surface_map" not in k:
                     fv[k] = posterior_means[f"{k}[{i}]"]
                 elif f"{k}[0]" in posterior_means.index:
                     n = 0

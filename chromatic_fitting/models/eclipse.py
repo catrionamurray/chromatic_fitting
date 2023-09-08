@@ -262,6 +262,8 @@ class EclipseModel(LightcurveModel):
                     )
                     planet.theta0 = 180.0
 
+                    eclipse_depth = pm.Deterministic(f"{name}depth_{i+j}",10 ** param_i[f"{name}planet_log_amplitude"])
+
                     system = starry.System(star, planet)
                     flux_model = system.flux(data.time.to_value("day"))
                     y_model.append(flux_model)
@@ -351,12 +353,14 @@ class EclipseModel(LightcurveModel):
         else:
             name = ""
 
+        datas, models = self.choose_model_based_on_optimization_method()
+
         if time is None:
-            if self.optimization == "separate":
-                data = self.get_data(i)
-            else:
-                data = self.get_data()
-            time = list(data.time.to_value("day"))
+            # if self.optimization == "separate":
+            #     data = self.get_data(i)
+            # else:
+            #     data = self.get_data()
+            time = list(datas[i].time.to_value("day"))
 
         self.check_and_fill_missing_parameters(params, i)
 
@@ -402,7 +406,8 @@ class EclipseModel(LightcurveModel):
         
         planet.theta0 = 180.0
         system = starry.System(star, planet)
-        flux_model = system.flux(time).eval()
+        # flux_model = system.flux(time).eval()
+        flux_model = eval_in_model(system.flux(time), model=models[i])
 
         return flux_model
 

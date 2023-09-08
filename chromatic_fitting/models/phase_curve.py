@@ -551,12 +551,14 @@ class PhaseCurveModel(LightcurveModel):
         else:
             name = ""
 
+        datas, models = self.choose_model_based_on_optimization_method()
+
         if time is None:
-            if self.optimization == "separate":
-                data = self.get_data(i)
-            else:
-                data = self.get_data()
-            time = list(data.time.to_value("day"))
+            # if self.optimization == "separate":
+            #     data = self.get_data(i)
+            # else:
+            #     data = self.get_data()
+            time = list(datas[i].time.to_value("day"))
 
         self.check_and_fill_missing_parameters(params, i)
 
@@ -602,7 +604,6 @@ class PhaseCurveModel(LightcurveModel):
             mass_unit=u.M_jup,
         )
 
-        # count = 0
 
         if self.n_spherical_harmonics > 0:
             planet.map[1:, :] = params[f'{name}planet_surface_map']
@@ -612,7 +613,7 @@ class PhaseCurveModel(LightcurveModel):
 
         planet.theta0 = 180.0 + params[f"{name}phase_offset"]
         system = starry.System(star, planet)
-        flux_model = system.flux(time).eval()
+        flux_model = eval_in_model(system.flux(time), model=models[i])
 
         if hasattr(self, 'keplerian_system'):
             self.keplerian_system[f'w{i}'] = system
