@@ -76,6 +76,7 @@ class EclipseModel(LightcurveModel):
             "planet_radius",
             "ecs",
             "limb_darkening",
+            "phase_offset",
         ]
 
         super().__init__(**kw)
@@ -112,10 +113,11 @@ class EclipseModel(LightcurveModel):
             planet_radius="The radius of the planet [R_jupiter].",
             ecs="[ecosw, esinw], where e is eccentricity.",
             limb_darkening="2-d Quadratic limb-darkening coefficients.",
+            phase_offset="Hotspot offset [degrees]",
         )
 
         for k, v in self.parameter_descriptions.items():
-            print(f"{k}: {v}")
+            print(f"{k}: {v}")q
     def set_defaults(self):
         """
         Set the default parameters for the model.
@@ -133,6 +135,7 @@ class EclipseModel(LightcurveModel):
             planet_radius=0.01,
             ecs=np.array([0.0,0.0]),
             limb_darkening=np.array([0.4,0.2]),
+            phase_offset=0.0,
         )
 
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
@@ -191,6 +194,7 @@ class EclipseModel(LightcurveModel):
             f"{name}planet_radius": [],
             f"{name}ecs": [],
             f"{name}limb_darkening": [],
+            f"{name}phase_offset": [],
         }
 
         for j, (mod, data) in enumerate(zip(models, datas)):
@@ -260,7 +264,7 @@ class EclipseModel(LightcurveModel):
                         length_unit=u.R_jup,
                         mass_unit=u.M_jup,
                     )
-                    planet.theta0 = 180.0
+                    planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
 
                     eclipse_depth = pm.Deterministic(f"eclipse_depth_{i+j}", 10 ** param_i[f"{name}planet_log_amplitude"])
 
@@ -390,7 +394,7 @@ class EclipseModel(LightcurveModel):
                 ydeg=0,
                 udeg=0,
                 amp=10 ** params[f"{name}planet_log_amplitude"],
-                inc=90.0,
+                inc=params[f"{name}inclination"],
                 obl=0.0,
             ),
             # the surface map
@@ -405,11 +409,16 @@ class EclipseModel(LightcurveModel):
             length_unit=u.R_jup,
             mass_unit=u.M_jup,
         )
-        
-        planet.theta0 = 180.0
+
+        planet.theta0 = 180.0 + params[f"{name}phase_offset"]
         system = starry.System(star, planet)
         # flux_model = system.flux(time).eval()
         flux_model = eval_in_model(system.flux(time), model=models[i])
+
+        if hasattr(self, 'keplerian_system'):
+            self.keplerian_system[f'w{i}'] = system
+        else:
+            self.keplerian_system = {f'w{i}': system}
 
         return flux_model
 
