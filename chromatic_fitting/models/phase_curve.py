@@ -280,6 +280,9 @@ class PhaseCurveModel(LightcurveModel):
                     parameters_to_loop_over[pname].append(
                         self.parameters[pname].get_prior_vector(**kw)
                     )
+                    # if pname == f"{name}limb_darkening" and \
+                    #         self.parameters[pname].distribution == QuadLimbDark:
+                    #     parameters_to_loop_over[pname] = [parameters_to_loop_over[pname]]
 
                 y_model = []
                 initial_guess = []
@@ -288,7 +291,11 @@ class PhaseCurveModel(LightcurveModel):
                     param_i = {}
                     for param_name, param in parameters_to_loop_over.items():
                         if isinstance(self.parameters[param_name], WavelikeFitted):
-                            param_i[param_name] = param[j][i]
+                            if param_name == f"{name}limb_darkening" and \
+                                    self.parameters[param_name].distribution == QuadLimbDark:
+                                param_i[param_name] = param[j]
+                            else:
+                                param_i[param_name] = param[j][i]
                         elif isinstance(self.parameters[param_name], Fitted) and eval_in_model(np.shape(param[j]))[
                             0] == 1:
                             param_i[param_name] = param[j][0]
@@ -312,6 +319,7 @@ class PhaseCurveModel(LightcurveModel):
                     )
                     star.map[1] = param_i[f"{name}limb_darkening"][0]
                     star.map[2] = param_i[f"{name}limb_darkening"][1]
+                    print(eval_in_model(star.map[1]), eval_in_model(star.map[2]))
                     if self.check_limb_darkened_map_is_physical(star.map) == False:
                         print("The limb-darkening is unphysical! The map is either negative or not monotonically " \
                               "decreasing towards the limb!")
@@ -341,6 +349,9 @@ class PhaseCurveModel(LightcurveModel):
                         mass_unit=u.M_jup,
                     )
                     planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
+
+                    f_max = pm.Deterministic(f"{name}fmax_{i + j}", planet.map.flux(theta=0)[0])
+                    f_min = pm.Deterministic(f"{name}fmin_{i + j}", planet.map.flux(theta=180)[0])
 
                     # save the radius ratio for generating the transmission spectrum later:
                     rr = Deterministic(f"{name}radius_ratio[{i + j}]",
@@ -507,7 +518,7 @@ class PhaseCurveModel(LightcurveModel):
             warnings.warn("WARNING: Starry doesn't seem to support pymc3.sample()")
             LightcurveModel.sample(self, **kw)
 
-    def add_model_to_rainbow(self):
+    def add_model_to_rainbow(self, **kw):
         """
         Add the phase curve model to the Rainbow object.
         """
@@ -522,14 +533,14 @@ class PhaseCurveModel(LightcurveModel):
             data = self.white_light
 
         # extract model as an array
-        model = self.get_model(as_array=True)
+        model = self.get_model(as_array=True, **kw)
         # attach the model to the Rainbow (creating a Rainbow_with_model object)
         r_with_model = data.attach_model(model=model, planet_model=model)
         # save the Rainbow_with_model for later
         self.data_with_model = r_with_model
 
     def phase_curve_model(
-            self, params: dict, i: int = 0, time: list = None
+            self, params: dict, i: int = 0, time: list = None, save_starry_maps=True,
     ) -> np.array:
         """
         Create a phase curve model given the passed parameters.
