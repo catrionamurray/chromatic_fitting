@@ -1,5 +1,7 @@
 import pymc3 as pm
 import numpy as np
+import exoplanet as xo
+from exoplanet import QuadLimbDark
 
 
 class Parameter:
@@ -237,30 +239,31 @@ class WavelikeFitted(Fitted):
         #         inputs[k] = v[i]
 
         inputs = dict(**inputs)
-        if "shape" not in self.inputs:
-            if shape is None:
-                inputs["shape"] = 1
-            elif shape > 1:
-                inputs["shape"] = shape  # shape  # (shape, 1)
-            else:
-                inputs["shape"] = 1
-        else:
-            if shape is not None:
-                if type(self.inputs["shape"]) == int:
-                    if self.inputs["shape"] > 1:
-                        inputs["shape"] = (shape, self.inputs["shape"])
-                        if "testval" in inputs:
-                            inputs["testval"] = [inputs["testval"]] * shape
-                    # else:
-                    #     inputs["shape"] = shape
+
+        if self.distribution != xo.distributions.physical.QuadLimbDark:
+            if "shape" not in self.inputs:
+                if shape is None:
+                    inputs["shape"] = 1
+                elif shape > 1:
+                    inputs["shape"] = shape  # shape  # (shape, 1)
                 else:
-                    if len(self.inputs["shape"]) == 1:
+                    inputs["shape"] = 1
+            else:
+                if shape is not None:
+                    if type(self.inputs["shape"]) == int:
+                        # this causes some issues with exoplanet.distributions.QuadLimbDark
                         if self.inputs["shape"] > 1:
                             inputs["shape"] = (shape, self.inputs["shape"])
                             if "testval" in inputs:
-                                inputs["testval"] = inputs["testval"] * shape
+                                inputs["testval"] = [inputs["testval"]] * shape
+                    else:
+                        if len(self.inputs["shape"]) == 1:
+                            if self.inputs["shape"] > 1:
+                                inputs["shape"] = (shape, self.inputs["shape"])
+                                if "testval" in inputs:
+                                    inputs["testval"] = inputs["testval"] * shape
 
-        self.inputs["shape"] = inputs["shape"]
+            self.inputs["shape"] = inputs["shape"]
 
         # if i is not None:
         #     inputs["name"] = self.label(i)

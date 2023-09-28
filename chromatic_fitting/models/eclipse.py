@@ -117,7 +117,7 @@ class EclipseModel(LightcurveModel):
         )
 
         for k, v in self.parameter_descriptions.items():
-            print(f"{k}: {v}")q
+            print(f"{k}: {v}")
     def set_defaults(self):
         """
         Set the default parameters for the model.
@@ -269,13 +269,15 @@ class EclipseModel(LightcurveModel):
                     eclipse_depth = pm.Deterministic(f"eclipse_depth_{i+j}", 10 ** param_i[f"{name}planet_log_amplitude"])
 
                     eclipse_depth = pm.Deterministic(f"{name}depth_{i+j}",10 ** param_i[f"{name}planet_log_amplitude"])
+                    f_max = pm.Deterministic(f"{name}fmax_{i+j}", planet.map.flux(theta=0)[0])
+                    f_min = pm.Deterministic(f"{name}fmin_{i + j}", planet.map.flux(theta=180)[0])
 
                     system = starry.System(star, planet)
                     flux_model = system.flux(data.time.to_value("day"))
                     y_model.append(flux_model)
 
                     initial_guess.append(eval_in_model(flux_model))
-                
+
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
                 if self.store_models:

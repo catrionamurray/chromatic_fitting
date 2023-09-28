@@ -156,7 +156,10 @@ class LightcurveModel:
                 self.parameters[k] = new_v
                 self.parameters[k].set_name(new_v)
             else:
+                # if type(v) == np.float64 or type(v) == float or type(v) == int:
                 self.parameters[k] = Fixed(v)
+                # else:
+                #     self.parameters[k] = WavelikeFixed(v)
                 self.parameters[k].set_name(k)
 
         # check that all the necessary parameters are defined somehow
@@ -1282,6 +1285,7 @@ class LightcurveModel:
         as_dict: bool = True,
         as_array: bool = False,
         store: bool = True,
+        **kw
     ):
         """
         Return the 'best-fit' model from the summary table as a dictionary or as an array
@@ -1339,7 +1343,7 @@ class LightcurveModel:
                         params = params_dict
                     else:
                         params = params_dict[f"w{i}"]
-                model_i = self.model(params, i)
+                model_i = self.model(params, i, **kw)
                 model[f"w{i}"] = model_i
 
             if store:
