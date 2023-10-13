@@ -18,7 +18,8 @@ from chromatic import *
 
 import pymc3 as pm
 import pymc3_ext as pmx
-
+import astropy.constants as c
+import astropy.units as u
 print(f"Running chromatic_fitting v{__version__}!\n")
 print("This program is running on:")
 print(f"Python v{sys.version}")

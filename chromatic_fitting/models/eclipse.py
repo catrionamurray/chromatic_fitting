@@ -68,9 +68,10 @@ class EclipseModel(LightcurveModel):
             "stellar_mass",
             "stellar_amplitude",
             "stellar_prot",
+            "stellar_teff",
             "period",
             "t0",
-            "planet_log_amplitude",
+            "planet_dayside_temp",
             "inclination",
             "planet_mass",
             "planet_radius",
@@ -104,9 +105,10 @@ class EclipseModel(LightcurveModel):
             stellar_mass="The stellar mass [M_sun].",
             stellar_amplitude="The stellar amplitude, or the out-of-transit baseline.",
             stellar_prot="The rotational period of the star [d].",
+            stellar_teff="The effective temperature of the star [K].",
             period="Orbital period [d].",
             t0="Epoch of transit center [d].",
-            planet_log_amplitude="The log-amplitude of the planet (determines the depth of the eclipse).",
+            planet_dayside_temp="The day-side brightness temperature of the planet (determines the depth of the eclipse).",
             inclination="The inclination of the planet [degrees].",
             planet_mass="The mass of the planet [M_jupiter].",
             planet_radius="The radius of the planet [R_jupiter].",
@@ -125,9 +127,10 @@ class EclipseModel(LightcurveModel):
             stellar_mass=1,
             stellar_amplitude=1.0,
             stellar_prot=1.0,
+            stellar_teff=3000,
             period=1.0,
             t0=1.0,
-            planet_log_amplitude=-2.8,
+            planet_dayside_temp=500,
             inclination=90.0,
             planet_mass=0.01,
             planet_radius=0.01,
@@ -183,9 +186,10 @@ class EclipseModel(LightcurveModel):
             f"{name}stellar_radius": [],
             f"{name}stellar_mass": [],
             f"{name}stellar_prot": [],
+            f"{name}stellar_teff": [],
             f"{name}period": [],
             f"{name}t0": [],
-            f"{name}planet_log_amplitude": [],
+            f"{name}planet_dayside_temp": [],
             f"{name}inclination": [],
             f"{name}planet_mass": [],
             f"{name}planet_radius": [],
@@ -231,12 +235,17 @@ class EclipseModel(LightcurveModel):
                     star.map[2] = param_i[f"{name}limb_darkening"][1]
                     omega = (theano.tensor.arctan2(param_i[f"{name}ecs"][1], param_i[f"{name}ecs"][0])*180.0)/np.pi
                     eccentricity = pm.math.sqrt(param_i[f"{name}ecs"][0]**2+param_i[f"{name}ecs"][1]**2)
-                   
+                    Bp = (2*c.h.value*c.c.value**2/(w.to('m').value**5))/(np.exp(c.h.value*c.c.value/(w.to('m').value*c.k_B.value*param_i[f"{name}planet_dayside_temp"]))-1)
+                    Bs = (2*c.h.value*c.c.value**2/(w.to('m').value**5))/(np.exp(c.h.value*c.c.value/(w.to('m').value*c.k_B.value*param_i[f"{name}stellar_teff"]))-1)
+                    RpRs = ((param_i[f"{name}planet_radius"]*u.R_jup).to("km"))/((param_i[f"{name}stellar_radius"]*u.R_sun).to("km"))
+
+                    depth = (Bp/Bs)*(RpRs)**2
+
                     planet = starry.kepler.Secondary(
                         starry.Map(
                             ydeg=0,
                             udeg=0,
-                            amp=10 ** param_i[f"{name}planet_log_amplitude"],
+                            amp=depth,
                             inc=90.0,
                             obl=0.0,
                         ),
@@ -254,7 +263,7 @@ class EclipseModel(LightcurveModel):
                     )
                     planet.theta0 = 180.0
 
-                    eclipse_depth = pm.Deterministic(f"eclipse_depth_{i+j}", 10 ** param_i[f"{name}planet_log_amplitude"])
+                    #eclipse_depth = pm.Deterministic(f"eclipse_depth_{i+j}", 10 ** param_i[f"{name}planet_log_amplitude"])
 
                     system = starry.System(star, planet)
                     flux_model = system.flux(data.time.to_value("day"))
@@ -353,7 +362,7 @@ class EclipseModel(LightcurveModel):
             time = list(data.time.to_value("day"))
 
         self.check_and_fill_missing_parameters(params, i)
-
+        w = data.wavelength[i]
         star = starry.Primary(
             starry.Map(
                 ydeg=0,
@@ -372,12 +381,19 @@ class EclipseModel(LightcurveModel):
 
         omega = theano.tensor.arctan2(params[f"{name}ecs"][1], params[f"{name}ecs"][0])*180.0/np.pi
         eccentricity = pm.math.sqrt(params[f"{name}ecs"][0]**2 + params[f"{name}ecs"][1]**2)
+        Bp = (2*c.h.value*c.c.value**2/(w.to('m').value**5))/(np.exp(c.h.value*c.c.value/(w.to('m').value*c.k_B.value*params[f"{name}planet_dayside_temp"]))-1)
+        Bs = (2*c.h.value*c.c.value**2/(w.to('m').value**5))/(np.exp(c.h.value*c.c.value/(w.to('m').value*c.k_B.value*params[f"{name}stellar_teff"]))-1)
+        RpRs = params[f"{name}planet_radius"]/params[f"{name}stellar_radius"]
+
+        depth = (Bp/Bs)*(RpRs)**2
+
+
 
         planet = starry.kepler.Secondary(
             starry.Map(
                 ydeg=0,
                 udeg=0,
-                amp=10 ** params[f"{name}planet_log_amplitude"],
+                amp=depth,
                 inc=90.0,
                 obl=0.0,
             ),
