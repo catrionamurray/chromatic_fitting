@@ -383,7 +383,7 @@ class EclipseModel(LightcurveModel):
         eccentricity = pm.math.sqrt(params[f"{name}ecs"][0]**2 + params[f"{name}ecs"][1]**2)
         Bp = (2*c.h.value*c.c.value**2/(w.to('m').value**5))/(np.exp(c.h.value*c.c.value/(w.to('m').value*c.k_B.value*params[f"{name}planet_dayside_temp"]))-1)
         Bs = (2*c.h.value*c.c.value**2/(w.to('m').value**5))/(np.exp(c.h.value*c.c.value/(w.to('m').value*c.k_B.value*params[f"{name}stellar_teff"]))-1)
-        RpRs = params[f"{name}planet_radius"]/params[f"{name}stellar_radius"]
+        RpRs = ((params[f"{name}planet_radius"]*u.R_jup).to("km"))/((params[f"{name}stellar_radius"]*u.R_sun).to("km"))
 
         depth = (Bp/Bs)*(RpRs)**2
 
