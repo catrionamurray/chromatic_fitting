@@ -254,7 +254,7 @@ class EclipseModel(LightcurveModel):
                     )
                     planet.theta0 = 180.0
 
-                    eclipse_depth = pm.Deterministic(f"eclipse_depth_{i+j}", 10 ** param_i[f"{name}planet_log_amplitude"])
+                    #eclipse_depth = pm.Deterministic(f"eclipse_depth_{i+j}", 10 ** param_i[f"{name}planet_log_amplitude"])
 
                     system = starry.System(star, planet)
                     flux_model = system.flux(data.time.to_value("day"))
