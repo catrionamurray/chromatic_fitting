@@ -71,7 +71,7 @@ class PhaseCurveModel(LightcurveModel):
         n_spherical_harmonics: Number of spherical harmonic orders to use to model the star (higher value = resolving smaller features)
         spherical_harmonics_coeffs: Coefficients for each spherical harmonic order: [Y_0,0, Y_1,-1, Y_1,0, Y_1,1, Y_2,-2, ...]. Default is a simple dipole map.
         See https://starry.readthedocs.io/en/latest/notebooks/Basics/ for more info on how to define the coefficients.
-        source_npts: Number of points to model illumination source, 1=a point source, so for close-in planets we want this to be >30-50
+        source_npts: Number of points to model illumination source, 1=a point source, so for close-in planets.py we want this to be >30-50
         type_of_model: is this a planet or systematic model?
         kw: any keywords to pass to the lightcurve model
         """

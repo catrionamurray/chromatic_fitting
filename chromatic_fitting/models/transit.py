@@ -156,12 +156,12 @@ class TransitModel(LightcurveModel):
 
         self.orbit = []
         # we need to separate the orbits in wavelength otherwise they're treated as
-        # multiple planets in the same system
+        # multiple planets.py in the same system
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j
             with mod:
-                # Set up a Keplerian orbit for the planets (for now without eccentricity)
+                # Set up a Keplerian orbit for the planets.py (for now without eccentricity)
                 orbit = xo.orbits.KeplerianOrbit(
                     period=self.parameters[name + "period"].get_prior_vector(**kw),
                     t0=self.parameters[name + "epoch"].get_prior_vector(**kw),
@@ -435,7 +435,7 @@ class TransitModel(LightcurveModel):
                 plt.close()
 
     def make_transmission_spectrum_table(
-        self, uncertainty=["hdi_16%", "hdi_84%"], svname=None
+        self, **kw
     ):
         """
         Generate and return a transmission spectrum table
@@ -450,40 +450,10 @@ class TransitModel(LightcurveModel):
         -------
 
         """
-        results = self.get_results(uncertainty=uncertainty)[
-            [
-                "wavelength",
-                f"{self.name}_radius_ratio",
-                f"{self.name}_radius_ratio_{uncertainty[0]}",
-                f"{self.name}_radius_ratio_{uncertainty[1]}",
-            ]
-        ]
-        trans_table = results[["wavelength", f"{self.name}_radius_ratio"]]
-        if "hdi" in uncertainty[0]:
-            trans_table[f"{self.name}_radius_ratio_neg_error"] = (
-                results[f"{self.name}_radius_ratio"]
-                - results[f"{self.name}_radius_ratio_{uncertainty[0]}"]
-            )
-            trans_table[f"{self.name}_radius_ratio_pos_error"] = (
-                results[f"{self.name}_radius_ratio_{uncertainty[1]}"]
-                - results[f"{self.name}_radius_ratio"]
-            )
-        else:
-            trans_table[f"{self.name}_radius_ratio_neg_error"] = results[
-                f"{self.name}_radius_ratio_{uncertainty[0]}"
-            ]
-            trans_table[f"{self.name}_radius_ratio_pos_error"] = results[
-                f"{self.name}_radius_ratio_{uncertainty[1]}"
-            ]
-
-        if svname is not None:
-            assert isinstance(svname, object)
-            trans_table.to_csv(svname)
-        else:
-            return trans_table
+        return self.make_spectrum_table(param="radius_ratio", **kw)
 
     def plot_transmission_spectrum(
-        self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
+        self, **kw
     ):
         """
         Plot the transmission spectrum (specifically the planet size as a function of wavelength).
@@ -503,51 +473,52 @@ class TransitModel(LightcurveModel):
         -------
 
         """
-        if table is not None:
-            transmission_spectrum = table
-            try:
-                # ensure the correct columns exist in the transmission spectrum table
-                assert transmission_spectrum[f"{self.name}_radius_ratio"]
-                assert transmission_spectrum[f"{self.name}_radius_ratio_neg_error"]
-                assert transmission_spectrum[f"{self.name}_radius_ratio_pos_error"]
-                assert transmission_spectrum["wavelength"]
-            except:
-                print(
-                    f"The given table doesn't have the correct columns 'wavelength', '{self.name}_radius_ratio', "
-                    f"{self.name}_radius_ratio_pos_error' and '{self.name}_radius_ratio_neg_error'"
-                )
-        else:
-            kw["uncertainty"] = uncertainty
-            transmission_spectrum = self.make_transmission_spectrum_table(**kw)
-            transmission_spectrum["wavelength"] = [
-                t.to_value("micron") for t in transmission_spectrum["wavelength"].values
-            ]
-
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(10, 4))
-
-        plt.sca(ax)
-        plt.title("Transmission Spectrum")
-        plt.plot(
-            transmission_spectrum["wavelength"],
-            transmission_spectrum[f"{self.name}_radius_ratio"],
-            "kx",
-            **plotkw,
-        )
-        plt.errorbar(
-            transmission_spectrum["wavelength"],
-            transmission_spectrum[f"{self.name}_radius_ratio"],
-            yerr=[
-                transmission_spectrum[f"{self.name}_radius_ratio_neg_error"],
-                transmission_spectrum[f"{self.name}_radius_ratio_pos_error"],
-            ],
-            color="k",
-            capsize=2,
-            linestyle="None",
-            **plotkw,
-        )
-        plt.xlabel("Wavelength (microns)")
-        plt.ylabel("Radius Ratio")
+        # if table is not None:
+        #     transmission_spectrum = table
+        #     try:
+        #         # ensure the correct columns exist in the transmission spectrum table
+        #         assert transmission_spectrum[f"{self.name}_radius_ratio"]
+        #         assert transmission_spectrum[f"{self.name}_radius_ratio_neg_error"]
+        #         assert transmission_spectrum[f"{self.name}_radius_ratio_pos_error"]
+        #         assert transmission_spectrum["wavelength"]
+        #     except:
+        #         print(
+        #             f"The given table doesn't have the correct columns 'wavelength', '{self.name}_radius_ratio', "
+        #             f"{self.name}_radius_ratio_pos_error' and '{self.name}_radius_ratio_neg_error'"
+        #         )
+        # else:
+        #     kw["uncertainty"] = uncertainty
+        #     transmission_spectrum = self.make_transmission_spectrum_table(**kw)
+        #     transmission_spectrum["wavelength"] = [
+        #         t.to_value("micron") for t in transmission_spectrum["wavelength"].values
+        #     ]
+        #
+        # if ax is None:
+        #     fig, ax = plt.subplots(figsize=(10, 4))
+        #
+        # plt.sca(ax)
+        # plt.title("Transmission Spectrum")
+        # plt.plot(
+        #     transmission_spectrum["wavelength"],
+        #     transmission_spectrum[f"{self.name}_radius_ratio"],
+        #     "kx",
+        #     **plotkw,
+        # )
+        # plt.errorbar(
+        #     transmission_spectrum["wavelength"],
+        #     transmission_spectrum[f"{self.name}_radius_ratio"],
+        #     yerr=[
+        #         transmission_spectrum[f"{self.name}_radius_ratio_neg_error"],
+        #         transmission_spectrum[f"{self.name}_radius_ratio_pos_error"],
+        #     ],
+        #     color="k",
+        #     capsize=2,
+        #     linestyle="None",
+        #     **plotkw,
+        # )
+        # plt.xlabel("Wavelength (microns)")
+        # plt.ylabel("Radius Ratio")
+        self.plot_spectrum(param="radius_ratio", name_of_spectrum="Transmission", **kw)
 
     def add_model_to_rainbow(self):
         """

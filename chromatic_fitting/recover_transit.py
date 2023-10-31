@@ -100,7 +100,7 @@ def fit_transit(x, y, yerr, init_r, init_t0, init_period, init_b, init_mean, ini
         else:
             b = xo.distributions.ImpactParameter("b", ror=r, testval=np.array(init_b))
 
-        # Set up a Keplerian orbit for the planets
+        # Set up a Keplerian orbit for the planets.py
         orbit = xo.orbits.KeplerianOrbit(period=period, t0=t0, b=b)
 
         # Compute the model light curve using starry
@@ -143,7 +143,7 @@ def plot_fit(x, y, yerr, map_soln,trace=[]):
     if len(trace)>0:
         for i in np.random.randint(len(trace) * trace.nchains, size=50):
             plt.plot(x, trace['light_curves'][i], color="C1", lw=1, alpha=0.2)
-    #         # Set up a Keplerian orbit for the planets
+    #         # Set up a Keplerian orbit for the planets.py
     #         orbit = xo.orbits.KeplerianOrbit(period=trace['period'][i], t0=trace['t0'][i], b=trace['b'][i])
     # #         # Compute the model light curve using starry
     #         light_curves = xo.LimbDarkLightCurve(trace['u[0]'][i], trace['u[1]']).get_light_curve(
