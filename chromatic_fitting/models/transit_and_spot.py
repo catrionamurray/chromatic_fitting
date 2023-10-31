@@ -47,9 +47,10 @@ class TransitSpotModel(LightcurveModel):
 
         # only require a constant (0th order) term:
         self.required_parameters = ["A", "rs", "ms", "prot", "u", "stellar_amp", "stellar_inc", "stellar_obl",
-                                    "mp", "rp", "inc", "amp", "period", "omega", "ecc", "t0"]
+                                    "mp", "rp", "inc", "amp", "period", "omega", "ecc", "t0",
+                                    "spot_contrast"]
         for n in range(self.nspots):
-            self.required_parameters.extend([f"spot_{n + 1}_contrast",
+            self.required_parameters.extend([#f"spot_{n + 1}_contrast",
                                              f"spot_{n + 1}_radius",
                                              f"spot_{n + 1}_latitude",
                                              f"spot_{n + 1}_longitude"])
@@ -84,12 +85,28 @@ class TransitSpotModel(LightcurveModel):
         """
         self.defaults = dict(A=1, rs=1, ms=1, stellar_amp=1, stellar_inc=90, stellar_obl=0.0, prot=3, u=[0.1, 0.1],
                              # spot_contrast=0.5, spot_radius=20, spot_latitude=0.0, spot_longitude=0.0,
-                             mp=1, rp=1, inc=90, amp=5e-3, period=3, omega=100, ecc=0.0, t0=0.0)
+                             mp=1, rp=1, inc=90, amp=5e-3, period=3, omega=100, ecc=0.0, t0=0.0, spot_contrast=0.5)
         for n in range(self.nspots):
-            self.defaults[f"spot_{n + 1}_contrast"] = 0.5
+            # self.defaults[f"spot_{n + 1}_contrast"] = 0.5
             self.defaults[f"spot_{n + 1}_radius"] = 20
             self.defaults[f"spot_{n + 1}_latitude"] = 0.0
             self.defaults[f"spot_{n + 1}_longitude"] = 0.0
+
+    def plot_optimized_map(self, opt):
+        opt_copy = opt.copy()
+        for k, v in self.parameters.items():
+            if k not in opt_copy.keys():
+                print(k)
+                opt_copy[k] = v.value
+        opt_copy[f'{self.name}_u'] = opt_copy[f'{self.name}_u'][0]
+        flux, starry_model = s.setup_star_and_planet(param_i=opt_copy, name=f"{self.name}_", method='starry',
+                                                     time=self.data.time,
+                                                     flux_model=[])
+
+        starry_model.show(t=opt_copy[f"{self.name}_t0"])
+        starry_model.primary.map.show(theta=starry_model.primary.theta0)
+        return flux, starry_model
+
 
     def setup_star_and_planet(self, name, method, param_i, time, flux_model):
         if method == "starry":
@@ -101,18 +118,23 @@ class TransitSpotModel(LightcurveModel):
                 prot=param_i[f"{name}prot"],
                 length_unit=u.R_sun,
                 mass_unit=u.M_sun,
+                inc=param_i[f"{name}stellar_inc"],
+                obl=param_i[f"{name}stellar_obl"],
+                t0=param_i[f"{name}t0"],
+                theta0=0.0,#360*(param_i[f"{name}t0"]/param_i[f"{name}prot"]) # set the initial orientation of the map as
+                                                                        # mid transit
             )
 
             star.map[1:] = param_i[f"{name}u"]
 
             for spot_i in range(self.nspots):
-                star.map.spot(contrast=param_i[f"{name}spot_{spot_i + 1}_contrast"],
+                star.map.spot(contrast=param_i[f"{name}spot_contrast"], #param_i[f"{name}spot_{spot_i + 1}_contrast"],
                               radius=param_i[f"{name}spot_{spot_i + 1}_radius"],
                               lat=param_i[f"{name}spot_{spot_i + 1}_latitude"],
                               lon=param_i[f"{name}spot_{spot_i + 1}_longitude"])
 
             planet = starry.kepler.Secondary(
-                starry.Map(ydeg=5, amp=param_i[f"{name}amp"]),  # the surface map
+                starry.Map(ydeg=0, amp=param_i[f"{name}amp"]),  # the surface map
                 m=param_i[f"{name}mp"],  # mass in solar masses
                 r=param_i[f"{name}rp"],  # radius
                 inc=param_i[f"{name}inc"],
@@ -201,11 +223,10 @@ class TransitSpotModel(LightcurveModel):
 
                     flux_model, _ = self.setup_star_and_planet(name, self.method, param_i, data.time.to_value('d'), flux_model)
 
-                    # exp.append(
-                    #     param_i[f"{name}A"]
-                    #     * np.exp(-(xi - self.t0) / param_i[f"{name}decay_time"])
-                    #     + param_i[f"{name}baseline"]
-                    # )
+                    # save the radius ratio for generating the transmission spectrum later:
+                    rr = Deterministic(f"{name}radius_ratio[{i + j}]",
+                                       (param_i[f"{name}rp"] * (1 * u.R_earth).to_value("R_sun")) / param_i[
+                                           f"{name}rs"])
 
                     initial_guess.append(eval_in_model(flux_model[-1]))
 
@@ -257,83 +278,111 @@ class TransitSpotModel(LightcurveModel):
 
         with pm.Model() as temp_model:
             flux_model, sys = self.setup_star_and_planet(f"{self.name}_", self.method, params, data.time.to_value('d'), [])
-            # star = starry.Primary(
-            #     starry.Map(ydeg=self.ydeg,
-            #                udeg=2,
-            #                amp=params[f"{self.name}_stellar_amp"],
-            #                inc=params[f"{self.name}_stellar_inc"],
-            #                obl=params[f"{self.name}_stellar_obl"],
-            #                ),
-            #     r=params[f"{self.name}_rs"],
-            #     m=params[f"{self.name}_ms"],
-            #     prot=params[f'{self.name}_prot'],
-            #     length_unit=u.R_sun,
-            #     mass_unit=u.M_sun,
-            # )
-            # star.map[1:] = params[f"{self.name}_u"]
-            #
-            # for spot_i in range(self.nspots):
-            #     star.map.spot(contrast=params[f"{self.name}_spot_{spot_i + 1}_contrast"],
-            #                   radius=params[f"{self.name}_spot_{spot_i + 1}_radius"],
-            #                   lat=params[f"{self.name}_spot_{spot_i + 1}_latitude"],
-            #                   lon=params[f"{self.name}_spot_{spot_i + 1}_longitude"])
-            #
-            # planet = starry.kepler.Secondary(
-            #     starry.Map(ydeg=5, amp=params[f"{self.name}_amp"]),  # the surface map
-            #     m=params[f'{self.name}_mp'],  # mass in solar masses
-            #     r=params[f'{self.name}_rp'],  # radius
-            #     inc=params[f"{self.name}_inc"],
-            #     length_unit=u.R_earth,
-            #     mass_unit=u.M_earth,
-            #     porb=params[f'{self.name}_period'],  # orbital period in days
-            #     prot=params[f'{self.name}_period'],  # rotation period in days (synchronous)
-            #     omega=params[f'{self.name}_omega'],  # longitude of ascending node in degrees
-            #     ecc=params[f'{self.name}_ecc'],  # eccentricity
-            #     t0=params[f'{self.name}_t0'],  # time of transit in days
-            # )
-
-            # sys = starry.System(star, planet)
             self.keplerian_system = sys
             transit_spot = eval_in_model(flux_model[0])
-            # transit_spot = params[f"{self.name}_A"] * eval_in_model(sys.flux(data.time.to_value('d')))
         return transit_spot
 
-    def multiwavelength_map(self, params: dict):
-
-        for i in range(self.nwave):
-            self.check_and_fill_missing_parameters(params, i)
-
-        with pm.Model() as temp_model:
-            star = starry.Primary(
-                starry.Map(ydeg=self.ydeg,
-                           nw=self.nwave,
-                           udeg=2,
-                           amp=params[f"{self.name}_stellar_amp"],
-                           inc=params[f"{self.name}_stellar_inc"],
-                           obl=params[f"{self.name}_stellar_obl"]),
-                r=params[f"{self.name}_rs"],
-                m=params[f"{self.name}_ms"],
-                prot=params[f'{self.name}_prot'],
-                length_unit=u.R_sun,
-                mass_unit=u.M_sun,
-            )
-            star.map[1:] = params[f"{self.name}_u"]
-
-            # star.map.spot(contrast=params[f'{self.name}_spot_contrast'],
-            #               radius=params[f'{self.name}_spot_radius'],
-            #               lat=params[f'{self.name}_spot_latitude'],
-            #               lon=params[f'{self.name}_spot_longitude'])
-
-            for spot_i in range(self.nspots):
-                star.map.spot(contrast=params[f"{self.name}_spot_{spot_i + 1}_contrast"],
-                              radius=params[f"{self.name}_spot_{spot_i + 1}_radius"],
-                              lat=params[f"{self.name}_spot_{spot_i + 1}_latitude"],
-                              lon=params[f"{self.name}_spot_{spot_i + 1}_longitude"])
+    # def multiwavelength_map(self, params: dict):
+    #
+    #     for i in range(self.nwave):
+    #         self.check_and_fill_missing_parameters(params, i)
+    #
+    #     with pm.Model() as temp_model:
+    #         star = starry.Primary(
+    #             starry.Map(ydeg=self.ydeg,
+    #                        nw=self.nwave,
+    #                        udeg=2,
+    #                        amp=params[f"{self.name}_stellar_amp"],
+    #                        inc=params[f"{self.name}_stellar_inc"],
+    #                        obl=params[f"{self.name}_stellar_obl"]),
+    #             r=params[f"{self.name}_rs"],
+    #             m=params[f"{self.name}_ms"],
+    #             prot=params[f'{self.name}_prot'],
+    #             length_unit=u.R_sun,
+    #             mass_unit=u.M_sun,
+    #
+    #         )
+    #         star.map[1:] = params[f"{self.name}_u"]
+    #
+    #         # star.map.spot(contrast=params[f'{self.name}_spot_contrast'],
+    #         #               radius=params[f'{self.name}_spot_radius'],
+    #         #               lat=params[f'{self.name}_spot_latitude'],
+    #         #               lon=params[f'{self.name}_spot_longitude'])
+    #
+    #         for spot_i in range(self.nspots):
+    #             star.map.spot(contrast=params[f"{self.name}_spot_{spot_i + 1}_contrast"],
+    #                           radius=params[f"{self.name}_spot_{spot_i + 1}_radius"],
+    #                           lat=params[f"{self.name}_spot_{spot_i + 1}_latitude"],
+    #                           lon=params[f"{self.name}_spot_{spot_i + 1}_longitude"])
 
     def show_system(self, **kw):
         if self.method == "starry":
             if hasattr(self, 'keplerian_system'):
                 self.keplerian_system.show(**kw)
+
+    def make_transmission_spectrum_table(
+            self, uncertainty=["hdi_16%", "hdi_84%"], svname=None
+    ):
+        """
+        Generate and return a transmission spectrum table
+        """
+
+        # THIS IS 100% A HACK TO INCLUDE RADIUS_RATIO IN THE RESULTS TABLE:
+        _, pm_models = self.choose_model_based_on_optimization_method()
+        with pm_models[0]:
+            try:
+                self.parameters[f'{self.name}_radius_ratio'] = Normal('radius_ratio', mu=0.1, sigma=0.1)
+            except:
+                pass
+
+        return TransitModel.make_transmission_spectrum_table(self, uncertainty=uncertainty, svname=svname)
+
+    def plot_transmission_spectrum(
+            self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
+    ):
+        """
+        Plot the transmission spectrum (specifically the planet size as a function of wavelength).
+
+        Parameters
+        ----------
+        table: [Optional] Table to use as transmssion spectrum (otherwise the default is to use the MCMC sampling results.
+        The table must have the following columns: "{self.name}_radius_ratio", "{self.name}_radius_ratio_neg_error",
+        "{self.name}_radius_ratio_pos_error", "wavelength".
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%", "hdi_84%",
+        "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        ax: [Optional] Pass a preexisting matplotlib axis is to be used instead of creating a new one.Default = None.
+        plotkw: [Optional] Dict of kw to pass to the transmission specrum plotting function.
+        kw: [Optional] kw to pass to the TransitModel.plot_transmission_spectrum.
+
+        Returns
+        -------
+
+        """
+        self.parameters[f'{self.name}_radius_ratio'] = self.summary['mean'][f'{self.name}_radius_ratio[0]']
+        TransitModel.plot_transmission_spectrum(self, table=table, uncertainty=uncertainty, ax=ax, plotkw=plotkw, **kw)
+
+    def plot_spot_spectrum(
+        self, **kw
+    ):
+        """
+        Plot the spot spectrum (specifically the spot contrast as a function of wavelength).
+
+        Parameters
+        ----------
+        table: [Optional] Table to use as spot spectrum (otherwise the default is to use the MCMC sampling results.
+        The table must have the following columns: "{self.name}_spot_contrast", "{self.name}_spot_contrast_neg_error",
+        "{self.name}_spot_contrast_pos_error", "wavelength".
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%", "hdi_84%",
+        "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        ax: [Optional] Pass a preexisting matplotlib axis is to be used instead of creating a new one.Default = None.
+        plotkw: [Optional] Dict of kw to pass to the spot specrum plotting function.
+        kw: [Optional] kw to pass to .make_spot_spectrum_table()
+
+        Returns
+        -------
+
+        """
+        self.plot_spectrum(param="spot_contrast", name_of_spectrum="Stellar Spot", **kw)
 
     def add_model_to_rainbow(self):
         """

@@ -1704,5 +1704,121 @@ class LightcurveModel:
     def write_chromatic_model(self, filename):
         pickle.dump(self, open(filename, 'wb'))
 
+    def make_spectrum_table(
+        self, param="radius_ratio", uncertainty=["hdi_16%", "hdi_84%"], svname=None
+    ):
+        """
+        Generate and return a spectrum table
+
+        Parameters
+        ----------
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%",
+        "hdi_84%", "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        svname: [Optional] String csv filename to save the transmission table. Default = None (do not save)
+
+        Returns
+        -------
+
+        """
+        results = self.get_results(uncertainty=uncertainty)[
+            [
+                "wavelength",
+                f"{self.name}_{param}",
+                f"{self.name}_{param}_{uncertainty[0]}",
+                f"{self.name}_{param}_{uncertainty[1]}",
+            ]
+        ]
+        trans_table = results[["wavelength", f"{self.name}_{param}"]]
+        if "hdi" in uncertainty[0]:
+            trans_table[f"{self.name}_{param}_neg_error"] = (
+                results[f"{self.name}_{param}"]
+                - results[f"{self.name}_{param}_{uncertainty[0]}"]
+            )
+            trans_table[f"{self.name}_{param}_pos_error"] = (
+                results[f"{self.name}_{param}_{uncertainty[1]}"]
+                - results[f"{self.name}_{param}"]
+            )
+        else:
+            trans_table[f"{self.name}_{param}_neg_error"] = results[
+                f"{self.name}_{param}_{uncertainty[0]}"
+            ]
+            trans_table[f"{self.name}_{param}_pos_error"] = results[
+                f"{self.name}_{param}_{uncertainty[1]}"
+            ]
+
+        if svname is not None:
+            assert isinstance(svname, object)
+            trans_table.to_csv(svname)
+        else:
+            return trans_table
+
+    def plot_spectrum(
+        self, param="radius_ratio", name_of_spectrum="transmission", table=None, uncertainty=["hdi_16%", "hdi_84%"],
+        ax=None, plotkw={}, **kw
+    ):
+        """
+        Plot the transmission spectrum (specifically the planet size as a function of wavelength).
+
+        Parameters
+        ----------
+        table: [Optional] Table to use as transmssion spectrum (otherwise the default is to use the MCMC sampling results.
+        The table must have the following columns: "{self.name}_radius_ratio", "{self.name}_radius_ratio_neg_error",
+        "{self.name}_radius_ratio_pos_error", "wavelength".
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%", "hdi_84%",
+        "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        ax: [Optional] Pass a preexisting matplotlib axis is to be used instead of creating a new one.Default = None.
+        plotkw: [Optional] Dict of kw to pass to the transmission specrum plotting function.
+        kw: [Optional] kw to pass to the TransitModel.make_transmission_spectrum_table
+
+        Returns
+        -------
+
+        """
+        if table is not None:
+            transmission_spectrum = table
+            try:
+                # ensure the correct columns exist in the transmission spectrum table
+                assert transmission_spectrum[f"{self.name}_{param}"]
+                assert transmission_spectrum[f"{self.name}_{param}_neg_error"]
+                assert transmission_spectrum[f"{self.name}_{param}_pos_error"]
+                assert transmission_spectrum["wavelength"]
+            except:
+                print(
+                    f"The given table doesn't have the correct columns 'wavelength', '{self.name}_{param}', "
+                    f"{self.name}_{param}_pos_error' and '{self.name}_{param}_neg_error'"
+                )
+        else:
+            kw["uncertainty"] = uncertainty
+            transmission_spectrum = self.make_spectrum_table(param=param, **kw)
+            transmission_spectrum["wavelength"] = [
+                t.to_value("micron") for t in transmission_spectrum["wavelength"].values
+            ]
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 4))
+
+        plt.sca(ax)
+        plt.title(f"{name_of_spectrum} Spectrum")
+        plt.plot(
+            transmission_spectrum["wavelength"],
+            transmission_spectrum[f"{self.name}_{param}"],
+            "kx",
+            **plotkw,
+        )
+        plt.errorbar(
+            transmission_spectrum["wavelength"],
+            transmission_spectrum[f"{self.name}_{param}"],
+            yerr=[
+                transmission_spectrum[f"{self.name}_{param}_neg_error"],
+                transmission_spectrum[f"{self.name}_{param}_pos_error"],
+            ],
+            color="k",
+            capsize=2,
+            linestyle="None",
+            **plotkw,
+        )
+        plt.xlabel("Wavelength (microns)")
+        plt.ylabel(param)
+
 
 from .combined import *
