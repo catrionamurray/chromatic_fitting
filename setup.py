@@ -79,7 +79,7 @@ setup(
         "astropy>=4.0",
         "pandas",
         "chromatic-lightcurves>=0.2.2",
-        "pymc>=3.11.1",
+        "pymc3>=3.11.1",
         "pymc3_ext",
         "corner",
         "exoplanet>=0.5.0",

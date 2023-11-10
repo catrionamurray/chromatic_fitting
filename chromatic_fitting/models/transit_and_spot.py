@@ -99,7 +99,7 @@ class TransitSpotModel(LightcurveModel):
                 print(k)
                 opt_copy[k] = v.value
         opt_copy[f'{self.name}_u'] = opt_copy[f'{self.name}_u'][0]
-        flux, starry_model = s.setup_star_and_planet(param_i=opt_copy, name=f"{self.name}_", method='starry',
+        flux, starry_model = self.setup_star_and_planet(param_i=opt_copy, name=f"{self.name}_", method='starry',
                                                      time=self.data.time,
                                                      flux_model=[])
 
@@ -148,7 +148,7 @@ class TransitSpotModel(LightcurveModel):
             )
 
             sys = starry.System(star, planet)
-            flux_model.append(param_i[f"{name}A"] * sys.flux(time))
+            flux_model.append(param_i[f"{name}A"]-1 + sys.flux(time))
 
         elif method == "fleck":
             print("fleck method not implemented yet")
@@ -278,7 +278,11 @@ class TransitSpotModel(LightcurveModel):
 
         with pm.Model() as temp_model:
             flux_model, sys = self.setup_star_and_planet(f"{self.name}_", self.method, params, data.time.to_value('d'), [])
-            self.keplerian_system = sys
+            # self.keplerian_system = sys
+            if hasattr(self, 'keplerian_system'):
+                self.keplerian_system[f'w{i}'] = sys
+            else:
+                self.keplerian_system = {f'w{i}': sys}
             transit_spot = eval_in_model(flux_model[0])
         return transit_spot
 
@@ -315,10 +319,10 @@ class TransitSpotModel(LightcurveModel):
     #                           lat=params[f"{self.name}_spot_{spot_i + 1}_latitude"],
     #                           lon=params[f"{self.name}_spot_{spot_i + 1}_longitude"])
 
-    def show_system(self, **kw):
+    def show_system(self, i=0, **kw):
         if self.method == "starry":
             if hasattr(self, 'keplerian_system'):
-                self.keplerian_system.show(**kw)
+                self.keplerian_system[f'w{i}'].show(**kw)
 
     def make_transmission_spectrum_table(
             self, uncertainty=["hdi_16%", "hdi_84%"], svname=None
