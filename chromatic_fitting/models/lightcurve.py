@@ -818,10 +818,19 @@ class LightcurveModel:
 
                     try:
                         samp = sampling_method(start=start, **sampling_kw, **kw)
-                        if summarize_step_by_step:
-                            self.summary.append(summary(samp, **summarize_kw))
-                        else:
-                            self.trace.append(samp)
+                        # if summarize_step_by_step:
+                        #     self.summary.append(summary(samp, **summarize_kw))
+                        # else:
+                        self.trace.append(samp)
+
+                    except EOFError:
+                        print(
+                            """An error (EOFError) with Starry has occurred related to multiprocessing. 
+                            Sometimes it works if we try sampling using 'spawn' instead of default 'fork' (mp_ctx='spawn')..."""
+                        )
+                        sampling_kw['mp_ctx'] = "spawn"
+                        samp = sampling_method(start=start, **sampling_kw, **kw)
+                        self.trace.append(samp)
 
                     except Exception as e:
                         print(f"Sampling failed for one of the models: {e}")

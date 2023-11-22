@@ -11,10 +11,36 @@ Classifier: Intended Audience :: Science/Research
 Classifier: Programming Language :: Python
 Classifier: Topic :: Scientific/Engineering :: Astronomy
 Requires-Python: >=3.8
-Provides-Extra: develop
-Provides-Extra: gp
-Provides-Extra: eclipse
-Provides-Extra: spot
 License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: matplotlib>=3.5
+Requires-Dist: astropy>=4.0
+Requires-Dist: pandas
+Requires-Dist: chromatic-lightcurves>=0.2.2
+Requires-Dist: pymc3>=3.11.1
+Requires-Dist: pymc3_ext
+Requires-Dist: corner
+Requires-Dist: exoplanet>=0.5.0
+Requires-Dist: tqdm
+Requires-Dist: starry
+Requires-Dist: arviz==0.14.0
+Requires-Dist: xarray<2023.10.0
+Provides-Extra: develop
+Requires-Dist: pytest; extra == "develop"
+Requires-Dist: black; extra == "develop"
+Requires-Dist: jupyter; extra == "develop"
+Requires-Dist: ipython; extra == "develop"
+Requires-Dist: mkdocs; extra == "develop"
+Requires-Dist: mkdocs-material; extra == "develop"
+Requires-Dist: mkdocstrings; extra == "develop"
+Requires-Dist: mkdocs-jupyter; extra == "develop"
+Requires-Dist: mkdocs-exclude; extra == "develop"
+Provides-Extra: gp
+Requires-Dist: celerite2; extra == "gp"
+Provides-Extra: eclipse
+Requires-Dist: starry; extra == "eclipse"
+Provides-Extra: spot
+Requires-Dist: starry; extra == "spot"
 
 Read the complete documentation at https://catrionamurray.github.io/chromatic_fitting/
