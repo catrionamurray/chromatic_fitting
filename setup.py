@@ -86,7 +86,7 @@ setup(
         "tqdm",
         "starry",
         "arviz==0.14.0",
-        "xarray<2023.10.0"
+        "xarray<2023.10.0" # for newer versions of starry
     ],
     # what version of Python is required?
     python_requires=">=3.8",  # f-strings are introduced in 3.6!

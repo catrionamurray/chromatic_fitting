@@ -408,3 +408,19 @@ class TransitSpotModel(LightcurveModel):
         r_with_model = data.attach_model(model=model, planet_model=model)
         # save the Rainbow_with_model for later
         self.data_with_model = r_with_model
+
+    def sample(
+            self,
+            summarize_step_by_step=False,
+            summarize_kw={"round_to": 7, "hdi_prob": 0.68, "fmt": "wide"},
+            sampling_method=pmx.sample,
+            sampling_kw={"init": "adapt_full", "mp_ctx": "spawn"},
+            **kw,
+        ):
+        LightcurveModel.sample(
+            summarize_step_by_step=summarize_step_by_step,
+            summarize_kw=summarize_kw,
+            sampling_method=sampling_method,
+            sampling_kw=sampling_kw,
+            **kw
+        )
