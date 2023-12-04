@@ -331,7 +331,7 @@ class EclipseModel(LightcurveModel):
         self.data_with_model = r_with_model
 
     def eclipse_model(
-        self, params: dict, i: int = 0, time: list = None
+        self, params: dict, i: int = 0, time: list = None,
     ) -> np.array:
         """
         Create a eclipse model given the passed parameters.
@@ -360,7 +360,7 @@ class EclipseModel(LightcurveModel):
             else:
                 data = self.get_data()
             time = list(data.time.to_value("day"))
-
+        self.parameters = list(params.keys())
         self.check_and_fill_missing_parameters(params, i)
         w = data.wavelength[i]
         star = starry.Primary(
