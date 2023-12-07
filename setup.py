@@ -73,7 +73,7 @@ setup(
     ],
     # what other packages are needed? (must be pip-installable)
     install_requires=[
-        "numpy",
+        "numpy<1.22.0",
         "scipy",
         "matplotlib>=3.5",
         "astropy>=4.0",
@@ -85,7 +85,8 @@ setup(
         "exoplanet>=0.5.0",
         "tqdm",
         "starry",
-        "arviz==0.14.0"
+        "arviz==0.14.0",
+        "xarray<2023.10.0"
     ],
     # what version of Python is required?
     python_requires=">=3.8",  # f-strings are introduced in 3.6!
