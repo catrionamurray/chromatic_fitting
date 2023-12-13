@@ -14,3 +14,4 @@ chromatic_fitting/tests
 *.pickle
 /build/
 /site/
+notebooks/Kepler-51
