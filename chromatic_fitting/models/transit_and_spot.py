@@ -21,7 +21,8 @@ class TransitSpotModel(LightcurveModel):
             self,
             name: str = "transitspot",
             method: str = "starry",
-            ydeg: int = 15,
+            ydeg: int = 20,
+            spot_smoothing = None,
             nspots: int = 1,
             type_of_model: str = "planet",
             **kw: object,
@@ -44,6 +45,10 @@ class TransitSpotModel(LightcurveModel):
                 "You have selected >=35 spherical harmonic degrees. Starry does not behave nicely at this high a resolution!")
 
         self.nspots = nspots
+        if spot_smoothing is not None:
+            self.spot_smoothing = spot_smoothing
+        else:
+            self.spot_smoothing = 2/ydeg
 
         # only require a constant (0th order) term:
         self.required_parameters = ["A", "rs", "ms", "prot", "u", "stellar_amp", "stellar_inc", "stellar_obl",
@@ -127,11 +132,14 @@ class TransitSpotModel(LightcurveModel):
 
             star.map[1:] = param_i[f"{name}u"]
 
+
+
             for spot_i in range(self.nspots):
                 star.map.spot(contrast=param_i[f"{name}spot_contrast"], #param_i[f"{name}spot_{spot_i + 1}_contrast"],
                               radius=param_i[f"{name}spot_{spot_i + 1}_radius"],
                               lat=param_i[f"{name}spot_{spot_i + 1}_latitude"],
-                              lon=param_i[f"{name}spot_{spot_i + 1}_longitude"])
+                              lon=param_i[f"{name}spot_{spot_i + 1}_longitude"],
+                              spot_smoothing=self.spot_smoothing)
 
             planet = starry.kepler.Secondary(
                 starry.Map(ydeg=0, amp=param_i[f"{name}amp"]),  # the surface map
