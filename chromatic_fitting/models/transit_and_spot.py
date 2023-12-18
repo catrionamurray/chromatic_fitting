@@ -25,6 +25,7 @@ class TransitSpotModel(LightcurveModel):
             spot_smoothing = None,
             nspots: int = 1,
             type_of_model: str = "planet",
+            plot_min_radius = True,
             **kw: object,
     ) -> None:
         """
@@ -45,10 +46,14 @@ class TransitSpotModel(LightcurveModel):
                 "You have selected >=35 spherical harmonic degrees. Starry does not behave nicely at this high a resolution!")
 
         self.nspots = nspots
+
         if spot_smoothing is not None:
             self.spot_smoothing = spot_smoothing
         else:
             self.spot_smoothing = 2/ydeg
+
+        if plot_min_radius:
+            self.plot_minimum_spot_radius()
 
         # only require a constant (0th order) term:
         self.required_parameters = ["A", "rs", "ms", "prot", "u", "stellar_amp", "stellar_inc", "stellar_obl",
@@ -111,6 +116,48 @@ class TransitSpotModel(LightcurveModel):
         starry_model.show(t=opt_copy[f"{self.name}_t0"])
         starry_model.primary.map.show(theta=starry_model.primary.theta0)
         return flux, starry_model
+
+    def plot_minimum_spot_radius(self):
+        smstrs = [0.0, 1.0, 2.0, self.spot_smoothing*self.ydeg]
+        ydegs = np.arange(10, 36)  # [10, 15, 20, 25, 30]
+        radii = np.arange(1, 30)
+        tol = 0.1
+        rmin = np.zeros((len(smstrs), len(ydegs)))
+        for i, smstr in enumerate(smstrs):
+            for j, ydeg in enumerate(ydegs):
+                map = starry.Map(ydeg)
+                # error = np.zeros(len(radii))
+                for radius in radii:
+                    map.reset()
+                    map.spot(contrast=1, radius=radius, spot_smoothing=smstr / ydeg)
+                    if (
+                            np.abs(np.mean(map.intensity(lon=np.linspace(0, 0.75 * radius, 50))))
+                            < tol
+                    ):
+                        rmin[i, j] = radius
+                        break
+
+        plt.figure(figsize=(6, 6))
+        plt.plot(ydegs, rmin[0], "-o", label=r"$0$")
+        plt.plot(ydegs, rmin[1], "-o", label=r"$1 / l_\mathrm{max}$")
+        plt.plot(ydegs, rmin[2], "-o", label=r"$2 / l_\mathrm{max}$ (default)")
+        plt.plot(ydegs, rmin[3], "-o", c='k', label=f"${self.spot_smoothing*self.ydeg}"+r"$ / l_\mathrm{max}$ (user)")
+        plt.axvline(self.ydeg, c='k', alpha=0.8)
+        ind = np.where(np.array(ydegs) == self.ydeg)[0][0]
+        plt.axhline(rmin[0][ind], c='k', alpha=0.2)
+        plt.axhline(rmin[1][ind], c='k', alpha=0.2)
+        plt.axhline(rmin[2][ind], c='k', alpha=0.2)
+        plt.axhline(rmin[3][ind], c='k', alpha=0.8)
+        plt.legend(title="smoothing", fontsize=10)
+        plt.xticks([10, 15, 20, 25, 30])
+        plt.xlabel(r"spherical harmonic degree $l_\mathrm{max}$")
+        plt.ylabel(r"minimum spot radius [degrees]")
+        plt.show()
+
+        print(f"""
+        With {self.ydeg} orders of spherical harmonics the minimum spot radius we can model
+        (with <{tol*100}% error on the contrast) is {rmin[3][ind]} degrees.
+        """)
 
 
     def setup_star_and_planet(self, name, method, param_i, time, flux_model):
