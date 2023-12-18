@@ -308,7 +308,7 @@ class TransitSpotModel(LightcurveModel):
                 else:
                     self.initial_guess[f"wavelength_{j}"] += initial_guess
 
-    def transit_spot_model(self, params: dict, i: int = 0) -> np.array:
+    def transit_spot_model(self, params: dict, i: int = 0, save_keplerian_system=False) -> np.array:
         """
         Return a exponential model, given a dictionary of parameters.
 
@@ -334,45 +334,13 @@ class TransitSpotModel(LightcurveModel):
         with pm.Model() as temp_model:
             flux_model, sys = self.setup_star_and_planet(f"{self.name}_", self.method, params, data.time.to_value('d'), [])
             # self.keplerian_system = sys
-            if hasattr(self, 'keplerian_system'):
-                self.keplerian_system[f'w{i}'] = sys
-            else:
-                self.keplerian_system = {f'w{i}': sys}
+            if save_keplerian_system:
+                if hasattr(self, 'keplerian_system'):
+                    self.keplerian_system[f'w{i}'] = sys
+                else:
+                    self.keplerian_system = {f'w{i}': sys}
             transit_spot = eval_in_model(flux_model[0])
         return transit_spot
-
-    # def multiwavelength_map(self, params: dict):
-    #
-    #     for i in range(self.nwave):
-    #         self.check_and_fill_missing_parameters(params, i)
-    #
-    #     with pm.Model() as temp_model:
-    #         star = starry.Primary(
-    #             starry.Map(ydeg=self.ydeg,
-    #                        nw=self.nwave,
-    #                        udeg=2,
-    #                        amp=params[f"{self.name}_stellar_amp"],
-    #                        inc=params[f"{self.name}_stellar_inc"],
-    #                        obl=params[f"{self.name}_stellar_obl"]),
-    #             r=params[f"{self.name}_rs"],
-    #             m=params[f"{self.name}_ms"],
-    #             prot=params[f'{self.name}_prot'],
-    #             length_unit=u.R_sun,
-    #             mass_unit=u.M_sun,
-    #
-    #         )
-    #         star.map[1:] = params[f"{self.name}_u"]
-    #
-    #         # star.map.spot(contrast=params[f'{self.name}_spot_contrast'],
-    #         #               radius=params[f'{self.name}_spot_radius'],
-    #         #               lat=params[f'{self.name}_spot_latitude'],
-    #         #               lon=params[f'{self.name}_spot_longitude'])
-    #
-    #         for spot_i in range(self.nspots):
-    #             star.map.spot(contrast=params[f"{self.name}_spot_{spot_i + 1}_contrast"],
-    #                           radius=params[f"{self.name}_spot_{spot_i + 1}_radius"],
-    #                           lat=params[f"{self.name}_spot_{spot_i + 1}_latitude"],
-    #                           lon=params[f"{self.name}_spot_{spot_i + 1}_longitude"])
 
     def show_system(self, i=0, **kw):
         if self.method == "starry":
