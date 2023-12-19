@@ -46,6 +46,7 @@ class TransitSpotModel(LightcurveModel):
                 "You have selected >=35 spherical harmonic degrees. Starry does not behave nicely at this high a resolution!")
 
         self.nspots = nspots
+        self.ydeg = ydeg
 
         if spot_smoothing is not None:
             self.spot_smoothing = spot_smoothing
@@ -70,7 +71,6 @@ class TransitSpotModel(LightcurveModel):
         self.set_name(name)
         self.metadata = {}
         self.model = self.transit_spot_model
-        self.ydeg = ydeg
         self.method = method
 
         if self.method != "starry":
