@@ -25,7 +25,7 @@ class TransitSpotModel(LightcurveModel):
             spot_smoothing = None,
             nspots: int = 1,
             type_of_model: str = "planet",
-            plot_min_radius = True,
+            plot_min_radius = False,
             **kw: object,
     ) -> None:
         """
