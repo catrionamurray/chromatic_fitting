@@ -12,7 +12,7 @@ class ExponentialModel(LightcurveModel):
 
     def __init__(
         self,
-        t0: int,
+        t0: float,
         independant_variable: str = "time",
         name: str = "exponential",
         type_of_model: str = "systematic",
@@ -115,6 +115,7 @@ class ExponentialModel(LightcurveModel):
             f"{name}decay_time": [],
             f"{name}baseline": [],
         }
+
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j

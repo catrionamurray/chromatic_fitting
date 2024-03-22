@@ -1610,7 +1610,7 @@ import collections
 #         for j, mod in enumerate(models):
 #             with mod:
 #
-#                 # Set up a Keplerian orbit for the planets
+#                 # Set up a Keplerian orbit for the planets.py
 #                 orbit = xo.orbits.KeplerianOrbit(
 #                     period=self.parameters[name + "period"].get_prior(j),
 #                     t0=self.parameters[name + "epoch"].get_prior(j),

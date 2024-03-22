@@ -1,5 +1,7 @@
 import pymc3 as pm
 import numpy as np
+import exoplanet as xo
+from exoplanet import QuadLimbDark
 
 
 class Parameter:
@@ -9,6 +11,7 @@ class Parameter:
 
     def set_name(self, name):
         self.name = name
+        """name for this parameter"""
 
 
 class Fixed(Parameter):
@@ -19,10 +22,11 @@ class Fixed(Parameter):
 
     def __init__(self, value, **inputs):
         self.value = value
+        """Value of this fixed parameter, constant across all wavelengths"""
 
     def get_prior(self, *args, **kwargs):
         """
-        Get the "prior", which is just a value.
+        Return the "prior", which for a Fixed parameter is just a value.
 
         Returns
         -------
@@ -32,6 +36,16 @@ class Fixed(Parameter):
         return self.value
 
     def get_prior_vector(self, *args, **kwargs):
+        """
+        Return the "prior" vector, which for a Fixed parameter is just a value.
+
+
+        Returns
+        -------
+        prior : float, array
+            The value or array for this parameter.
+
+        """
         return self.get_prior(self, *args, **kwargs)
 
     def __repr__(self):
@@ -46,10 +60,11 @@ class WavelikeFixed(Fixed):
 
     def __init__(self, values, **inputs):
         self.values = values
+        """Value of this fixed parameter which varies with wavelength"""
 
     def get_prior(self, i=None, *args, **kwargs):
         """
-        Get the "prior", which is just a value, for this wavelength.
+        Return the "prior", which is just a fixed value, for wavelength i.
 
         Parameters
         ----------
@@ -59,7 +74,7 @@ class WavelikeFixed(Fixed):
         Returns
         -------
         prior : float, array
-            The value or array for this parameter at this wavelength.
+            The value or array for this parameter at wavelength i.
         """
         if i is None:
             return [v for v in self.values]
@@ -67,6 +82,21 @@ class WavelikeFixed(Fixed):
             return self.values[i]
 
     def get_prior_vector(self, i=None, shape=None, *args, **kwargs):
+        """
+        Return the "prior", which is just a fixed value, for wavelength i.
+
+        Parameters
+        ----------
+        i : int
+            The index of the wavelength associated with this prior.
+        shape : int
+            Shape of parameter (default = None)
+
+        Returns
+        -------
+        prior : float, array
+            The value or array for this parameter at wavelength i.
+        """
         if i is None:
             # if shape is None:
             return self.get_prior(*args, **kwargs)
@@ -87,10 +117,13 @@ class Fitted(Parameter):
 
     def __init__(self, distribution, **inputs):
         self.distribution = distribution
+        """Prior distribution over this parameter"""
         self.inputs = inputs
+        """Optional extra inputs for this parameter's distribution (e.g. `name`, `upper`, `lower`, `mu`, `sigma`...) """
 
     def set_name(self, name):
         self.name = name
+        """name for this parameter"""
         self.inputs["name"] = name
 
     def generate_pymc3(self, *args, **kwargs):
@@ -103,11 +136,12 @@ class Fitted(Parameter):
             All keyword arguments will be ignored.
         """
         self._pymc3_prior = self.distribution(**self.inputs)
+        """PyMC3 prior set up for this parameter"""
         return self._pymc3_prior
 
     def get_prior(self, *args, **kwargs):
         """
-        Get the PyMC3 prior.
+        Return the PyMC3 prior.
 
         Returns
         -------
@@ -121,7 +155,7 @@ class Fitted(Parameter):
 
     def generate_pymc3_vector(self, *args, **kwargs):
         """
-        Generate a PyMC3 prior.
+        Generate and return a PyMC3 prior.
 
         Parameters
         ----------
@@ -135,7 +169,7 @@ class Fitted(Parameter):
 
     def get_prior_vector(self, *args, **kwargs):
         """
-        Get the PyMC3 prior.
+        Return the PyMC3 prior.
 
         Returns
         -------
@@ -171,7 +205,9 @@ class WavelikeFitted(Fitted):
 
     def __init__(self, distribution, **inputs):
         self.distribution = distribution
+        """Prior distribution over this parameter"""
         self.inputs = inputs
+        """Optional extra inputs for this parameter's distribution (e.g. `name`, `upper`, `lower`, `mu`, `sigma`...) """
         self._pymc3_priors = {}
 
     def label(self, i):
@@ -202,7 +238,7 @@ class WavelikeFitted(Fitted):
 
     def get_prior(self, i, *args, **kwargs):
         """
-        Get the PyMC3 prior for this wavelength.
+        Return the PyMC3 prior for this wavelength.
 
         Parameters
         ----------
@@ -237,30 +273,31 @@ class WavelikeFitted(Fitted):
         #         inputs[k] = v[i]
 
         inputs = dict(**inputs)
-        if "shape" not in self.inputs:
-            if shape is None:
-                inputs["shape"] = 1
-            elif shape > 1:
-                inputs["shape"] = shape  # shape  # (shape, 1)
-            else:
-                inputs["shape"] = 1
-        else:
-            if shape is not None:
-                if type(self.inputs["shape"]) == int:
-                    if self.inputs["shape"] > 1:
-                        inputs["shape"] = (shape, self.inputs["shape"])
-                        if "testval" in inputs:
-                            inputs["testval"] = [inputs["testval"]] * shape
-                    # else:
-                    #     inputs["shape"] = shape
+
+        if self.distribution != xo.distributions.physical.QuadLimbDark:
+            if "shape" not in self.inputs:
+                if shape is None:
+                    inputs["shape"] = 1
+                elif shape > 1:
+                    inputs["shape"] = shape  # shape  # (shape, 1)
                 else:
-                    if len(self.inputs["shape"]) == 1:
+                    inputs["shape"] = 1
+            else:
+                if shape is not None:
+                    if type(self.inputs["shape"]) == int:
+                        # this causes some issues with exoplanet.distributions.QuadLimbDark
                         if self.inputs["shape"] > 1:
                             inputs["shape"] = (shape, self.inputs["shape"])
                             if "testval" in inputs:
-                                inputs["testval"] = inputs["testval"] * shape
+                                inputs["testval"] = [inputs["testval"]] * shape
+                    else:
+                        if len(self.inputs["shape"]) == 1:
+                            if self.inputs["shape"] > 1:
+                                inputs["shape"] = (shape, self.inputs["shape"])
+                                if "testval" in inputs:
+                                    inputs["testval"] = inputs["testval"] * shape
 
-        self.inputs["shape"] = inputs["shape"]
+            self.inputs["shape"] = inputs["shape"]
 
         # if i is not None:
         #     inputs["name"] = self.label(i)
@@ -276,7 +313,7 @@ class WavelikeFitted(Fitted):
 
     def get_prior_vector(self, shape=None, i=None, *args, **kwargs):
         """
-        Get the PyMC3 prior for this wavelength.
+        Return the PyMC3 prior for this wavelength.
 
         Parameters
         ----------
