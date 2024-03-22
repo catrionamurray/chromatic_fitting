@@ -8,6 +8,7 @@ starry.config.lazy = True
 starry.config.quiet = True
 
 import theano
+# import aesara_theano_fallback.tensor as tt
 
 theano.config.gcc__cxxflags += " -fexceptions"
 
@@ -26,6 +27,7 @@ class TransitSpotModel(LightcurveModel):
             nspots: int = 1,
             type_of_model: str = "planet",
             plot_min_radius = False,
+            fit_for_n_spots = False,
             **kw: object,
     ) -> None:
         """
@@ -47,24 +49,34 @@ class TransitSpotModel(LightcurveModel):
 
         self.nspots = nspots
         self.ydeg = ydeg
+        self.fit_for_n_spots = fit_for_n_spots
 
-        if spot_smoothing is not None:
-            self.spot_smoothing = spot_smoothing
-        else:
-            self.spot_smoothing = 2/ydeg
+        if self.nspots > 0:
+            if spot_smoothing is not None:
+                self.spot_smoothing = spot_smoothing
+            else:
+                self.spot_smoothing = 2/ydeg
 
-        if plot_min_radius:
-            self.plot_minimum_spot_radius()
+            if plot_min_radius:
+                self.plot_minimum_spot_radius()
 
         # only require a constant (0th order) term:
         self.required_parameters = ["A", "rs", "ms", "prot", "u", "stellar_amp", "stellar_inc", "stellar_obl",
                                     "mp", "rp", "inc", "amp", "period", "omega", "ecc", "t0",
                                     "spot_contrast"]
-        for n in range(self.nspots):
-            self.required_parameters.extend([#f"spot_{n + 1}_contrast",
-                                             f"spot_{n + 1}_radius",
-                                             f"spot_{n + 1}_latitude",
-                                             f"spot_{n + 1}_longitude"])
+
+        if fit_for_n_spots:
+            for nspots in range(self.nspots):
+                for n in range(nspots):
+                    self.required_parameters.extend([f"{nspots+1}_spot_{n + 1}_radius",
+                                                     f"{nspots+1}_spot_{n + 1}_latitude",
+                                                     f"{nspots+1}_spot_{n + 1}_longitude"])
+            self.required_parameters.extend(["nspots"])
+        else:
+            for n in range(self.nspots):
+                self.required_parameters.extend([f"{self.nspots}_spot_{n + 1}_radius",
+                                                 f"{self.nspots}_spot_{n + 1}_latitude",
+                                                 f"{self.nspots}_spot_{n + 1}_longitude"])
 
         super().__init__(**kw)
         self.set_defaults()
@@ -93,14 +105,22 @@ class TransitSpotModel(LightcurveModel):
         """
         Set the default parameters for the model.
         """
-        self.defaults = dict(A=1, rs=1, ms=1, stellar_amp=1, stellar_inc=90, stellar_obl=0.0, prot=3, u=[0.1, 0.1],
+        self.defaults = dict(A=1, rs=1, ms=1, stellar_amp=1, stellar_inc=90, stellar_obl=0.0, prot=1000, u=[0.1, 0.1],
                              # spot_contrast=0.5, spot_radius=20, spot_latitude=0.0, spot_longitude=0.0,
-                             mp=1, rp=1, inc=90, amp=5e-3, period=3, omega=100, ecc=0.0, t0=0.0, spot_contrast=0.5)
-        for n in range(self.nspots):
-            # self.defaults[f"spot_{n + 1}_contrast"] = 0.5
-            self.defaults[f"spot_{n + 1}_radius"] = 20
-            self.defaults[f"spot_{n + 1}_latitude"] = 0.0
-            self.defaults[f"spot_{n + 1}_longitude"] = 0.0
+                             mp=1, rp=1, inc=90, amp=5e-3, omega=0.0, period=10, ecc=0.0, t0=0.0, spot_contrast=0.5) #omega=100,
+
+        if self.fit_for_n_spots:
+            for nspots in range(self.nspots):
+                for n in range(nspots):
+                    self.defaults[f"{nspots+1}_spot_{n + 1}_radius"] = 20
+                    self.defaults[f"{nspots+1}_spot_{n + 1}_latitude"] = 0.0
+                    self.defaults[f"{nspots+1}_spot_{n + 1}_longitude"] = 0.0
+            self.defaults['nspots'] = self.nspots
+        else:
+            for n in range(self.nspots):
+                self.defaults[f"{self.nspots}_spot_{n + 1}_radius"] = 20
+                self.defaults[f"{self.nspots}_spot_{n + 1}_latitude"] = 0.0
+                self.defaults[f"{self.nspots}_spot_{n + 1}_longitude"] = 0.0
 
     def plot_optimized_map(self, opt):
         opt_copy = opt.copy()
@@ -179,14 +199,27 @@ class TransitSpotModel(LightcurveModel):
 
             star.map[1:] = param_i[f"{name}u"]
 
+            if self.fit_for_n_spots:
+                nspots = param_i[f"{name}nspots"]
+                if pm.math.eq(nspots, 0) == True:
+                    pass
+                else:
+                    for ns in range(self.nspots):
+                        if pm.math.eq(nspots, ns + 1):
+                            for spot_i in range(ns + 1):
+                                star.map.spot(contrast=param_i[f"{name}spot_contrast"],
+                                              radius=param_i[f"{name}{ns + 1}_spot_{spot_i + 1}_radius"],
+                                              lat=param_i[f"{name}{ns + 1}_spot_{spot_i + 1}_latitude"],
+                                              lon=param_i[f"{name}{ns + 1}_spot_{spot_i + 1}_longitude"],
+                                              spot_smoothing=self.spot_smoothing)
 
-
-            for spot_i in range(self.nspots):
-                star.map.spot(contrast=param_i[f"{name}spot_contrast"], #param_i[f"{name}spot_{spot_i + 1}_contrast"],
-                              radius=param_i[f"{name}spot_{spot_i + 1}_radius"],
-                              lat=param_i[f"{name}spot_{spot_i + 1}_latitude"],
-                              lon=param_i[f"{name}spot_{spot_i + 1}_longitude"],
-                              spot_smoothing=self.spot_smoothing)
+            else:
+                for spot_i in range(self.nspots):
+                    star.map.spot(contrast=param_i[f"{name}spot_contrast"], #param_i[f"{name}spot_{spot_i + 1}_contrast"],
+                                  radius=param_i[f"{name}{self.nspots}_spot_{spot_i + 1}_radius"],
+                                  lat=param_i[f"{name}{self.nspots}_spot_{spot_i + 1}_latitude"],
+                                  lon=param_i[f"{name}{self.nspots}_spot_{spot_i + 1}_longitude"],
+                                  spot_smoothing=self.spot_smoothing)
 
             planet = starry.kepler.Secondary(
                 starry.Map(ydeg=0, amp=param_i[f"{name}amp"]),  # the surface map
@@ -254,6 +287,7 @@ class TransitSpotModel(LightcurveModel):
         for p in self.parameters.keys():
             parameters_to_loop_over[p] = []
 
+
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j
@@ -276,12 +310,16 @@ class TransitSpotModel(LightcurveModel):
                         else:
                             param_i[pname] = param[j][0]
 
-                    flux_model, _ = self.setup_star_and_planet(name, self.method, param_i, data.time.to_value('d'), flux_model)
+
+                    flux_model, _ = self.setup_star_and_planet(name=name, method=self.method, param_i=param_i,
+                                                               time=data.time.to_value('d'),
+                                                               flux_model=flux_model)
 
                     # save the radius ratio for generating the transmission spectrum later:
                     rr = Deterministic(f"{name}radius_ratio[{i + j}]",
                                        (param_i[f"{name}rp"] * (1 * u.R_earth).to_value("R_sun")) / param_i[
                                            f"{name}rs"])
+                    transit_depth = Deterministic(f"{name}depth[{i + j}]", rr ** 2)
 
                     initial_guess.append(eval_in_model(flux_model[-1]))
 

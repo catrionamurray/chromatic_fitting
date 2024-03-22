@@ -34,29 +34,30 @@ class LightcurveModel:
     The base lightcurve model
     """
 
-    required_parameters = []
-
     def __init__(self, name="lightcurve_model", **kw):
         """
 
         Parameters
         ----------
-        name: the name of the model
-        kw: additional keywords to pass ...
+        name: the name of the model (default='lightcurve_model')
+        kw: additional keywords to pass
         """
-        # define some default parameters (fixed):
+        required_parameters = []
         self.defaults = dict()
-        # the default fitting method is simultaneous fitting
+        """The default fixed parameters"""
         self.optimization = "simultaneous"
-        # by default do not store the lightcurve models
+        """The fitting method, default is simultaneous fitting"""
         self.store_models = False
-        # assign the model a name (overwritten by the specific models)
+        """Whether to store the lightcurve models, default is False"""
         self.name = name
-        # by default do not flag outliers
+        """The model name (overwritten by the specific models)"""
         self.outlier_flag = False
+        """Whether to flag outliers, default is False (WARNING: OUTLIER FLAGGING STILL IN BETA TESTING)"""
         self.has_gp = False
+        """Whether the model includes a Gaussian Process, by default False"""
 
         self.initialize_empty_model()
+
 
     def __add__(self, other):
         """
@@ -122,12 +123,9 @@ class LightcurveModel:
             and if it is fitted what its prior should be.
         """
 
-        # set up a dictionary of unprocessed
-        # print("RUNNING SETUP PARAMS")
-        # print(self.defaults)
+        # set up a dictionary of unprocessed parameters
         unprocessed_parameters = dict(self.defaults)
         unprocessed_parameters.update(**kw)
-        # print(unprocessed_parameters)
 
         # process all parameters into Parameter objects
         self.parameters = {}
@@ -183,6 +181,17 @@ class LightcurveModel:
         self._original_parameters = self.parameters.copy()
 
     def get_parameter_shape(self, param):
+        """
+        Set-up the shape of a specified parameter
+
+        Parameters
+        ----------
+        param: Parameter to set up the shape of
+
+        Returns
+        -------
+
+        """
         inputs = param.inputs
         for k in ["testval", "mu", "lower", "upper", "sigma"]:
             if k in inputs.keys():
@@ -204,7 +213,7 @@ class LightcurveModel:
 
     def which_steps_have_been_run(self):
         """
-        Print a summary of which fitting stages have been run
+        Print a friendly summary of which fitting stages have been run
         """
         parameters_setup = False
         data_attached = False
@@ -245,6 +254,13 @@ class LightcurveModel:
 
 
     def reinitialize(self):
+        """
+        Reinitialize model (incl. parameters and pymc3 model)
+
+        Returns
+        -------
+
+        """
         self.__init__(name=self.name)
         self.reinitialize_parameters()
 
@@ -275,13 +291,14 @@ class LightcurveModel:
 
     def initialize_empty_model(self):
         """
-        Restart with an empty model.
+        Restart with an empty PyMC3 model.
         """
         self._pymc3_model = pm.Model()
 
     def copy(self):
         """
          make a "copy" of each lightcurve model:
+
         :return:
         copy of lightcurve model
         """
@@ -379,6 +396,10 @@ class LightcurveModel:
                 mod.optimization = self.optimization
 
     def change_all_priors_to_Wavelike(self):
+        """
+        Change all parameter priors to Wavelike
+        i.e. Change Fitted to WavelikeFitted and Fixed to WavelikeFixed
+        """
         for k, v in self.parameters.items():
             if isinstance(v, Fitted) and not isinstance(v, WavelikeFitted):
                 self.parameters[k] = WavelikeFitted(v.distribution, **v.inputs)
@@ -388,6 +409,10 @@ class LightcurveModel:
                 self.parameters[k].set_name(k)
 
     def change_all_priors_to_notWavelike(self):
+        """
+        Change all Wavelike parameter priors to not Wavelike
+        i.e. Change WavelikeFitted to Fitted and WavelikeFixed to Fixed
+        """
         for k, v in self.parameters.items():
             if isinstance(v, WavelikeFitted):
                 self.parameters[k] = Fitted(v.distribution, **v.inputs)
@@ -395,18 +420,6 @@ class LightcurveModel:
             if isinstance(v, WavelikeFixed):
                 self.parameters[k] = Fixed(v.values[0])
                 self.parameters[k].set_name(k)
-
-    # def separate_wavelengths(self, i):
-    #     # if self.outlier_flag:
-    #     #     data_copy = self.data_without_outliers._create_copy()
-    #     # else:
-    #     data_copy = self.data._create_copy()
-    #
-    #     for k, v in data_copy.fluxlike.items():
-    #         data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
-    #     for k, v in data_copy.wavelike.items():
-    #         data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
-    #     return data_copy
 
     def separate_wavelengths(self, i):
         """
@@ -446,8 +459,8 @@ class LightcurveModel:
 
         Returns
         ----------
-        datas: reformated data
-        models: reformated models
+        datas: reformated data,
+        models: reformated models,
         *extra_arrs: reformated arrays
         """
         extra_arrs_new = []
@@ -499,6 +512,20 @@ class LightcurveModel:
     ):
         """
         Connect the light curve model to the actual data it aims to explain.
+
+        Parameters
+        ----------
+        mask_outliers: Boolean whether to mask outliers in time (WARNING: STILL IN BETA TESTING), \n
+        mask_wavelength_outliers: Boolean whether to mask outliers in wavelength (WARNING: STILL IN BETA TESTING),
+        sigma_wavelength: Number of sigmas for sigma-clipping in wavelength (WARNING: STILL IN BETA TESTING),
+        data_mask: User-defined outlier mask (WARNING: STILL IN BETA TESTING),
+        inflate_uncertainties: Boolean whether or not to inflate the uncertainties by a fitted factor `nsigma`,
+        inflate_uncertainties_prior: Prior on `nsigma` (default = WavelikeFitted(Uniform, lower=1.0, upper=3.0, testval=1.01)),
+        setup_lightcurves_kw: keywords to pass to self.setup_lightcurves()
+        kw: other keywords to pass to data masking
+
+        Returns
+        -------
         """
 
         if hasattr(self, "every_light_curve"):
@@ -817,6 +844,7 @@ class LightcurveModel:
                         start = mod.test_point
 
                     try:
+                        print(f"Sampling Wavelength: {i}")
                         samp = sampling_method(start=start, **sampling_kw, **kw)
                         # if summarize_step_by_step:
                         #     self.summary.append(summary(samp, **summarize_kw))
@@ -1268,7 +1296,7 @@ class LightcurveModel:
             self.sample()
 
         with self._pymc3_model:
-            _ = corner.corner(self.trace, **kw)
+            return corner.corner(self.trace, **kw)
 
     def check_and_fill_missing_parameters(self, params, i):
         if all([f"{self.name}_" in rp for rp in self.required_parameters]):
