@@ -12,6 +12,7 @@ class TrapezoidModel(LightcurveModel):
         self,
         name: str = "trapezoid",
         type_of_model: str = "planet",
+        secondary_eclipse = False,
         **kw: object,
     ) -> None:
         """
@@ -30,6 +31,7 @@ class TrapezoidModel(LightcurveModel):
         self.set_name(name)
         self.metadata = {}
         self.model = self.trapezoid_model
+        self.is_it_secondary_eclipse = secondary_eclipse
 
         if type_of_model in allowed_types_of_models:
             self.type_of_model = type_of_model
@@ -168,16 +170,27 @@ class TrapezoidModel(LightcurveModel):
                     val_a = -slope * (x - x1)
                     val_b = -param_i[f"{name}delta"]
                     val_c = -slope * (x4 - x)
-
-                    trap.append(
-                        param_i[f"{name}baseline"]
-                        * (
-                            1
-                            + (range_a * val_a)
-                            + (range_b * val_b)
-                            + (range_c * val_c)
+                    if self.is_it_secondary_eclipse:
+                        trap.append(
+                            (param_i[f"{name}baseline"]+param_i[f"{name}delta"])
+                            * (
+                                1
+                                + (range_a * val_a)
+                                + (range_b * val_b)
+                                + (range_c * val_c)
+                            )
                         )
-                    )
+    
+                    else:
+                        trap.append(
+                            param_i[f"{name}baseline"]
+                            * (
+                                1
+                                + (range_a * val_a)
+                                + (range_b * val_b)
+                                + (range_c * val_c)
+                            )
+                       )
 
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
@@ -251,10 +264,16 @@ class TrapezoidModel(LightcurveModel):
         val_a = 1 - slope * (x - x1)
         val_b = 1 - delta
         val_c = 1 - slope * (x4 - x)
-        flux = (
-            np.select([range_a, range_b, range_c], [val_a, val_b, val_c], default=1)
-            * baseline
-        )
+        if self.is_it_secondary_eclipse:
+            flux = (
+                np.select([range_a, range_b, range_c], [val_a, val_b, val_c], default=1)
+                * (baseline+delta)
+            )
+        else:
+            flux = (
+                np.select([range_a, range_b, range_c], [val_a, val_b, val_c], default=1)
+                * (baseline)
+            )
         return flux
 
     def add_model_to_rainbow(self):
