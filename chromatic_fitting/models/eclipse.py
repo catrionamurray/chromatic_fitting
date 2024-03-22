@@ -266,8 +266,6 @@ class EclipseModel(LightcurveModel):
                     )
                     planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
 
-                    eclipse_depth = pm.Deterministic(f"eclipse_depth_{i+j}", 10 ** param_i[f"{name}planet_log_amplitude"])
-
                     eclipse_depth = pm.Deterministic(f"{name}depth_{i+j}",10 ** param_i[f"{name}planet_log_amplitude"])
                     f_max = pm.Deterministic(f"{name}fmax_{i+j}", planet.map.flux(theta=0)[0])
                     f_min = pm.Deterministic(f"{name}fmin_{i + j}", planet.map.flux(theta=180)[0])
