@@ -38,7 +38,7 @@ def kepler51():
 
     planet_params = dict(
         porb=130.1845, # orbital period of planet (d)
-        mp=5.70 * u.M_earth, # mass of planet in M_earth
+        mp=6.5 * u.M_earth, # mass of planet in M_earth
         rp=9.46 * u.R_earth, # radius of planet in R_earth
         ecc=0.0, # eccentricity
         omega=-12.6, # longitude of ascending node in degrees,
