@@ -1,4 +1,4 @@
-__version__ = "0.12.8"
+__version__ = "0.12.9"
 
 
 def version():
@@ -36,3 +36,4 @@ def version():
 # v 0.12.0 - added phase curve model
 #    v 0.12.1 - added GP model
 #    v 0.12.2 - fixed bug in phase curve + eclipse model building
+#    v 0.12.9 - changed plot_priors and plot_posteriors to imshow
