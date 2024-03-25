@@ -164,13 +164,13 @@ class LightcurveModel:
         for k in self.required_parameters:
             assert k in self.parameters
 
-        # for k in self.parameters.keys():
-        #     if self.name in k:
-        #         warnings.warn(
-        #             f"{self.name} in the parameter name: {k}. Please avoid having the model name in the "
-        #             f"parameter name as it can get confusing!"
-        #         )
-        #         return
+        for k in self.parameters.keys():
+            if self.name in k:
+                # warnings.warn(
+                #     f"{self.name} in the parameter name: {k}. Please avoid having the model name in the "
+                #     f"parameter name as it can get confusing!"
+                # )
+                return
         self.parameters = add_string_before_each_dictionary_key(
             self.parameters, self.name
         )

@@ -1,4 +1,4 @@
-__version__ = "0.12.10"
+__version__ = "0.12.11"
 
 
 def version():
@@ -38,3 +38,4 @@ def version():
 #    v 0.12.2 - fixed bug in phase curve + eclipse model building
 #    v 0.12.9 - changed plot_priors and plot_posteriors to imshow
 #    v 0.12.10 - added edge case for fixed deterministic param
+#    v 0.12.11 - fixed duplicate name issue
