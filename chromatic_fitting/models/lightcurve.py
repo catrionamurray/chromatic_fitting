@@ -1009,7 +1009,9 @@ class LightcurveModel:
                     for w in range(data.nwave):
                         i_dict = {}
                         for k, v in prior_predictive_trace.items():
-                            if np.shape(v)[1] == 1:
+                            if np.shape(v) == ():
+                                i_dict = {**i_dict, **{k: v}}
+                            elif np.shape(v)[1] == 1:
                                 i_dict = {**i_dict, **{k: v[i][0]}}
                             elif np.shape(v)[1] == data.nwave:
                                 i_dict = {**i_dict, **{k: v[i][w]}}
@@ -1072,7 +1074,9 @@ class LightcurveModel:
                     for w in range(data.nwave):
                         i_dict = {}
                         for k, v in posterior_predictive_trace.items():
-                            if np.shape(v)[1] == 1:
+                            if np.shape(v) == ():
+                                i_dict = {**i_dict, **{k: v}}
+                            elif np.shape(v)[1] == 1:
                                 i_dict = {**i_dict, **{k: v[i][0]}}
                             elif np.shape(v)[1] == data.nwave:
                                 i_dict = {**i_dict, **{k: v[i][w]}}
