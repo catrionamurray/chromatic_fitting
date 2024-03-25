@@ -976,7 +976,7 @@ class LightcurveModel:
         self.sample(start=opt)
         # self.summarize(round_to=7, fmt="wide")
 
-    def plot_priors(self, n=3, quantity="data", plot_all=True):
+    def imshow_priors(self, n=3, quantity="data", plot_all=True):
         """
         Plot n prior samples from the parameter distributions defined by the user
         :parameter n
@@ -1034,7 +1034,7 @@ class LightcurveModel:
                     else:
                         data.imshow(ax=ax[i], quantity=f"prior-predictive-{i}")
 
-    def plot_posteriors(self, n=3, quantity="data", plot_all=True):
+    def imshow_posteriors(self, n=3, quantity="data", plot_all=True):
         """
         Plot n posterior samples from the parameter distributions defined by the user
         :parameter trace
