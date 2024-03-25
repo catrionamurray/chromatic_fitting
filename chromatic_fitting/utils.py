@@ -311,6 +311,50 @@ def add_string_before_each_dictionary_key(dict_old, string_to_add):
         dict_new[f"{string_to_add}_{k}"] = v
     return dict_new
 
+def remove_string_from_each_dictionary_key(dict_old, string_to_remove):
+    dict_new = {}
+    for k, v in dict_old.items():
+        new_k = k.replace(string_to_remove,"")
+        dict_new[new_k] = v
+    return dict_new
+
+def remove_keys_from_dictionary(dict_old, keys_to_remove):
+    dict_new = dict_old.copy()
+    [dict_new.pop(k) for k in keys_to_remove]
+    return dict_new
+
+def remove_all_keys_with_string_from_dictionary(dict_old, string_to_remove):
+    dict_new = {}
+    for k, v in dict_old.items():
+        if string_to_remove not in k:
+            dict_new[k] = v
+    return dict_new
+
+def return_only_keys_with_string_from_dictionary(dict_old, string_to_return):
+    dict_new = {}
+    for k, v in dict_old.items():
+        if string_to_return in k:
+            dict_new[k] = v
+    return dict_new
+
+def return_only_keys_with_string_at_start_of_dictionary(dict_old, start_string_to_return):
+    dict_new = {}
+    for k, v in dict_old.items():
+        if k[:len(start_string_to_return)] == start_string_to_return:
+            dict_new[k] = v
+    return dict_new
+
+def extract_index_from_each_dictionary_key(dict_old, index):
+    dict_new = {}
+    for k, v in dict_old.items():
+        if type(v) == list or type(v)==np.ndarray:
+            try:
+                dict_new[k] = v[index]
+            except Exception:
+                dict_new[k] = v[0]
+        else:
+            dict_new[k] = v
+    return dict_new
 
 def remove_data_outliers(r, data_mask):
     """

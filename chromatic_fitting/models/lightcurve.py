@@ -34,28 +34,30 @@ class LightcurveModel:
     The base lightcurve model
     """
 
-    required_parameters = []
-
     def __init__(self, name="lightcurve_model", **kw):
         """
 
         Parameters
         ----------
-        name: the name of the model
-        kw: additional keywords to pass ...
+        name: the name of the model (default='lightcurve_model')
+        kw: additional keywords to pass
         """
-        # define some default parameters (fixed):
+        required_parameters = []
         self.defaults = dict()
-        # the default fitting method is simultaneous fitting
+        """The default fixed parameters"""
         self.optimization = "simultaneous"
-        # by default do not store the lightcurve models
+        """The fitting method, default is simultaneous fitting"""
         self.store_models = False
-        # assign the model a name (overwritten by the specific models)
+        """Whether to store the lightcurve models, default is False"""
         self.name = name
-        # by default do not flag outliers
+        """The model name (overwritten by the specific models)"""
         self.outlier_flag = False
+        """Whether to flag outliers, default is False (WARNING: OUTLIER FLAGGING STILL IN BETA TESTING)"""
+        self.has_gp = False
+        """Whether the model includes a Gaussian Process, by default False"""
 
         self.initialize_empty_model()
+
 
     def __add__(self, other):
         """
@@ -121,12 +123,9 @@ class LightcurveModel:
             and if it is fitted what its prior should be.
         """
 
-        # set up a dictionary of unprocessed
-        # print("RUNNING SETUP PARAMS")
-        # print(self.defaults)
+        # set up a dictionary of unprocessed parameters
         unprocessed_parameters = dict(self.defaults)
         unprocessed_parameters.update(**kw)
-        # print(unprocessed_parameters)
 
         # process all parameters into Parameter objects
         self.parameters = {}
@@ -155,7 +154,10 @@ class LightcurveModel:
                 self.parameters[k] = new_v
                 self.parameters[k].set_name(new_v)
             else:
+                # if type(v) == np.float64 or type(v) == float or type(v) == int:
                 self.parameters[k] = Fixed(v)
+                # else:
+                #     self.parameters[k] = WavelikeFixed(v)
                 self.parameters[k].set_name(k)
 
         # check that all the necessary parameters are defined somehow
@@ -179,6 +181,17 @@ class LightcurveModel:
         self._original_parameters = self.parameters.copy()
 
     def get_parameter_shape(self, param):
+        """
+        Set-up the shape of a specified parameter
+
+        Parameters
+        ----------
+        param: Parameter to set up the shape of
+
+        Returns
+        -------
+
+        """
         inputs = param.inputs
         for k in ["testval", "mu", "lower", "upper", "sigma"]:
             if k in inputs.keys():
@@ -200,7 +213,7 @@ class LightcurveModel:
 
     def which_steps_have_been_run(self):
         """
-        Print a summary of which fitting stages have been run
+        Print a friendly summary of which fitting stages have been run
         """
         parameters_setup = False
         data_attached = False
@@ -241,6 +254,13 @@ class LightcurveModel:
 
 
     def reinitialize(self):
+        """
+        Reinitialize model (incl. parameters and pymc3 model)
+
+        Returns
+        -------
+
+        """
         self.__init__(name=self.name)
         self.reinitialize_parameters()
 
@@ -271,13 +291,14 @@ class LightcurveModel:
 
     def initialize_empty_model(self):
         """
-        Restart with an empty model.
+        Restart with an empty PyMC3 model.
         """
         self._pymc3_model = pm.Model()
 
     def copy(self):
         """
          make a "copy" of each lightcurve model:
+
         :return:
         copy of lightcurve model
         """
@@ -291,6 +312,11 @@ class LightcurveModel:
                 new_model.how_to_combine = self.how_to_combine
                 for name, model in self._chromatic_models.items():
                     new_model._chromatic_models[name] = model.copy()
+
+                for name, mod in new_model._chromatic_models.items():
+                    mod.__dict__ = self[name].__dict__.copy()
+
+        new_model.__dict__ = self.__dict__.copy()
 
         # new_model._pymc3_model = self._pymc3_model
         model_params = {}
@@ -370,6 +396,10 @@ class LightcurveModel:
                 mod.optimization = self.optimization
 
     def change_all_priors_to_Wavelike(self):
+        """
+        Change all parameter priors to Wavelike
+        i.e. Change Fitted to WavelikeFitted and Fixed to WavelikeFixed
+        """
         for k, v in self.parameters.items():
             if isinstance(v, Fitted) and not isinstance(v, WavelikeFitted):
                 self.parameters[k] = WavelikeFitted(v.distribution, **v.inputs)
@@ -379,6 +409,10 @@ class LightcurveModel:
                 self.parameters[k].set_name(k)
 
     def change_all_priors_to_notWavelike(self):
+        """
+        Change all Wavelike parameter priors to not Wavelike
+        i.e. Change WavelikeFitted to Fitted and WavelikeFixed to Fixed
+        """
         for k, v in self.parameters.items():
             if isinstance(v, WavelikeFitted):
                 self.parameters[k] = Fitted(v.distribution, **v.inputs)
@@ -386,18 +420,6 @@ class LightcurveModel:
             if isinstance(v, WavelikeFixed):
                 self.parameters[k] = Fixed(v.values[0])
                 self.parameters[k].set_name(k)
-
-    # def separate_wavelengths(self, i):
-    #     # if self.outlier_flag:
-    #     #     data_copy = self.data_without_outliers._create_copy()
-    #     # else:
-    #     data_copy = self.data._create_copy()
-    #
-    #     for k, v in data_copy.fluxlike.items():
-    #         data_copy.fluxlike[k] = np.array([data_copy.fluxlike[k][i, :]])
-    #     for k, v in data_copy.wavelike.items():
-    #         data_copy.wavelike[k] = [data_copy.wavelike[k][i]]
-    #     return data_copy
 
     def separate_wavelengths(self, i):
         """
@@ -437,8 +459,8 @@ class LightcurveModel:
 
         Returns
         ----------
-        datas: reformated data
-        models: reformated models
+        datas: reformated data,
+        models: reformated models,
         *extra_arrs: reformated arrays
         """
         extra_arrs_new = []
@@ -484,11 +506,26 @@ class LightcurveModel:
         sigma_wavelength=5,
         data_mask=None,
         inflate_uncertainties=False,
+        inflate_uncertainties_prior=WavelikeFitted(Uniform, lower=1.0, upper=3.0, testval=1.01),
         setup_lightcurves_kw={},
         **kw,
     ):
         """
         Connect the light curve model to the actual data it aims to explain.
+
+        Parameters
+        ----------
+        mask_outliers: Boolean whether to mask outliers in time (WARNING: STILL IN BETA TESTING), \n
+        mask_wavelength_outliers: Boolean whether to mask outliers in wavelength (WARNING: STILL IN BETA TESTING),
+        sigma_wavelength: Number of sigmas for sigma-clipping in wavelength (WARNING: STILL IN BETA TESTING),
+        data_mask: User-defined outlier mask (WARNING: STILL IN BETA TESTING),
+        inflate_uncertainties: Boolean whether or not to inflate the uncertainties by a fitted factor `nsigma`,
+        inflate_uncertainties_prior: Prior on `nsigma` (default = WavelikeFitted(Uniform, lower=1.0, upper=3.0, testval=1.01)),
+        setup_lightcurves_kw: keywords to pass to self.setup_lightcurves()
+        kw: other keywords to pass to data masking
+
+        Returns
+        -------
         """
 
         if hasattr(self, "every_light_curve"):
@@ -521,12 +558,12 @@ class LightcurveModel:
             self.data_without_outliers = remove_data_outliers(self.get_data(), data_mask)
 
         if inflate_uncertainties:
-            self.parameters["nsigma"] = WavelikeFitted(
-                Uniform, lower=1.0, upper=3.0, testval=1.01
-            )
+            self.parameters["nsigma"] = inflate_uncertainties_prior
             self.parameters["nsigma"].set_name("nsigma")
 
         nsigma = []
+        if self.has_gp:
+            self.gp = []
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
                 if inflate_uncertainties:
@@ -559,12 +596,42 @@ class LightcurveModel:
                     data_name = f"data"
                     light_curve_name = f"wavelength_{j}"
 
-                    pm.Normal(
-                        data_name,
-                        mu=self.every_light_curve[light_curve_name],
-                        sd=uncertainties,
-                        observed=flux,
-                    )
+                    if self.has_gp == False:
+                        pm.Normal(
+                            data_name,
+                            mu=self.every_light_curve[light_curve_name],
+                            sd=uncertainties,
+                            observed=flux,
+                        )
+                    else:
+                        if type(self.independant_variable) is not list:
+                            x = data.get(self.independant_variable)
+                            if self.independant_variable == "time":
+                                x = x.to_value("day")
+                        else:
+                            warnings.warn("GP models use different independent variables - this does not work yet!!")
+
+                        for i in range(data.nwave):
+                            if len(np.shape(x)) > 1:
+                                xi = x[i, :]
+                            else:
+                                xi = x
+                            self.gp.append(
+                                GaussianProcess(
+                                    self.covar[light_curve_name][i],
+                                    t=xi,
+                                    diag=uncertainties[i] ** 2 + pm.math.exp(self.log_jitter.get_prior(i + j)),
+                                    mean=self.mean.get_prior(i + j),
+                                    quiet=True,
+                                )
+                            )
+
+                            self.gp[-1].marginal(
+                                f"gp_w{i + j}",
+                                observed=flux[i] - self.every_light_curve[light_curve_name][i],
+                            )
+
+
                 except Exception as e:
                     print(e)
 
@@ -674,28 +741,55 @@ class LightcurveModel:
                     if f"wavelength_{i}" in self.initial_guess.keys():
                         plt.plot(
                             self.data.time,
-                            # pmx.eval_in_model(
                             self.initial_guess[f"wavelength_{i}"][j],
-                            # )[j],
                             "C1--",
                             lw=1,
                             alpha=0.7,
                             label="Initial",
                         )
+
                 if hasattr(self, "every_light_curve"):
                     # plot the final MAP-optimized solution (not sampled)
                     if f"wavelength_{i}" in self.every_light_curve.keys():
+                        opt_y = pmx.eval_in_model(
+                            self.every_light_curve[f"wavelength_{i}"],
+                            opt_sep,
+                            model=model,
+                        )[j]
+
                         plt.plot(
                             self.data.time,
-                            pmx.eval_in_model(
-                                self.every_light_curve[f"wavelength_{i}"],
-                                opt_sep,
-                                model=model,
-                            )[j],
+                            opt_y,
                             "C1-",
                             label="MAP optimization",
                             lw=2,
+                            alpha=0.7
                         )
+
+                        if hasattr(self, 'has_gp'):
+                            if self.has_gp:
+                                gp_model = self.generate_gp_model_from_params(params=opt_sep)
+                                mu, variance = eval_in_model(gp_model.predict(data.flux[j] - opt_y,
+                                                                              t=self.data.time,
+                                                                              return_var=True), model=model)
+                                opt_y = opt_y + mu
+
+                                plt.plot(
+                                    self.data.time,
+                                    mu + 1,
+                                    "C0-",
+                                    label="GP_model (+1)",
+                                    lw=2,
+                                    alpha=0.5
+                                )
+
+                                plt.plot(
+                                    self.data.time,
+                                    opt_y,
+                                    "C2-",
+                                    label="MAP optimization (with GP)",
+                                    lw=2,
+                                )
                 plt.legend(fontsize=10, numpoints=5)
                 plt.xlabel("time [days]", fontsize=24)
                 plt.ylabel("relative flux", fontsize=24)
@@ -750,11 +844,21 @@ class LightcurveModel:
                         start = mod.test_point
 
                     try:
+                        print(f"Sampling Wavelength: {i}")
                         samp = sampling_method(start=start, **sampling_kw, **kw)
-                        if summarize_step_by_step:
-                            self.summary.append(summary(samp, **summarize_kw))
-                        else:
-                            self.trace.append(samp)
+                        # if summarize_step_by_step:
+                        #     self.summary.append(summary(samp, **summarize_kw))
+                        # else:
+                        self.trace.append(samp)
+
+                    except EOFError:
+                        print(
+                            """An error (EOFError) with Starry has occurred related to multiprocessing. 
+                            Sometimes it works if we try sampling using 'spawn' instead of default 'fork' (mp_ctx='spawn')..."""
+                        )
+                        sampling_kw['mp_ctx'] = "spawn"
+                        samp = sampling_method(start=start, **sampling_kw, **kw)
+                        self.trace.append(samp)
 
                     except Exception as e:
                         print(f"Sampling failed for one of the models: {e}")
@@ -1109,7 +1213,10 @@ class LightcurveModel:
                 elif v.inputs["shape"] != (self.data.nwave, 1):
                     more_than_one_input = True
             if more_than_one_input:
-                if f"{k}[{i}]" in posterior_means.index and np.logical_and("limb_darkening" not in k, "ecs" not in k):
+                if f"{k}[{i}]" in posterior_means.index and\
+                        "limb_darkening" not in k and\
+                        "ecs" not in k and\
+                        "planet_surface_map" not in k:
                     fv[k] = posterior_means[f"{k}[{i}]"]
                 elif f"{k}[0]" in posterior_means.index:
                     n = 0
@@ -1183,7 +1290,7 @@ class LightcurveModel:
             self.sample()
 
         with self._pymc3_model:
-            _ = corner.corner(self.trace, **kw)
+            return corner.corner(self.trace, **kw)
 
     def check_and_fill_missing_parameters(self, params, i):
         if all([f"{self.name}_" in rp for rp in self.required_parameters]):
@@ -1209,6 +1316,7 @@ class LightcurveModel:
         as_dict: bool = True,
         as_array: bool = False,
         store: bool = True,
+        **kw
     ):
         """
         Return the 'best-fit' model from the summary table as a dictionary or as an array
@@ -1266,7 +1374,7 @@ class LightcurveModel:
                         params = params_dict
                     else:
                         params = params_dict[f"w{i}"]
-                model_i = self.model(params, i)
+                model_i = self.model(params, i, **kw)
                 model[f"w{i}"] = model_i
 
             if store:
@@ -1626,6 +1734,122 @@ class LightcurveModel:
 
     def write_chromatic_model(self, filename):
         pickle.dump(self, open(filename, 'wb'))
+
+    def make_spectrum_table(
+        self, param="radius_ratio", uncertainty=["hdi_16%", "hdi_84%"], svname=None
+    ):
+        """
+        Generate and return a spectrum table
+
+        Parameters
+        ----------
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%",
+        "hdi_84%", "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        svname: [Optional] String csv filename to save the transmission table. Default = None (do not save)
+
+        Returns
+        -------
+
+        """
+        results = self.get_results(uncertainty=uncertainty)[
+            [
+                "wavelength",
+                f"{self.name}_{param}",
+                f"{self.name}_{param}_{uncertainty[0]}",
+                f"{self.name}_{param}_{uncertainty[1]}",
+            ]
+        ]
+        trans_table = results[["wavelength", f"{self.name}_{param}"]]
+        if "hdi" in uncertainty[0]:
+            trans_table[f"{self.name}_{param}_neg_error"] = (
+                results[f"{self.name}_{param}"]
+                - results[f"{self.name}_{param}_{uncertainty[0]}"]
+            )
+            trans_table[f"{self.name}_{param}_pos_error"] = (
+                results[f"{self.name}_{param}_{uncertainty[1]}"]
+                - results[f"{self.name}_{param}"]
+            )
+        else:
+            trans_table[f"{self.name}_{param}_neg_error"] = results[
+                f"{self.name}_{param}_{uncertainty[0]}"
+            ]
+            trans_table[f"{self.name}_{param}_pos_error"] = results[
+                f"{self.name}_{param}_{uncertainty[1]}"
+            ]
+
+        if svname is not None:
+            assert isinstance(svname, object)
+            trans_table.to_csv(svname)
+        else:
+            return trans_table
+
+    def plot_spectrum(
+        self, param="radius_ratio", name_of_spectrum="transmission", table=None, uncertainty=["hdi_16%", "hdi_84%"],
+        ax=None, plotkw={}, **kw
+    ):
+        """
+        Plot the transmission spectrum (specifically the planet size as a function of wavelength).
+
+        Parameters
+        ----------
+        table: [Optional] Table to use as transmssion spectrum (otherwise the default is to use the MCMC sampling results.
+        The table must have the following columns: "{self.name}_radius_ratio", "{self.name}_radius_ratio_neg_error",
+        "{self.name}_radius_ratio_pos_error", "wavelength".
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%", "hdi_84%",
+        "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        ax: [Optional] Pass a preexisting matplotlib axis is to be used instead of creating a new one.Default = None.
+        plotkw: [Optional] Dict of kw to pass to the transmission specrum plotting function.
+        kw: [Optional] kw to pass to the TransitModel.make_transmission_spectrum_table
+
+        Returns
+        -------
+
+        """
+        if table is not None:
+            transmission_spectrum = table
+            try:
+                # ensure the correct columns exist in the transmission spectrum table
+                assert transmission_spectrum[f"{self.name}_{param}"]
+                assert transmission_spectrum[f"{self.name}_{param}_neg_error"]
+                assert transmission_spectrum[f"{self.name}_{param}_pos_error"]
+                assert transmission_spectrum["wavelength"]
+            except:
+                print(
+                    f"The given table doesn't have the correct columns 'wavelength', '{self.name}_{param}', "
+                    f"{self.name}_{param}_pos_error' and '{self.name}_{param}_neg_error'"
+                )
+        else:
+            kw["uncertainty"] = uncertainty
+            transmission_spectrum = self.make_spectrum_table(param=param, **kw)
+            transmission_spectrum["wavelength"] = [
+                t.to_value("micron") for t in transmission_spectrum["wavelength"].values
+            ]
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 4))
+
+        plt.sca(ax)
+        plt.title(f"{name_of_spectrum} Spectrum")
+        plt.plot(
+            transmission_spectrum["wavelength"],
+            transmission_spectrum[f"{self.name}_{param}"],
+            "kx",
+            **plotkw,
+        )
+        plt.errorbar(
+            transmission_spectrum["wavelength"],
+            transmission_spectrum[f"{self.name}_{param}"],
+            yerr=[
+                transmission_spectrum[f"{self.name}_{param}_neg_error"],
+                transmission_spectrum[f"{self.name}_{param}_pos_error"],
+            ],
+            color="k",
+            capsize=2,
+            linestyle="None",
+            **plotkw,
+        )
+        plt.xlabel("Wavelength (microns)")
+        plt.ylabel(param)
 
 
 from .combined import *
