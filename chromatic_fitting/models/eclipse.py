@@ -76,6 +76,7 @@ class EclipseModel(LightcurveModel):
             "planet_radius",
             "ecs",
             "limb_darkening",
+            "phase_offset",
         ]
 
         super().__init__(**kw)
@@ -112,6 +113,7 @@ class EclipseModel(LightcurveModel):
             planet_radius="The radius of the planet [R_jupiter].",
             ecs="[ecosw, esinw], where e is eccentricity.",
             limb_darkening="2-d Quadratic limb-darkening coefficients.",
+            phase_offset="Hotspot offset [degrees]",
         )
 
         for k, v in self.parameter_descriptions.items():
@@ -133,6 +135,7 @@ class EclipseModel(LightcurveModel):
             planet_radius=0.01,
             ecs=np.array([0.0,0.0]),
             limb_darkening=np.array([0.4,0.2]),
+            phase_offset=0.0,
         )
 
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
@@ -191,6 +194,7 @@ class EclipseModel(LightcurveModel):
             f"{name}planet_radius": [],
             f"{name}ecs": [],
             f"{name}limb_darkening": [],
+            f"{name}phase_offset": [],
         }
 
         for j, (mod, data) in enumerate(zip(models, datas)):
@@ -208,9 +212,17 @@ class EclipseModel(LightcurveModel):
 
                 for i, w in enumerate(data.wavelength):
                     param_i = {}
+                    # for param_name, param in parameters_to_loop_over.items():
+                    #     if isinstance(self.parameters[param_name], WavelikeFitted):
+                    #         param_i[param_name] = param[j][i]
+                    #     else:
+                    #         param_i[param_name] = param[j]
                     for param_name, param in parameters_to_loop_over.items():
                         if isinstance(self.parameters[param_name], WavelikeFitted):
                             param_i[param_name] = param[j][i]
+                        elif isinstance(self.parameters[param_name], Fitted) and eval_in_model(np.shape(param[j]))[
+                            0] == 1:
+                            param_i[param_name] = param[j][0]
                         else:
                             param_i[param_name] = param[j]
                     # **FUNCTION TO MODEL - MAKE SURE IT MATCHES self.temp_model()!**
@@ -231,13 +243,13 @@ class EclipseModel(LightcurveModel):
                     star.map[2] = param_i[f"{name}limb_darkening"][1]
                     omega = (theano.tensor.arctan2(param_i[f"{name}ecs"][1], param_i[f"{name}ecs"][0])*180.0)/np.pi
                     eccentricity = pm.math.sqrt(param_i[f"{name}ecs"][0]**2+param_i[f"{name}ecs"][1]**2)
-                   
+
                     planet = starry.kepler.Secondary(
                         starry.Map(
                             ydeg=0,
                             udeg=0,
                             amp=10 ** param_i[f"{name}planet_log_amplitude"],
-                            inc=90.0,
+                            inc=param_i[f"{name}inclination"],
                             obl=0.0,
                         ),
                         # the surface map
@@ -245,23 +257,29 @@ class EclipseModel(LightcurveModel):
                         m=param_i[f"{name}planet_mass"],  # mass in Jupiter masses
                         r=param_i[f"{name}planet_radius"],  # radius in Jupiter radii
                         porb=param_i[f"{name}period"],  # orbital period in days
-                        prot=param_i[f"{name}period"],  # orbital period in days
+                        prot=param_i[f"{name}period"],  # rotational period in days (currently assuming tidally locked)
                         ecc=eccentricity,  # eccentricity
                         w=omega,  # longitude of pericenter in degrees
                         t0=param_i[f"{name}t0"],  # time of transit in days
                         length_unit=u.R_jup,
                         mass_unit=u.M_jup,
                     )
-                    planet.theta0 = 180.0
+                    planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
 
+<<<<<<< HEAD
                     #eclipse_depth = pm.Deterministic(f"eclipse_depth_{i+j}", 10 ** param_i[f"{name}planet_log_amplitude"])
+=======
+                    eclipse_depth = pm.Deterministic(f"{name}depth_{i+j}",10 ** param_i[f"{name}planet_log_amplitude"])
+                    f_max = pm.Deterministic(f"{name}fmax_{i+j}", planet.map.flux(theta=0)[0])
+                    f_min = pm.Deterministic(f"{name}fmin_{i + j}", planet.map.flux(theta=180)[0])
+>>>>>>> 36436f7719eb44f218bce6efb24436bc0bc0b742
 
                     system = starry.System(star, planet)
                     flux_model = system.flux(data.time.to_value("day"))
                     y_model.append(flux_model)
 
                     initial_guess.append(eval_in_model(flux_model))
-                
+
                 # (if we've chosen to) add a Deterministic parameter to the model for easy extraction/plotting
                 # later:
                 if self.store_models:
@@ -345,12 +363,14 @@ class EclipseModel(LightcurveModel):
         else:
             name = ""
 
+        datas, models = self.choose_model_based_on_optimization_method()
+
         if time is None:
-            if self.optimization == "separate":
-                data = self.get_data(i)
-            else:
-                data = self.get_data()
-            time = list(data.time.to_value("day"))
+            # if self.optimization == "separate":
+            #     data = self.get_data(i)
+            # else:
+            #     data = self.get_data()
+            time = list(datas[i].time.to_value("day"))
 
         self.check_and_fill_missing_parameters(params, i)
 
@@ -378,7 +398,7 @@ class EclipseModel(LightcurveModel):
                 ydeg=0,
                 udeg=0,
                 amp=10 ** params[f"{name}planet_log_amplitude"],
-                inc=90.0,
+                inc=params[f"{name}inclination"],
                 obl=0.0,
             ),
             # the surface map
@@ -393,10 +413,16 @@ class EclipseModel(LightcurveModel):
             length_unit=u.R_jup,
             mass_unit=u.M_jup,
         )
-        
-        planet.theta0 = 180.0
+
+        planet.theta0 = 180.0 + params[f"{name}phase_offset"]
         system = starry.System(star, planet)
-        flux_model = system.flux(time).eval()
+        # flux_model = system.flux(time).eval()
+        flux_model = eval_in_model(system.flux(time), model=models[i])
+
+        if hasattr(self, 'keplerian_system'):
+            self.keplerian_system[f'w{i}'] = system
+        else:
+            self.keplerian_system = {f'w{i}': system}
 
         return flux_model
 
@@ -404,7 +430,18 @@ class EclipseModel(LightcurveModel):
         self, uncertainty=["hdi_16%", "hdi_84%"], svname=None
     ):
         """
-        Generate and return a emission spectrum table
+        Generate and return an emission spectrum table
+
+        Parameters
+        ----------
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%",
+         "hdi_84%", "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        svname: [Optional] String csv filename to save the emission table. Default = None (do not save)
+
+        Returns
+        -------
+
         """
         results = self.get_results(uncertainty=uncertainty)[
             [
@@ -443,6 +480,24 @@ class EclipseModel(LightcurveModel):
     def plot_eclipse_spectrum(
         self, table=None, uncertainty=["hdi_16%", "hdi_84%"], ax=None, plotkw={}, **kw
     ):
+        """
+        Plot the eclipse spectrum (specifically the planet amplitude as a function of wavelength).
+
+        Parameters
+        ----------
+        table: [Optional] Table to use as eclipse spectrum (otherwise the default is to use the MCMC sampling results.
+        The table must have the following columns: "{self.name}_depth", "{self.name}_depth_neg_error",
+        "{self.name}_depth_pos_error", "wavelength".
+        uncertainty: [Optional] List of the names of parameters to use as the lower and upper errors. Options: "hdi_16%", "hdi_84%",
+        "sd" etc. Default = ["hdi_16%", "hdi_84%"].
+        ax: [Optional] Pass a preexisting matplotlib axis is to be used instead of creating a new one.Default = None.
+        plotkw: [Optional] Dict of kw to pass to the transmission specrum plotting function.
+        kw: [Optional] kw to pass to the TransitModel.plot_transmission_spectrum.
+
+        Returns
+        -------
+
+        """
         if table is not None:
             emission_spectrum = table
             try:

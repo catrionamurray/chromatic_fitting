@@ -82,7 +82,7 @@ setup(
         "pymc3>=3.11.1",
         "pymc3_ext",
         "corner",
-        "exoplanet>=0.5.0",
+        "exoplanet>=0.5.3",
         "tqdm",
         "starry",
         "arviz==0.14.0",
