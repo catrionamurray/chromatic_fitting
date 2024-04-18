@@ -631,6 +631,10 @@ class LightcurveModel:
                                 observed=flux[i] - self.every_light_curve[light_curve_name][i],
                             )
 
+                            if self.store_models:
+                                Deterministic(f"gp_w{i + j}_model",
+                                              self.gp[-1].predict(observed=flux[i] - self.every_light_curve[light_curve_name][i]))
+
 
                 except Exception as e:
                     print(e)
