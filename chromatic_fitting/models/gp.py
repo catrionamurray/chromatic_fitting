@@ -1,23 +1,27 @@
 from ..imports import *
 from .lightcurve import *
 
-allowed_kernels = ["sho", "quasi_periodic"]
+allowed_kernels = ["sho", "quasi_periodic", "matern32"]
 possible_params = {
     "sho": ["sigma", "rho", "Q", "w0", "tau"],
     "quasi_periodic": ["sigma", "period", "Q0", "dQ", "f"],
+    "matern32":["sigma", "rho", "eps"],
 }
 required_params = {
     "sho": ["sigma"],
     "quasi_periodic": ["sigma", "period", "Q0", "dQ", "f"],
+    "matern32": ["sigma", "rho"],
 }
 defaults = {
     "sho": dict(sigma=1.0),
     "quasi_periodic": dict(sigma=1.0, period=1.0, dQ=1.0, Q0=1.0 / np.sqrt(2.0), f=0.0),
+    "matern32": dict(sigma=1.0, rho=1.0),
 }
 
 try:
     from celerite2.theano import terms, GaussianProcess
-    kernel_func = {"sho": terms.SHOTerm, "quasi_periodic": terms.RotationTerm}
+    kernel_func = {"sho": terms.SHOTerm, "quasi_periodic": terms.RotationTerm,
+                   "matern32": terms.Matern32Term}
 except ModuleNotFoundError:
     warnings.warn("Celerite2 has not been installed! The GPModel will not work without Celerite2.")
 
@@ -39,6 +43,7 @@ class GPModel(LightcurveModel):
             warnings.warn(
                 f"{kernel} is not a valid type of model. Please select one of: {allowed_kernels}"
             )
+            return
 
         if type_of_model in allowed_types_of_models:
             self.type_of_model = type_of_model
