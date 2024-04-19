@@ -249,7 +249,7 @@ class EclipseModel(LightcurveModel):
                             ydeg=0,
                             udeg=0,
                             amp=10 ** param_i[f"{name}planet_log_amplitude"],
-                            inc=param_i[f"{name}inclination"],
+                            inc=90.0,
                             obl=0.0,
                         ),
                         # the surface map
@@ -266,13 +266,9 @@ class EclipseModel(LightcurveModel):
                     )
                     planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
 
-<<<<<<< HEAD
-                    #eclipse_depth = pm.Deterministic(f"eclipse_depth_{i+j}", 10 ** param_i[f"{name}planet_log_amplitude"])
-=======
-                    eclipse_depth = pm.Deterministic(f"{name}depth_{i+j}",10 ** param_i[f"{name}planet_log_amplitude"])
-                    f_max = pm.Deterministic(f"{name}fmax_{i+j}", planet.map.flux(theta=0)[0])
-                    f_min = pm.Deterministic(f"{name}fmin_{i + j}", planet.map.flux(theta=180)[0])
->>>>>>> 36436f7719eb44f218bce6efb24436bc0bc0b742
+                    #eclipse_depth = pm.Deterministic(f"{name}depth_{i+j}",theano.tensor.exp(param_i[f"{name}planet_log_amplitude"]))  ## This is not good,test only
+                    #f_max = pm.Deterministic(f"{name}fmax_{i+j}", planet.map.flux(theta=0)[0])
+                    #f_min = pm.Deterministic(f"{name}fmin_{i + j}", planet.map.flux(theta=180)[0])
 
                     system = starry.System(star, planet)
                     flux_model = system.flux(data.time.to_value("day"))
@@ -370,7 +366,7 @@ class EclipseModel(LightcurveModel):
             #     data = self.get_data(i)
             # else:
             #     data = self.get_data()
-            time = list(datas[i].time.to_value("day"))
+            time = list(datas[0].time.to_value("day"))
 
         self.check_and_fill_missing_parameters(params, i)
 
@@ -398,7 +394,7 @@ class EclipseModel(LightcurveModel):
                 ydeg=0,
                 udeg=0,
                 amp=10 ** params[f"{name}planet_log_amplitude"],
-                inc=params[f"{name}inclination"],
+                inc=90.0,
                 obl=0.0,
             ),
             # the surface map
@@ -416,13 +412,13 @@ class EclipseModel(LightcurveModel):
 
         planet.theta0 = 180.0 + params[f"{name}phase_offset"]
         system = starry.System(star, planet)
-        # flux_model = system.flux(time).eval()
-        flux_model = eval_in_model(system.flux(time), model=models[i])
+        flux_model = system.flux(time).eval()
+        #flux_model = eval_in_model(system.flux(time), model=models[i])
 
-        if hasattr(self, 'keplerian_system'):
-            self.keplerian_system[f'w{i}'] = system
-        else:
-            self.keplerian_system = {f'w{i}': system}
+#        if hasattr(self, 'keplerian_system'):
+#            self.keplerian_system[f'w{i}'] = system
+#        else:
+#            self.keplerian_system = {f'w{i}': system}
 
         return flux_model
 
