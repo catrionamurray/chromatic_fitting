@@ -1,4 +1,4 @@
-__version__ = "0.12.11"
+__version__ = "0.12.12"
 
 
 def version():
@@ -39,3 +39,4 @@ def version():
 #    v 0.12.9 - changed plot_priors and plot_posteriors to imshow
 #    v 0.12.10 - added edge case for fixed deterministic param
 #    v 0.12.11 - fixed duplicate name issue
+#    v 0.12.12 - fixed exoplanet version to 0.5.3
