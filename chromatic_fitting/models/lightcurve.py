@@ -685,8 +685,8 @@ class LightcurveModel:
                     )
             return posteriors
 
-    def plot_initial_guess(self):
-        # datas, models, opts = self.choose_model_based_on_optimization_method(map_soln)
+    def plot_initial_guess(self, figsize=(12, 5), **kw):
+        datas, models = self.choose_model_based_on_optimization_method()
         for i, (data, model) in enumerate(zip(datas, models)):
             for j in range(data.nwave):
                 # create a new plot for each wavelength
