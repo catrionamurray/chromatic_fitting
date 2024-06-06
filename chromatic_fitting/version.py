@@ -1,4 +1,4 @@
-__version__ = "0.12.14"
+__version__ = "0.12.15"
 
 
 def version():
@@ -40,3 +40,4 @@ def version():
 #    v 0.12.10 - added edge case for fixed deterministic param
 #    v 0.12.11 - fixed duplicate name issue
 #    v 0.12.14 - added Matern-3/2 kernel to GP model
+#    v 0.12.15 - added .plot_initial_guess() func and fixed some docs
