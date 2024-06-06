@@ -165,9 +165,14 @@ class GPModel(LightcurveModel):
                     print(param_i)
                     kernel.append(self.kernel_func(**param_i))
 
+                    if type(self.mean) == float or type(self.mean) == int:
+                        mean = self.mean
+                    else:
+                        mean = self.mean.get_prior(i + j)
+
                     initial_gp = GaussianProcess(
                         kernel[-1],
-                        mean=self.mean.get_prior(i + j),
+                        mean=mean,
                         t=xi,
                         diag=data.uncertainty[i] ** 2
                         + pm.math.exp(self.log_jitter.get_prior(i + j)),

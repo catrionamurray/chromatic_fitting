@@ -685,6 +685,46 @@ class LightcurveModel:
                     )
             return posteriors
 
+    def plot_initial_guess(self):
+        # datas, models, opts = self.choose_model_based_on_optimization_method(map_soln)
+        for i, (data, model) in enumerate(zip(datas, models)):
+            for j in range(data.nwave):
+                # create a new plot for each wavelength
+                plt.figure(figsize=figsize)
+                plt.title(f"Wavelength: {data.wavelength[j]}")
+                # plot the data and errors
+                plt.plot(
+                    data.time,
+                    data.flux[j],
+                    "k.",
+                    alpha=0.3,
+                    ms=3,
+                    label="data",
+                )
+                plt.errorbar(
+                    data.time,
+                    data.flux[j],
+                    data.uncertainty[j],
+                    c="k",
+                    alpha=0.1,
+                    linestyle="None",
+                )
+
+                if hasattr(self, "initial_guess"):
+                    # plot the initial guess from priors
+                    if f"wavelength_{i}" in self.initial_guess.keys():
+                        plt.plot(
+                            self.data.time,
+                            self.initial_guess[f"wavelength_{i}"][j],
+                            "C1--",
+                            lw=1,
+                            alpha=0.7,
+                            label="Initial",
+                        )
+                else:
+                    warnings.warn(".setup_lightcurve() and .setup_likelihood() need to be run before this method!")
+        return
+
     def optimize(self, plot=False, plotkw={}, **kw):
         """
         Wrapper for PyMC3_ext sample

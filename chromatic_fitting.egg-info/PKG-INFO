@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: chromatic-fitting
-Version: 0.12.7
+Version: 0.12.14
 Summary: Tools for fitting spectroscopic light curves (of transiting exoplanets), built on top of chromatic.
 Home-page: https://github.com/catrionamurray/chromatic_fitting
 Author: Catriona Anne Murray
@@ -21,7 +21,7 @@ Requires-Dist: chromatic-lightcurves>=0.2.2
 Requires-Dist: pymc3>=3.11.1
 Requires-Dist: pymc3_ext
 Requires-Dist: corner
-Requires-Dist: exoplanet>=0.5.3
+Requires-Dist: exoplanet==0.5.3
 Requires-Dist: tqdm
 Requires-Dist: starry
 Requires-Dist: arviz==0.14.0

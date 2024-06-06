@@ -34,9 +34,7 @@ class TransitSpotModel(LightcurveModel):
 
         Parameters
         ----------
-        t0: where the exponential = the amplitude (traditionally the first data point)
-        independant_variable: the independant variable of the exponential (default = time)
-        name: the name of the model (default = "exponential")
+        name: the name of the model (default = "transitspot")
         kw: keyword arguments for initialising the chromatic model
         """
         if ydeg >= 25:
@@ -96,9 +94,9 @@ class TransitSpotModel(LightcurveModel):
 
     def __repr__(self):
         """
-        Print the exponential model.
+        Print the transit+spot model.
         """
-        return f"<chromatic exponential model '{self.name}' 🌈>"
+        return f"<chromatic transit + spot model '{self.name}' 🌈>"
 
     def set_defaults(self):
         """
@@ -245,7 +243,7 @@ class TransitSpotModel(LightcurveModel):
 
     def setup_lightcurves(self, store_models: bool = False, **kwargs):
         """
-        Create an exponential model, given the stored parameters.
+        Create an transit+spot model, given the stored parameters.
         [This should be run after .attach_data()]
 
         Parameters
@@ -329,7 +327,7 @@ class TransitSpotModel(LightcurveModel):
                         f"{name}model", pm.math.stack(flux_model, axis=0)
                     )  # pm.math.sum(poly, axis=0))
 
-                # add the exponential model to the overall lightcurve:
+                # add the transit+spot model to the overall lightcurve:
                 if f"wavelength_{j}" not in self.every_light_curve.keys():
                     self.every_light_curve[f"wavelength_{j}"] = pm.math.stack(
                         flux_model, axis=0
@@ -347,7 +345,7 @@ class TransitSpotModel(LightcurveModel):
 
     def transit_spot_model(self, params: dict, i: int = 0, save_keplerian_system=False) -> np.array:
         """
-        Return a exponential model, given a dictionary of parameters.
+        Return a transit spot model, given a dictionary of parameters.
 
         Parameters
         ----------
@@ -356,7 +354,7 @@ class TransitSpotModel(LightcurveModel):
 
         Returns
         -------
-        np.array: exponential model with the given parameters
+        np.array: transit+spot model with the given parameters
         """
         # transit_spot = []
 
@@ -450,7 +448,7 @@ class TransitSpotModel(LightcurveModel):
 
     def add_model_to_rainbow(self):
         """
-        Add the exponential model to the Rainbow object.
+        Add the transit+spot model to the Rainbow object.
         """
         # if we decided to flag outliers then flag these in the final model
         if self.outlier_flag:
