@@ -26,7 +26,7 @@ def create_new_eclipse_model():
                 inclination = 89.68,     #planet inclination
                 planet_mass = 0.00903,   #m_jup
                 planet_radius = 0.1164,  #r_jup
-                ecs =  Fitted(pm.TruncatedNormal,mu=np.array([0.0,0.0]),sigma=np.array([0.01,0.01]),upper=np.array([0.1,0.1]),lower=np.array([-0.1,-0.1]),testval=np.array([0.001,0.001]), shape=2),#2-d parameter which is [ecosw, esinw]
+                ecs =  Fitted(pm.TruncatedNormal,mu=np.array([0.0,0.0]),sigma=np.array([0.01,0.01]),upper=np.array([0.1,0.1]),lower=np.array([-0.1,-0.1]),testval=np.array([0.001,0.001]), shape=2),#2-d parameter which is [sqrt(e)cosw, sqrt(e)sinw]
                 limb_darkening = np.array([0.4,0.2]),         #limb darkening quadratic coeff np.array([1,2])
             )    
     
@@ -111,7 +111,7 @@ class EclipseModel(LightcurveModel):
             inclination="The inclination of the planet [degrees].",
             planet_mass="The mass of the planet [M_jupiter].",
             planet_radius="The radius of the planet [R_jupiter].",
-            ecs="[ecosw, esinw], where e is eccentricity.",
+            ecs="[sqrt(e)cosw, sqrt(e)sinw], where e is eccentricity and w is argument of periapsis.",
             limb_darkening="2-d Quadratic limb-darkening coefficients.",
             phase_offset="Hotspot offset [degrees]",
         )
@@ -242,7 +242,7 @@ class EclipseModel(LightcurveModel):
                     star.map[1] = param_i[f"{name}limb_darkening"][0]
                     star.map[2] = param_i[f"{name}limb_darkening"][1]
                     omega = (theano.tensor.arctan2(param_i[f"{name}ecs"][1], param_i[f"{name}ecs"][0])*180.0)/np.pi
-                    eccentricity = pm.math.sqrt(param_i[f"{name}ecs"][0]**2+param_i[f"{name}ecs"][1]**2)
+                    eccentricity = param_i[f"{name}ecs"][0]**2+param_i[f"{name}ecs"][1]**2
 
                     planet = starry.kepler.Secondary(
                         starry.Map(
@@ -387,7 +387,7 @@ class EclipseModel(LightcurveModel):
         star.map[2] = params[f"{name}limb_darkening"][1]
 
         omega = theano.tensor.arctan2(params[f"{name}ecs"][1], params[f"{name}ecs"][0])*180.0/np.pi
-        eccentricity = pm.math.sqrt(params[f"{name}ecs"][0]**2 + params[f"{name}ecs"][1]**2)
+        eccentricity = params[f"{name}ecs"][0]**2 + params[f"{name}ecs"][1]**2
 
         planet = starry.kepler.Secondary(
             starry.Map(
