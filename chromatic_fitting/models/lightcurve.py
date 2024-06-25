@@ -1458,7 +1458,7 @@ class LightcurveModel:
             self.add_model_to_rainbow()
         self.data_with_model.plot_with_model_and_residuals(**kw)
 
-    def plot_model(self, normalize=True, plot_data=True, **kw):
+    def plot_model(self, normalize=True, plot_data=True,ylim=None,time_from_start=False, **kw):
         model = self.get_model()
 
         def plot_one_model(model, normalize, name_label=None, **kw):
@@ -1500,20 +1500,23 @@ class LightcurveModel:
 
             if name_label is None:
                 name_label = self.name
-
+            if time_from_start == True:
+                time = (self.data.time - self.data.time[0])
+            else:
+                time = self.data.time
             for wave_n, ax_i, mod in zip(wave_num, ax, model.values()):
                 if normalize:
                     if np.nanmedian(mod) < 0.1:
-                        ax_i.plot(self.data.time, mod + 1, label=f"{name_label}")
+                        ax_i.plot(time, mod + 1, label=f"{name_label}")
                     else:
-                        ax_i.plot(self.data.time, mod, label=f"{name_label}")
+                        ax_i.plot(time, mod, label=f"{name_label}")
                 else:
-                    ax_i.plot(self.data.time, mod, label=f"{name_label}")
+                    ax_i.plot(time, mod, label=f"{name_label}")
 
                 if plot_data:
-                    ax_i.plot(self.data.time, self.data.flux[wave_n, :], "k.")
+                    ax_i.plot(time, self.data.flux[wave_n, :], "k.")
                     ax_i.errorbar(
-                        self.data.time,
+                        time,
                         self.data.flux[wave_n, :],
                         self.data.uncertainty[wave_n, :],
                         color="k",
@@ -1523,6 +1526,8 @@ class LightcurveModel:
                 ax_i.set_title(f"Wavelength {wave_n}")
                 ax_i.set_ylabel("Relative Flux")
                 ax_i.set_xlabel("Time [d]")
+                if ylim!=None:
+                    ax_i.set_ylim(ylim)
                 ax_i.legend()
 
             return kw
