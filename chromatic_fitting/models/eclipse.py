@@ -52,7 +52,7 @@ class EclipseModel(LightcurveModel):
     A eclipse model for the lightcurve.
     """
 
-    def __init__(self, name: str = "eclipse",type_of_model: str = "planet", **kw: object) -> None:
+    def __init__(self, name: str = "eclipse",type_of_model: str = "planet",log_planet_amp=False, **kw: object) -> None:
         """
         Initialise the eclipse model.
 
@@ -85,6 +85,7 @@ class EclipseModel(LightcurveModel):
         self.set_name(name)
         self.metadata = {}
         self.model = self.eclipse_model
+        self.log_planet_amp = log_planet_amp
 
         if type_of_model in allowed_types_of_models:
             self.type_of_model = type_of_model
@@ -243,12 +244,16 @@ class EclipseModel(LightcurveModel):
                     star.map[2] = param_i[f"{name}limb_darkening"][1]
                     omega = (theano.tensor.arctan2(param_i[f"{name}ecs"][1], param_i[f"{name}ecs"][0])*180.0)/np.pi
                     eccentricity = param_i[f"{name}ecs"][0]**2+param_i[f"{name}ecs"][1]**2
-
+		    
+                    if self.log_planet_amp:
+                        pla_amp = 10**param_i[f"{name}planet_log_amplitude"]
+                    else:
+                        pla_amp = param_i[f"{name}planet_log_amplitude"] 
                     planet = starry.kepler.Secondary(
                         starry.Map(
                             ydeg=0,
                             udeg=0,
-                            amp=10 ** param_i[f"{name}planet_log_amplitude"],
+                            amp=pla_amp,
                             inc=90.0,
                             obl=0.0,
                         ),
@@ -388,12 +393,97 @@ class EclipseModel(LightcurveModel):
 
         omega = theano.tensor.arctan2(params[f"{name}ecs"][1], params[f"{name}ecs"][0])*180.0/np.pi
         eccentricity = params[f"{name}ecs"][0]**2 + params[f"{name}ecs"][1]**2
-
+        if self.log_planet_amp:
+            pla_amp = 10**params[f"{name}planet_log_amplitude"]
+        else:
+            pla_amp = params[f"{name}planet_log_amplitude"]
         planet = starry.kepler.Secondary(
             starry.Map(
                 ydeg=0,
                 udeg=0,
-                amp=10 ** params[f"{name}planet_log_amplitude"],
+                amp=pla_amp,
+                inc=90.0,
+                obl=0.0,
+            ),
+            # the surface map
+            inc=params[f"{name}inclination"],
+            m=params[f"{name}planet_mass"],  # mass in Jupiter masses
+            r=params[f"{name}planet_radius"],  # radius in Jupiter radii
+            porb=params[f"{name}period"],  # orbital period in days
+            prot=params[f"{name}period"],  # orbital period in days
+            ecc=eccentricity,  # eccentricity
+            w=omega,  # longitude of pericenter in degrees
+            t0=params[f"{name}t0"],  # time of transit in days
+            length_unit=u.R_jup,
+            mass_unit=u.M_jup,
+        )
+
+        planet.theta0 = 180.0 + params[f"{name}phase_offset"]
+        system = starry.System(star, planet)
+        flux_model = system.flux(time).eval()
+        #flux_model = eval_in_model(system.flux(time), model=models[i])
+
+#        if hasattr(self, 'keplerian_system'):
+#            self.keplerian_system[f'w{i}'] = system
+#        else:
+#            self.keplerian_system = {f'w{i}': system}
+
+        return flux_model
+
+
+    def eclipse_model_analytic(
+        self, params: dict, i: int = 0, time: list = None
+    ) -> np.array:
+        """
+        Create a eclipse model given the passed parameters.
+
+        Parameters
+        ----------
+        params: A dictionary of parameters to be used in the eclipse model.
+        i: wavelength index
+        time: If we don't want to use the default time then the user can pass a time array on which to calculate the model
+
+        Returns
+        -------
+        object
+        """
+
+
+        # if the model has a name then add this to each parameter"s name
+        if hasattr(self, "name"):
+            name = self.name + "_"
+        else:
+            name = ""
+
+
+        star = starry.Primary(
+            starry.Map(
+                ydeg=0,
+                udeg=2,
+                amp=params[f"{name}stellar_amplitude"],
+                inc=90.0,
+                obl=0.0,
+            ),
+            m=params[f"{name}stellar_mass"],
+            r=params[f"{name}stellar_radius"],
+            prot=params[f"{name}stellar_prot"],
+        )
+
+        star.map[1] = params[f"{name}limb_darkening"][0]
+        star.map[2] = params[f"{name}limb_darkening"][1]
+
+        omega = theano.tensor.arctan2(params[f"{name}ecs"][1], params[f"{name}ecs"][0])*180.0/np.pi
+        eccentricity = params[f"{name}ecs"][0]**2 + params[f"{name}ecs"][1]**2
+
+        if self.log_planet_amp:
+            pla_amp = 10**params[f"{name}planet_log_amplitude"]
+        else:
+            pla_amp = params[f"{name}planet_log_amplitude"]
+        planet = starry.kepler.Secondary(
+            starry.Map(
+                ydeg=0,
+                udeg=0,
+                amp=pla_amp,
                 inc=90.0,
                 obl=0.0,
             ),
