@@ -70,8 +70,9 @@ class SinusoidModel(LightcurveModel):
         # """
         self.parameter_descriptions = dict(
             A="The amplitude of the exponential at t0 (defined by the user when initializing).",
-            decay_time="The time it takes for the amplitude to decay by 1/e [d].",
-            baseline="The baseline flux before the exponential.",
+            w="",
+            phase="",
+            baseline="",
         )
 
         for k, v in self.parameter_descriptions.items():

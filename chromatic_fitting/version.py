@@ -1,4 +1,4 @@
-__version__ = "0.12.16"
+__version__ = "0.12.23"
 
 
 def version():
@@ -42,3 +42,7 @@ def version():
 #    v 0.12.14 - added Matern-3/2 kernel to GP model
 #    v 0.12.15 - added .plot_initial_guess() func and fixed some docs
 #    v 0.12.16 - fixed bug in .plot_initial_guess() func
+#    v 0.12.17 - allowed for other orders of limb darkening apart from Quadratic
+#    v 0.12.18 - removed an exclusion for QuadLimbDark in parameters.py - may cause issues later?
+#    v 0.12.19 - add logp as Deterministic variable to store in trace
+#    v 0.12.22 - added back an exclusion for QuadLimbDark (BETA!!)

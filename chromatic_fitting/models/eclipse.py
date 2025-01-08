@@ -134,7 +134,7 @@ class EclipseModel(LightcurveModel):
             planet_mass=0.01,
             planet_radius=0.01,
             ecs=np.array([0.0,0.0]),
-            limb_darkening=np.array([0.4,0.2]),
+            limb_darkening=np.array([0.4, 0.2]),
             phase_offset=0.0,
         )
 

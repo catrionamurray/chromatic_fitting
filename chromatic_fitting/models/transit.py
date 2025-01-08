@@ -237,6 +237,7 @@ class TransitModel(LightcurveModel):
             f"{name}radius_ratio": [],
             f"{name}stellar_radius": [],
             f"{name}baseline": [],
+            f"{name}transit_depth": [],
         }
 
         for j, (mod, data, orbit) in enumerate(zip(models, datas, orbits)):
@@ -245,15 +246,17 @@ class TransitModel(LightcurveModel):
 
             with mod:
                 for pname in parameters_to_loop_over.keys():
-                    if pname != f"{name}planet_radius":
+                    if pname != f"{name}planet_radius" and pname != f"{name}transit_depth":
                         parameters_to_loop_over[pname] = self.parameters[
                             pname
                         ].get_prior_vector(**kw)
-                    if pname == f"{name}limb_darkening":
-                        if isinstance(self.parameters[pname], Fitted):
-                            if self.parameters[pname].distribution == QuadLimbDark:
-                                # print(eval_in_model(parameters_to_loop_over[pname]))
-                                parameters_to_loop_over[pname] = [parameters_to_loop_over[pname]]
+
+                    if self.optimization == "separate":
+                        if pname == f"{name}limb_darkening":
+                            if isinstance(self.parameters[pname], Fitted):
+                                if self.parameters[pname].distribution == QuadLimbDark:
+                                    # print(eval_in_model(parameters_to_loop_over[pname]))
+                                    parameters_to_loop_over[pname] = parameters_to_loop_over[pname]
 
                 # store Deterministic parameter {a/R*} for use later
                 Deterministic(
@@ -269,11 +272,17 @@ class TransitModel(LightcurveModel):
                 )
                 parameters_to_loop_over[f"{name}planet_radius"] = planet_radius
 
+                transit_depth = Deterministic(
+                    f"{name}transit_depth",
+                    parameters_to_loop_over[name + "radius_ratio"]**2,
+                )
+                parameters_to_loop_over[f"{name}transit_depth"] = transit_depth
+
                 light_curves, initial_guess = [], []
                 for i, w in enumerate(data.wavelength):
                     param_i = {}
                     for pname, param in parameters_to_loop_over.items():
-                        if pname == f"{name}planet_radius":
+                        if pname == f"{name}planet_radius" or pname == f"{name}transit_depth":
                             try:
                                 param_i[pname] = param[i]
                             except:
@@ -368,8 +377,13 @@ class TransitModel(LightcurveModel):
             m_star=params[f"{name}stellar_mass"],
         )
 
+        try:
+            ld = params[f"{name}limb_darkening_0"]
+        except:
+            ld = params[f"{name}limb_darkening"]
+
         ldlc = (
-            xo.LimbDarkLightCurve(params[f"{name}limb_darkening"])
+            xo.LimbDarkLightCurve(ld)
             .get_light_curve(
                 orbit=orbit,
                 r=params[f"{name}radius_ratio"]
@@ -435,7 +449,7 @@ class TransitModel(LightcurveModel):
                 plt.close()
 
     def make_transmission_spectrum_table(
-        self, **kw
+        self, param="radius_ratio", **kw
     ):
         """
         Generate and return a transmission spectrum table
@@ -450,10 +464,10 @@ class TransitModel(LightcurveModel):
         -------
 
         """
-        return self.make_spectrum_table(param="radius_ratio", **kw)
+        return self.make_spectrum_table(param=param, **kw)
 
     def plot_transmission_spectrum(
-        self, **kw
+        self, param="radius_ratio", **kw
     ):
         """
         Plot the transmission spectrum (specifically the planet size as a function of wavelength).
@@ -518,7 +532,7 @@ class TransitModel(LightcurveModel):
         # )
         # plt.xlabel("Wavelength (microns)")
         # plt.ylabel("Radius Ratio")
-        self.plot_spectrum(param="radius_ratio", name_of_spectrum="Transmission", **kw)
+        self.plot_spectrum(param=param, name_of_spectrum="Transmission", **kw)
 
     def add_model_to_rainbow(self):
         """
@@ -533,6 +547,11 @@ class TransitModel(LightcurveModel):
         # if optimization method is "white_light" then extract the white light curve
         if self.optimization == "white_light":
             data = self.white_light
+
+        try:
+            self.parameters['transit_limb_darkening_0'] = self.parameters['transit_limb_darkening']
+        except Exception as e:
+            print(e)
 
         # extract model as an array
         model = self.get_model(as_array=True)

@@ -507,6 +507,7 @@ class LightcurveModel:
         data_mask=None,
         inflate_uncertainties=False,
         inflate_uncertainties_prior=WavelikeFitted(Uniform, lower=1.0, upper=3.0, testval=1.01),
+        store_logp=True,
         setup_lightcurves_kw={},
         **kw,
     ):
@@ -566,6 +567,9 @@ class LightcurveModel:
             self.gp = []
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
+                if store_logp:
+                    llk = pm.Deterministic(f'logp_w{j}', mod.logpt)
+
                 if inflate_uncertainties:
                     nsigma.append(
                         self.parameters["nsigma"].get_prior_vector(

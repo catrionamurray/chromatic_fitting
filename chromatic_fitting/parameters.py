@@ -274,35 +274,50 @@ class WavelikeFitted(Fitted):
 
         inputs = dict(**inputs)
 
-        if self.distribution != xo.distributions.physical.QuadLimbDark:
-            if "shape" not in self.inputs:
-                if shape is None:
-                    inputs["shape"] = 1
-                elif shape > 1:
-                    inputs["shape"] = shape  # shape  # (shape, 1)
-                else:
-                    inputs["shape"] = 1
+        # if self.distribution != xo.distributions.physical.QuadLimbDark:
+        if "shape" not in self.inputs:
+            if shape is None:
+                inputs["shape"] = 1
+            elif shape > 1:
+                inputs["shape"] = shape  # shape  # (shape, 1)
             else:
-                if shape is not None:
-                    if type(self.inputs["shape"]) == int:
-                        # this causes some issues with exoplanet.distributions.QuadLimbDark
+                inputs["shape"] = 1
+        else:
+            if shape is not None:
+                if type(self.inputs["shape"]) == int:
+                    # this causes some issues with exoplanet.distributions.QuadLimbDark
+                    if self.inputs["shape"] > 1:
+                        inputs["shape"] = (shape, self.inputs["shape"])
+                        if "testval" in inputs:
+                            inputs["testval"] = [inputs["testval"]] * shape
+                elif self.distribution == xo.distributions.physical.QuadLimbDark:
+                    inputs["testval"] = [inputs["testval"]] * shape
+                else:
+                    if len(self.inputs["shape"]) == 1:
                         if self.inputs["shape"] > 1:
                             inputs["shape"] = (shape, self.inputs["shape"])
                             if "testval" in inputs:
-                                inputs["testval"] = [inputs["testval"]] * shape
-                    else:
-                        if len(self.inputs["shape"]) == 1:
-                            if self.inputs["shape"] > 1:
-                                inputs["shape"] = (shape, self.inputs["shape"])
-                                if "testval" in inputs:
-                                    inputs["testval"] = inputs["testval"] * shape
+                                inputs["testval"] = inputs["testval"] * shape
 
-            self.inputs["shape"] = inputs["shape"]
+        self.inputs["shape"] = inputs["shape"]
 
         # if i is not None:
         #     inputs["name"] = self.label(i)
 
-        prior = self.distribution(**inputs)
+        if self.distribution != xo.distributions.physical.QuadLimbDark:
+            prior = self.distribution(**inputs)
+        else:
+            prior = []
+            for j in range(inputs['shape'][0]):
+                inputs_j = inputs.copy()
+                inputs_j['testval'] = inputs['testval'][j]
+                inputs_j['shape'] = 2
+                if i is None:
+                    inputs_j['name'] = f"{inputs['name']}_{j}"
+                else:
+                    inputs_j['name'] = f"{inputs['name']}_{j+i}"
+                prior_j = self.distribution(**inputs_j)
+                prior.append(prior_j)
 
         if i is not None:
             self._pymc3_priors[self.label(i)] = prior
