@@ -1,4 +1,4 @@
-__version__ = "0.12.23"
+__version__ = "0.13.0"
 
 
 def version():
@@ -46,3 +46,4 @@ def version():
 #    v 0.12.18 - removed an exclusion for QuadLimbDark in parameters.py - may cause issues later?
 #    v 0.12.19 - add logp as Deterministic variable to store in trace
 #    v 0.12.22 - added back an exclusion for QuadLimbDark (BETA!!)
+# v 0.13.0 - added flare model
