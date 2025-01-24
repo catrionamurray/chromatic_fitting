@@ -62,7 +62,7 @@ class TransitSpotModel(LightcurveModel):
         # only require a constant (0th order) term:
         self.required_parameters = ["A", "rs", "ms", "prot", "u", "stellar_amp", "stellar_inc", "stellar_obl",
                                     "mp", "rp", "inc", "planet_log_amplitude", "period", "omega", "ecc", "t0",
-                                    "spot_contrast"]
+                                    "theta0", "spot_contrast"]
 
         if fit_for_n_spots:
             for nspots in range(self.nspots):
@@ -107,7 +107,7 @@ class TransitSpotModel(LightcurveModel):
         self.defaults = dict(A=1, rs=1, ms=1, stellar_amp=1, stellar_inc=90, stellar_obl=0.0, prot=1000, u=[0.1, 0.1],
                              # spot_contrast=0.5, spot_radius=20, spot_latitude=0.0, spot_longitude=0.0,
                              mp=1, rp=1, inc=90, planet_log_amplitude=-3, omega=0.0, period=10, ecc=0.0, t0=0.0,
-                             spot_contrast=0.5) #omega=100,
+                             theta0=0.0, spot_contrast=0.5) #omega=100,
 
         if self.fit_for_n_spots:
             for nspots in range(self.nspots):
@@ -188,12 +188,11 @@ class TransitSpotModel(LightcurveModel):
                 r=param_i[f"{name}rs"],
                 m=param_i[f"{name}ms"],
                 prot=param_i[f"{name}prot"],
-                length_unit=u.R_sun,
                 mass_unit=u.M_sun,
                 inc=param_i[f"{name}stellar_inc"],
                 obl=param_i[f"{name}stellar_obl"],
                 t0=param_i[f"{name}t0"],
-                theta0=0.0,#360*(param_i[f"{name}t0"]/param_i[f"{name}prot"]) # set the initial orientation of the map as
+                theta0=param_i[f"{name}theta0"],#360*(param_i[f"{name}t0"]/param_i[f"{name}prot"]) # set the initial orientation of the map as
                                                                         # mid transit
             )
 
@@ -325,6 +324,7 @@ class TransitSpotModel(LightcurveModel):
                                            (param_i[f"{name}rp"] * (1 * u.R_earth).to_value("R_sun")) / param_i[
                                                f"{name}rs"])
                         transit_depth = Deterministic(f"{name}depth[{i + j}]", rr ** 2)
+                        # a = Deterministic(f"{name}a[{i + j}]", param_i[f"{name}ms"] + param_i[f"{name}mp"])
                     except:
                         print("No wavelength-dependant transit depth")
                         pass
