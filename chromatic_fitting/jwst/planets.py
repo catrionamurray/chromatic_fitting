@@ -23,6 +23,7 @@ def toi3884():
         omega=(-1.96*u.radian).to_value('degree'), # longitude of ascending node in degrees,
         epoch=2459556.51669,
         dur=0.0666 * u.d,
+        b=0.0890,
         inc=89.81 * u.deg,  # inclination in degrees
     )
 

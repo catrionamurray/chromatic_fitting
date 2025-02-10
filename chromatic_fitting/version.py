@@ -1,4 +1,4 @@
-__version__ = "0.13.0"
+__version__ = "0.13.1"
 
 
 def version():
@@ -47,3 +47,4 @@ def version():
 #    v 0.12.19 - add logp as Deterministic variable to store in trace
 #    v 0.12.22 - added back an exclusion for QuadLimbDark (BETA!!)
 # v 0.13.0 - added flare model
+#    v 0.13.1  - moved logp, possible fix?

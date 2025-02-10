@@ -567,9 +567,6 @@ class LightcurveModel:
             self.gp = []
         for j, (mod, data) in enumerate(zip(models, datas)):
             with mod:
-                if store_logp:
-                    llk = pm.Deterministic(f'logp_w{j}', mod.logpt)
-
                 if inflate_uncertainties:
                     nsigma.append(
                         self.parameters["nsigma"].get_prior_vector(
@@ -642,6 +639,9 @@ class LightcurveModel:
 
                 except Exception as e:
                     print(e)
+
+                if store_logp:
+                    llk = pm.Deterministic(f'logp_w{j}', mod.logpt)
 
     #                 print(f"Setting up likelihood failed for wavelength {i}: {e}")
     #                 self.bad_wavelengths.append(i)
@@ -875,6 +875,9 @@ class LightcurveModel:
         Wrapper for PyMC3_ext sample
         """
         print(f"Sampling model using the {sampling_method} method")
+
+        self.metadata['sampling_parameters'] = kw
+
         if self.optimization == "separate":
             self.trace = []
             starts = []
