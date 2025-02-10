@@ -1,0 +1,9 @@
+cff-version: 0.12.12
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: Murray
+  given-names: Catriona
+orcid: https://orcid.org/0000-0001-8504-5862
+title: chromatic_fitting
+version: v0.12.12
+date-released: 2025-02-10
