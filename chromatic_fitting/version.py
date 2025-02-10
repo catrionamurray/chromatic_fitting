@@ -1,4 +1,4 @@
-__version__ = "0.12.12"
+__version__ = "0.12.13"
 
 
 def version():
@@ -40,3 +40,4 @@ def version():
 #    v 0.12.10 - added edge case for fixed deterministic param
 #    v 0.12.11 - fixed duplicate name issue
 #    v 0.12.12 - fixed exoplanet version to 0.5.3
+#    v 0.12.13 - removed archived folder
