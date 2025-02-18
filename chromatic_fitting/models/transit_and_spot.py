@@ -394,6 +394,34 @@ class TransitSpotModel(LightcurveModel):
             transit_spot = eval_in_model(flux_model[0])
         return transit_spot
 
+    def check_starry_map(self, params, xlims=None, ylims=None):
+        params_copy = params.copy()
+
+        for p in self.parameters:
+            if p not in params_copy and p != "transitspot_u":
+                params_copy[p] = self.parameters[p].value
+            else:
+                try:
+                    params_copy[p] = params_copy[p][0]
+                except:
+                    pass
+
+        flux_model, sys = self.setup_star_and_planet(name=f"{self.name}_",
+                                                     method="starry",
+                                                     param_i=params_copy,
+                                                     time=self.data.time.value,
+                                                     flux_model=[])
+
+        plt.plot(self.data.time.value, self.data.flux[0] / np.nanmedian(self.data.flux[0, :10]), 'k.')
+        with self._pymc3_model:
+            plt.plot(self.data.time.value, eval_in_model(flux_model[0]))
+        if xlims is not None:
+            plt.xlim(xlims[0], xlims[1])
+        if ylims is not None:
+            plt.ylim(ylims[0], ylims[1])
+
+        sys.primary.map.show()
+
     def show_system(self, i=0, **kw):
         if self.method == "starry":
             if hasattr(self, 'keplerian_system'):

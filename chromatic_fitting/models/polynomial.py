@@ -209,11 +209,17 @@ class PolynomialModel(LightcurveModel):
                         if type(p[d]) == float or type(p[d]) == int:
                             coeff.append(p[d])
                             # to_sub += 1
-                        elif eval_in_model(p[d].shape) == 1:
-                            coeff.append(p[d][0])
-                            # to_sub += 1
                         else:
-                            coeff.append(p[d][i])# - to_sub])
+                            try:
+                                if eval_in_model(p[d].shape) == 1:
+                                    coeff.append(p[d][0])
+                                else:
+                                    coeff.append(p[d][i])  # - to_sub])
+                            except TypeError:
+                                if p[d].shape == 1:
+                                    coeff.append(p[d][0])
+                                else:
+                                    coeff.append(p[d][i])
                         variable.append(xi**d)
                     poly.append(pm.math.dot(coeff, variable))
 

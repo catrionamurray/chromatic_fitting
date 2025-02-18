@@ -1331,6 +1331,30 @@ class LightcurveModel:
 
         return fv
 
+    def extract_init_vals(self):
+        """
+        Extract the initial values provided by the user for each parameter.
+        Returns
+        dict: initial parameters to be passed to Optimize or Sampling
+        -------
+
+        """
+        p = {}
+        for k, v in self.parameters.items():
+            # print(k,v)
+            if isinstance(v, Fixed):
+                p[k] = v.value
+            else:
+                if 'testval' in v.inputs:
+                    p[k] = v.inputs['testval']
+                else:
+                    if 'mu' in v.inputs:
+                        p[k] = v.inputs['mu']
+                    if v.distribution == pymc3.distributions.continuous.Uniform:
+                        p[k] = (v.inputs['lower'] + v.inputs['upper']) / 2
+
+        return p
+
     def corner_plot(self, **kw):
         try:
             import corner

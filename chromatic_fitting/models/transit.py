@@ -265,17 +265,23 @@ class TransitModel(LightcurveModel):
                 )
                 # stored_a_r = True
 
-                planet_radius = Deterministic(
-                    f"{name}planet_radius",
-                    parameters_to_loop_over[name + "radius_ratio"]
-                    * parameters_to_loop_over[name + "stellar_radius"],
-                )
+                try:
+                    planet_radius = Deterministic(
+                        f"{name}planet_radius",
+                        parameters_to_loop_over[name + "radius_ratio"]
+                        * parameters_to_loop_over[name + "stellar_radius"],
+                    )
+                except:
+                    planet_radius = parameters_to_loop_over[name + "radius_ratio"] * parameters_to_loop_over[name + "stellar_radius"]
                 parameters_to_loop_over[f"{name}planet_radius"] = planet_radius
 
-                transit_depth = Deterministic(
-                    f"{name}transit_depth",
-                    parameters_to_loop_over[name + "radius_ratio"]**2,
-                )
+                try:
+                    transit_depth = Deterministic(
+                        f"{name}transit_depth",
+                        parameters_to_loop_over[name + "radius_ratio"]**2,
+                    )
+                except:
+                    transit_depth = parameters_to_loop_over[name + "radius_ratio"]**2
                 parameters_to_loop_over[f"{name}transit_depth"] = transit_depth
 
                 light_curves, initial_guess = [], []

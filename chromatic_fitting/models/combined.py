@@ -613,6 +613,13 @@ class CombinedModel(LightcurveModel):
 
         return k_func
 
+    def extract_init_vals(self, **kw):
+        init_vals = {}
+        for mod in self._chromatic_models.values():
+            init_vals_mod = mod.extract_init_vals(**kw)
+            for k, v in init_vals_mod.items():
+                init_vals[k] = v
+        return init_vals
 
     def get_results(self, **kw):
         """

@@ -1,4 +1,4 @@
-__version__ = "0.13.1"
+__version__ = "0.13.9"
 
 
 def version():
@@ -47,4 +47,13 @@ def version():
 #    v 0.12.19 - add logp as Deterministic variable to store in trace
 #    v 0.12.22 - added back an exclusion for QuadLimbDark (BETA!!)
 # v 0.13.0 - added flare model
-#    v 0.13.1  - moved logp, possible fix?
+#    v 0.13.1  - moved logp to end of setup_likelihood, fixed update issue!
+#    v 0.13.2  - fixed bug in using .iteritems() -> .items()
+#    v 0.13.3  - fixed issue in flaremodel when dealing with very long baselines
+#    v 0.13.4  - changed flare model to accept log(fwhm) rather than fwhm.
+#    v 0.13.5  - added try/except statements for transit model in case there are no Fitted parameters
+#    v 0.13.6  - changed flare deterministic fwhm and A to be the correct dimension when sampling
+#    v 0.13.7  - added try/except statements for poly model in case there are no Fitted parameters
+#    v 0.13.8  - added extract_init_vals function to lightcurve
+#    v 0.13.9  - added check_starry_map function to TransitSpotModel
+

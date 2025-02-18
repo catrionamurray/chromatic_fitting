@@ -3,6 +3,7 @@ from ..imports import *
 from .lightcurve import *
 from scipy import special
 
+
 def flare_eqn_mendoza2022(t, ampl, pymc):
     '''
     The equation that defines the shape for the Continuous Flare Model
@@ -23,10 +24,19 @@ def flare_eqn_mendoza2022(t, ampl, pymc):
         erfc = pm.math.erfc
     else:
         erfc = special.erfc
+
     eqn = ((1 / 2) * np.sqrt(np.pi) * A * C * f1 * np.exp(-D1 * t + ((B / C) + (D1 * C / 2)) ** 2)
            * erfc(((B - t) / C) + (C * D1 / 2))) + ((1 / 2) * np.sqrt(np.pi) * A * C * f2
-                                                            * np.exp(
+                                                    * np.exp(
                 -D2 * t + ((B / C) + (D2 * C / 2)) ** 2) * erfc(((B - t) / C) + (C * D2 / 2)))
+
+    if pymc:
+        eqn = pm.math.where(pm.math.eq(erfc(((B - t) / C) + (C * D2 / 2)), 0),
+                            pm.math.zeros_like(eqn),
+                            eqn)
+    else:
+        eqn[erfc(((B - t) / C) + (C * D2 / 2)) == 0] = 0
+
     return eqn * ampl
 
 
@@ -179,7 +189,7 @@ class FlareModel(LightcurveModel):
         kw: keyword arguments for initialising the chromatic model
         """
         # only require a constant (0th order) term:
-        self.required_parameters = ["logA", "tpeak", "fwhm"]
+        self.required_parameters = ["logA", "tpeak", "logfwhm"]
 
         super().__init__(**kw)
         self.independant_variable = independant_variable
@@ -206,16 +216,16 @@ class FlareModel(LightcurveModel):
         """
         Set the default parameters for the model.
         """
-        self.defaults = dict(logA=0.1, tpeak=0.0, fwhm=0.01)
+        self.defaults = dict(logA=-2, tpeak=0.0, logfwhm=-2)
 
     def what_are_parameters(self):
         """
         Print a summary of what each parameter is
         # """
         self.parameter_descriptions = dict(
-            logA="The amplitude of the flare.",
+            logA="The log amplitude of the flare.",
             tpeak="The time of the flare peak.",
-            fwhm="The fwhm (width) of the flare",
+            logfwhm="The log fwhm (width) of the flare",
         )
 
         for k, v in self.parameter_descriptions.items():
@@ -290,8 +300,20 @@ class FlareModel(LightcurveModel):
                     for pname, param in parameters_to_loop_over.items():
                         if isinstance(self.parameters[pname], WavelikeFitted):
                             param_i[pname] = param[j][i]
-                        else:
+                        elif isinstance(self.parameters[pname], Fixed):
                             param_i[pname] = param[j]
+                        else:
+                            param_i[pname] = param[j][0]
+
+                    try:
+                        fwhm = Deterministic(f"{name}fwhm[{i + j}]", 10 ** param_i[f"{name}logfwhm"])
+                    except:
+                        fwhm = 10 ** param_i[f"{name}logfwhm"]
+
+                    try:
+                        A = Deterministic(f"{name}A[{i + j}]", 10 ** param_i[f"{name}logA"])
+                    except:
+                        A = 10 ** param_i[f"{name}logA"]
 
                     fl.append(self.flare(param_i, xi, pymc=True))
                     initial_guess.append(eval_in_model(fl[-1]))
@@ -320,13 +342,17 @@ class FlareModel(LightcurveModel):
                     self.initial_guess[f"wavelength_{j}"] += initial_guess
 
     def flare(self, params, x, pymc=False):
+        # if pymc:
+        #     fwhm = Deterministic(f"{self.name}_fwhm", 10 ** params[f"{self.name}_logfwhm"])
+        #     A = Deterministic(f"{self.name}_A", 10 ** params[f"{self.name}_logA"])
+
         if self.flare_model_method == "mendoza2022":
             flare = flare_model_mendoza2022(x, params[f"{self.name}_tpeak"],
-                                            params[f"{self.name}_fwhm"],
+                                            10 ** params[f"{self.name}_logfwhm"],
                                             10 ** params[f"{self.name}_logA"], pymc)
         elif self.flare_model_method == "davenport2014":
             flare = flare_model_davenport2014(x, params[f"{self.name}_tpeak"],
-                                              params[f"{self.name}_fwhm"],
+                                              10 ** params[f"{self.name}_logfwhm"],
                                               10 ** params[f"{self.name}_logA"], pymc)
         return flare
 
