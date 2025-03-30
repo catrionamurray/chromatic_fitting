@@ -26,7 +26,7 @@ def create_new_eclipse_model():
                 inclination = 89.68,     #planet inclination
                 planet_mass = 0.00903,   #m_jup
                 planet_radius = 0.1164,  #r_jup
-                ecs =  Fitted(pm.TruncatedNormal,mu=np.array([0.0,0.0]),sigma=np.array([0.01,0.01]),upper=np.array([0.1,0.1]),lower=np.array([-0.1,-0.1]),testval=np.array([0.001,0.001]), shape=2),#2-d parameter which is [ecosw, esinw]
+                ecs =  Fitted(pm.TruncatedNormal,mu=np.array([0.0,0.0]),sigma=np.array([0.01,0.01]),upper=np.array([0.1,0.1]),lower=np.array([-0.1,-0.1]),testval=np.array([0.001,0.001]), shape=2),#2-d parameter which is [sqrt(e)cosw, sqrt(e)sinw]
                 limb_darkening = np.array([0.4,0.2]),         #limb darkening quadratic coeff np.array([1,2])
             )    
     
@@ -111,7 +111,7 @@ class EclipseModel(LightcurveModel):
             inclination="The inclination of the planet [degrees].",
             planet_mass="The mass of the planet [M_jupiter].",
             planet_radius="The radius of the planet [R_jupiter].",
-            ecs="[ecosw, esinw], where e is eccentricity.",
+            ecs="[sqrt(e)cosw, sqrt(e)sinw], where e is eccentricity and w is argument of periapsis.",
             limb_darkening="2-d Quadratic limb-darkening coefficients.",
             phase_offset="Hotspot offset [degrees]",
         )
@@ -242,14 +242,14 @@ class EclipseModel(LightcurveModel):
                     star.map[1] = param_i[f"{name}limb_darkening"][0]
                     star.map[2] = param_i[f"{name}limb_darkening"][1]
                     omega = (theano.tensor.arctan2(param_i[f"{name}ecs"][1], param_i[f"{name}ecs"][0])*180.0)/np.pi
-                    eccentricity = pm.math.sqrt(param_i[f"{name}ecs"][0]**2+param_i[f"{name}ecs"][1]**2)
+                    eccentricity = param_i[f"{name}ecs"][0]**2+param_i[f"{name}ecs"][1]**2
 
                     planet = starry.kepler.Secondary(
                         starry.Map(
                             ydeg=0,
                             udeg=0,
                             amp=10 ** param_i[f"{name}planet_log_amplitude"],
-                            inc=param_i[f"{name}inclination"],
+                            inc=90.0,
                             obl=0.0,
                         ),
                         # the surface map
@@ -266,9 +266,9 @@ class EclipseModel(LightcurveModel):
                     )
                     planet.theta0 = 180.0 + param_i[f"{name}phase_offset"]
 
-                    eclipse_depth = pm.Deterministic(f"{name}depth_{i+j}",10 ** param_i[f"{name}planet_log_amplitude"])
-                    f_max = pm.Deterministic(f"{name}fmax_{i+j}", planet.map.flux(theta=0)[0])
-                    f_min = pm.Deterministic(f"{name}fmin_{i + j}", planet.map.flux(theta=180)[0])
+                    #eclipse_depth = pm.Deterministic(f"{name}depth_{i+j}",theano.tensor.exp(param_i[f"{name}planet_log_amplitude"]))  ## This is not good,test only
+                    #f_max = pm.Deterministic(f"{name}fmax_{i+j}", planet.map.flux(theta=0)[0])
+                    #f_min = pm.Deterministic(f"{name}fmin_{i + j}", planet.map.flux(theta=180)[0])
 
                     system = starry.System(star, planet)
                     flux_model = system.flux(data.time.to_value("day"))
@@ -366,7 +366,7 @@ class EclipseModel(LightcurveModel):
             #     data = self.get_data(i)
             # else:
             #     data = self.get_data()
-            time = list(datas[i].time.to_value("day"))
+            time = list(datas[0].time.to_value("day"))
 
         self.check_and_fill_missing_parameters(params, i)
 
@@ -387,14 +387,14 @@ class EclipseModel(LightcurveModel):
         star.map[2] = params[f"{name}limb_darkening"][1]
 
         omega = theano.tensor.arctan2(params[f"{name}ecs"][1], params[f"{name}ecs"][0])*180.0/np.pi
-        eccentricity = pm.math.sqrt(params[f"{name}ecs"][0]**2 + params[f"{name}ecs"][1]**2)
+        eccentricity = params[f"{name}ecs"][0]**2 + params[f"{name}ecs"][1]**2
 
         planet = starry.kepler.Secondary(
             starry.Map(
                 ydeg=0,
                 udeg=0,
                 amp=10 ** params[f"{name}planet_log_amplitude"],
-                inc=params[f"{name}inclination"],
+                inc=90.0,
                 obl=0.0,
             ),
             # the surface map
@@ -412,13 +412,13 @@ class EclipseModel(LightcurveModel):
 
         planet.theta0 = 180.0 + params[f"{name}phase_offset"]
         system = starry.System(star, planet)
-        # flux_model = system.flux(time).eval()
-        flux_model = eval_in_model(system.flux(time), model=models[i])
+        flux_model = system.flux(time).eval()
+        #flux_model = eval_in_model(system.flux(time), model=models[i])
 
-        if hasattr(self, 'keplerian_system'):
-            self.keplerian_system[f'w{i}'] = system
-        else:
-            self.keplerian_system = {f'w{i}': system}
+#        if hasattr(self, 'keplerian_system'):
+#            self.keplerian_system[f'w{i}'] = system
+#        else:
+#            self.keplerian_system = {f'w{i}': system}
 
         return flux_model
 

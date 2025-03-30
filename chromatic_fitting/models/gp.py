@@ -303,6 +303,7 @@ class GPModel(LightcurveModel):
 
     def gp_model(self, params, i=0):
         gp = self.generate_gp_model_from_params(params=params, i=i)
+        y = self.data.flux[i,:]
         return gp.predict(y=y)
 
 
