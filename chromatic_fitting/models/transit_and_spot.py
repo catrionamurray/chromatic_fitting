@@ -25,9 +25,10 @@ class TransitSpotModel(LightcurveModel):
             udeg: int = 2,
             spot_smoothing = None,
             nspots: int = 1,
+            nplanets: int = 1,
             type_of_model: str = "planet",
-            plot_min_radius = False,
-            fit_for_n_spots = False,
+            plot_min_radius=False,
+            fit_for_n_spots=False,
             **kw: object,
     ) -> None:
         """
@@ -45,6 +46,7 @@ class TransitSpotModel(LightcurveModel):
             warnings.warn(
                 "You have selected >=35 spherical harmonic degrees. Starry does not behave nicely at this high a resolution!")
 
+        self.nplanets = nplanets
         self.nspots = nspots
         self.ydeg = ydeg
         self.udeg = udeg
@@ -61,7 +63,6 @@ class TransitSpotModel(LightcurveModel):
 
         # only require a constant (0th order) term:
         self.required_parameters = ["A", "rs", "ms", "prot", "u", "stellar_amp", "stellar_inc", "stellar_obl",
-                                    "mp", "rp", "inc", "planet_log_amplitude", "period", "omega", "ecc", "t0",
                                     "theta0", "spot_contrast"]
 
         if fit_for_n_spots:
@@ -76,6 +77,19 @@ class TransitSpotModel(LightcurveModel):
                 self.required_parameters.extend([f"{self.nspots}_spot_{n + 1}_radius",
                                                  f"{self.nspots}_spot_{n + 1}_latitude",
                                                  f"{self.nspots}_spot_{n + 1}_longitude"])
+
+        for nplanets in range(self.nplanets):
+            if self.nplanets == 1:
+                self.required_parameters.extend(["mp", "rp", "inc", "planet_log_amplitude", "period", "omega", "ecc",
+                                                 "t0"])
+            else:
+                warnings.warn("You are modeling >1 planet!")
+                for n in range(self.nplanets):
+                    self.required_parameters.extend([f"planet_{n+1}_mp", f"planet_{n+1}_rp",
+                                                     f"planet_{n+1}_inc",
+                                                     f"planet_{n+1}_planet_log_amplitude",
+                                                     f"planet_{n+1}_period", f"planet_{n+1}_omega",
+                                                     f"planet_{n+1}_ecc", f"planet_{n+1}_t0"])
 
         super().__init__(**kw)
         self.set_defaults()
@@ -105,9 +119,8 @@ class TransitSpotModel(LightcurveModel):
         Set the default parameters for the model.
         """
         self.defaults = dict(A=1, rs=1, ms=1, stellar_amp=1, stellar_inc=90, stellar_obl=0.0, prot=1000, u=[0.1, 0.1],
-                             # spot_contrast=0.5, spot_radius=20, spot_latitude=0.0, spot_longitude=0.0,
-                             mp=1, rp=1, inc=90, planet_log_amplitude=-3, omega=0.0, period=10, ecc=0.0, t0=0.0,
                              theta0=0.0, spot_contrast=0.5) #omega=100,
+
 
         if self.fit_for_n_spots:
             for nspots in range(self.nspots):
@@ -121,6 +134,14 @@ class TransitSpotModel(LightcurveModel):
                 self.defaults[f"{self.nspots}_spot_{n + 1}_radius"] = 10
                 self.defaults[f"{self.nspots}_spot_{n + 1}_latitude"] = 0.0
                 self.defaults[f"{self.nspots}_spot_{n + 1}_longitude"] = 0.0
+
+        def_temp = dict(mp=1, rp=1, inc=90, planet_log_amplitude=-3, omega=0.0, period=10, ecc=0.0, t0=0.0)
+        if self.nplanets == 1:
+            self.defaults.update(def_temp)
+        else:
+            for n in range(self.nplanets):
+                for k, v in def_temp.items():
+                    self.defaults[f"planet_{n+1}_{k}"] = v
 
     def plot_optimized_map(self, opt):
         opt_copy = opt.copy()
@@ -179,67 +200,84 @@ class TransitSpotModel(LightcurveModel):
         (with <{tol*100}% error on the contrast) is {rmin[3][ind]} degrees.
         """)
 
+    def setup_star(self, name, param_i):
+        if self.nplanets == 1:
+            t0 = param_i[f"{name}t0"]
+        else:
+            t0 = param_i[f"{name}planet_1_t0"]
+
+        star = starry.Primary(
+            starry.Map(ydeg=self.ydeg, udeg=self.udeg, amp=param_i[f"{name}stellar_amp"],
+                       inc=param_i[f"{name}stellar_inc"], obl=param_i[f"{name}stellar_obl"]),
+            r=param_i[f"{name}rs"],
+            m=param_i[f"{name}ms"],
+            prot=param_i[f"{name}prot"],
+            mass_unit=u.M_sun,
+            inc=param_i[f"{name}stellar_inc"],
+            obl=param_i[f"{name}stellar_obl"],
+            t0=t0,
+            theta0=param_i[f"{name}theta0"],
+        )
+
+        try:
+            star.map[1:] = param_i[f"{name}u"]
+        except:
+            star.map[1:] = param_i[f"{name}u_0"]
+
+        if self.fit_for_n_spots:
+            nspots = param_i[f"{name}nspots"]
+            if pm.math.eq(nspots, 0) == True:
+                pass
+            else:
+                for ns in range(self.nspots):
+                    if pm.math.eq(nspots, ns + 1):
+                        for spot_i in range(ns + 1):
+                            star.map.spot(contrast=param_i[f"{name}spot_contrast"],
+                                          radius=param_i[f"{name}{ns + 1}_spot_{spot_i + 1}_radius"],
+                                          lat=param_i[f"{name}{ns + 1}_spot_{spot_i + 1}_latitude"],
+                                          lon=param_i[f"{name}{ns + 1}_spot_{spot_i + 1}_longitude"],
+                                          spot_smoothing=self.spot_smoothing)
+
+        else:
+            for spot_i in range(self.nspots):
+                star.map.spot(contrast=param_i[f"{name}spot_contrast"],  # param_i[f"{name}spot_{spot_i + 1}_contrast"],
+                              radius=param_i[f"{name}{self.nspots}_spot_{spot_i + 1}_radius"],
+                              lat=param_i[f"{name}{self.nspots}_spot_{spot_i + 1}_latitude"],
+                              lon=param_i[f"{name}{self.nspots}_spot_{spot_i + 1}_longitude"],
+                              spot_smoothing=self.spot_smoothing)
+
+        return star
+
+    def setup_planet(self, name, param_i):
+        planet = starry.kepler.Secondary(
+            starry.Map(ydeg=0, amp=10 ** param_i[f"{name}planet_log_amplitude"]),  # the surface map
+            m=param_i[f"{name}mp"],  # mass in solar masses
+            r=param_i[f"{name}rp"],  # radius
+            inc=param_i[f"{name}inc"],
+            length_unit=u.R_earth,
+            mass_unit=u.M_earth,
+            porb=param_i[f"{name}period"],  # orbital period in days
+            prot=param_i[f"{name}period"],  # rotation period in days (synchronous)
+            omega=param_i[f"{name}omega"],  # longitude of ascending node in degrees
+            ecc=param_i[f"{name}ecc"],  # eccentricity
+            t0=param_i[f"{name}t0"],  # time of transit in days
+        )
+
+        return planet
 
     def setup_star_and_planet(self, name, method, param_i, time, flux_model):
         if method == "starry":
-            star = starry.Primary(
-                starry.Map(ydeg=self.ydeg, udeg=self.udeg, amp=param_i[f"{name}stellar_amp"],
-                           inc=param_i[f"{name}stellar_inc"], obl=param_i[f"{name}stellar_obl"]),
-                r=param_i[f"{name}rs"],
-                m=param_i[f"{name}ms"],
-                prot=param_i[f"{name}prot"],
-                mass_unit=u.M_sun,
-                inc=param_i[f"{name}stellar_inc"],
-                obl=param_i[f"{name}stellar_obl"],
-                t0=param_i[f"{name}t0"],
-                theta0=param_i[f"{name}theta0"],#360*(param_i[f"{name}t0"]/param_i[f"{name}prot"]) # set the initial orientation of the map as
-                                                                        # mid transit
-            )
-
-            try:
-                star.map[1:] = param_i[f"{name}u"]
-            except:
-                # print(param_i)
-                star.map[1:] = param_i[f"{name}u_0"]
-
-            if self.fit_for_n_spots:
-                nspots = param_i[f"{name}nspots"]
-                if pm.math.eq(nspots, 0) == True:
-                    pass
-                else:
-                    for ns in range(self.nspots):
-                        if pm.math.eq(nspots, ns + 1):
-                            for spot_i in range(ns + 1):
-                                star.map.spot(contrast=param_i[f"{name}spot_contrast"],
-                                              radius=param_i[f"{name}{ns + 1}_spot_{spot_i + 1}_radius"],
-                                              lat=param_i[f"{name}{ns + 1}_spot_{spot_i + 1}_latitude"],
-                                              lon=param_i[f"{name}{ns + 1}_spot_{spot_i + 1}_longitude"],
-                                              spot_smoothing=self.spot_smoothing)
-
+            star = self.setup_star(name, param_i)
+            planets = []
+            if self.nplanets > 1:
+                for n in range(self.nplanets):
+                    planets.append(self.setup_planet(name + f"planet_{n + 1}_", param_i))
+                sys = starry.System(star, *planets)
             else:
-                for spot_i in range(self.nspots):
-                    star.map.spot(contrast=param_i[f"{name}spot_contrast"], #param_i[f"{name}spot_{spot_i + 1}_contrast"],
-                                  radius=param_i[f"{name}{self.nspots}_spot_{spot_i + 1}_radius"],
-                                  lat=param_i[f"{name}{self.nspots}_spot_{spot_i + 1}_latitude"],
-                                  lon=param_i[f"{name}{self.nspots}_spot_{spot_i + 1}_longitude"],
-                                  spot_smoothing=self.spot_smoothing)
+                planets = self.setup_planet(name, param_i)
+                sys = starry.System(star, planets)
 
-            planet = starry.kepler.Secondary(
-                starry.Map(ydeg=0, amp=10**param_i[f"{name}planet_log_amplitude"]),  # the surface map
-                m=param_i[f"{name}mp"],  # mass in solar masses
-                r=param_i[f"{name}rp"],  # radius
-                inc=param_i[f"{name}inc"],
-                length_unit=u.R_earth,
-                mass_unit=u.M_earth,
-                porb=param_i[f"{name}period"],  # orbital period in days
-                prot=param_i[f"{name}period"],  # rotation period in days (synchronous)
-                omega=param_i[f"{name}omega"],  # longitude of ascending node in degrees
-                ecc=param_i[f"{name}ecc"],  # eccentricity
-                t0=param_i[f"{name}t0"],  # time of transit in days
-            )
-
-            sys = starry.System(star, planet)
-            flux_model.append(param_i[f"{name}A"]-1 + sys.flux(time))
+            flux_model.append(param_i[f"{name}A"] - 1 + sys.flux(time))
 
         elif method == "fleck":
             print("fleck method not implemented yet")
@@ -290,7 +328,6 @@ class TransitSpotModel(LightcurveModel):
         for p in self.parameters.keys():
             parameters_to_loop_over[p] = []
 
-
         for j, (mod, data) in enumerate(zip(models, datas)):
             if self.optimization == "separate":
                 kw["i"] = j
@@ -306,32 +343,50 @@ class TransitSpotModel(LightcurveModel):
 
                     param_i = {}
                     for pname, param in parameters_to_loop_over.items():
+                        # print(pname, param)
                         if isinstance(self.parameters[pname], WavelikeFitted):
                             param_i[pname] = param[j][i]
                         elif isinstance(self.parameters[pname], Fixed):
-                            param_i[pname] = param[j]
+                            if isinstance(self.parameters[pname], WavelikeFixed):
+                                param_i[pname] = param[j][i]
+                            else:
+                                param_i[pname] = param[j]
                         else:
                             param_i[pname] = param[j][0]
 
-
                     flux_model, _ = self.setup_star_and_planet(name=name, method=self.method, param_i=param_i,
-                                                               time=data.time.to_value('d'),
-                                                               flux_model=flux_model)
+                                                          time=data.time.to_value('d'),
+                                                          flux_model=flux_model)
 
                     # save the radius ratio for generating the transmission spectrum later:
-                    try:
+                    # try:
+                    if self.nplanets == 1:
                         rr = Deterministic(f"{name}radius_ratio[{i + j}]",
                                            (param_i[f"{name}rp"] * (1 * u.R_earth).to_value("R_sun")) / param_i[
                                                f"{name}rs"])
-                        transit_depth = Deterministic(f"{name}depth[{i + j}]", rr ** 2)
-                        # a = Deterministic(f"{name}a[{i + j}]", param_i[f"{name}ms"] + param_i[f"{name}mp"])
-                    except:
-                        print("No wavelength-dependant transit depth")
-                        pass
+                    else:
+                        rr = []
+                        for n in range(self.nplanets):
+                            rr.append(Deterministic(f"{name}planet_{n + 1}_radius_ratio[{i + j}]",
+                                                    (param_i[f"{name}planet_{n + 1}_rp"] * (1 * u.R_earth).to_value(
+                                                        "R_sun")) / param_i[
+                                                        f"{name}rs"]))
+                    transit_depth = Deterministic(f"{name}depth[{i + j}]", pm.math.dot(rr, rr))
+                    # a = Deterministic(f"{name}a[{i + j}]", param_i[f"{name}ms"] + param_i[f"{name}mp"])
+                    # except:
+                    #     print("No wavelength-dependant transit depth")
+                    #     pass
 
                     try:
-                        eclipse_depth = Deterministic(f"{name}eclipse_depth[{i + j}]",
-                                                      10**param_i[f"{name}planet_log_amplitude"])
+                        if self.nplanets == 1:
+                            eclipse_depth = Deterministic(f"{name}eclipse_depth[{i + j}]",
+                                                          10 ** param_i[f"{name}planet_log_amplitude"])
+                        else:
+                            logA = []
+                            for n in range(self.nplanets):
+                                logA.append(param_i[f"{name}planet_{n + 1}_planet_log_amplitude"])
+                            eclipse_depth = Deterministic(f"{name}eclipse_depth[{i + j}]",
+                                                          10 ** logA)
                     except:
                         print("No wavelength-dependant eclipse depth")
 
@@ -394,33 +449,150 @@ class TransitSpotModel(LightcurveModel):
             transit_spot = eval_in_model(flux_model[0])
         return transit_spot
 
-    def check_starry_map(self, params, xlims=None, ylims=None):
+    def check_starry_map(self, params, i=0, t0=None, xlims=None, tlims=None, ylims=None, figsize=(8, 4), **starrykw):
         params_copy = params.copy()
 
+        nplots = 1
+        if xlims is not None:
+            if len(np.shape(xlims)) > 1:
+                # we are plotting more than once
+                nplots = np.shape(xlims)[0]
+            else:
+                xlims = [xlims]
+        if tlims is not None:
+            if len(np.shape(tlims)) > 1:
+                # we are plotting more than once
+                nplots = np.shape(tlims)[0]
+            else:
+                tlims = [tlims]
+
         for p in self.parameters:
-            if p not in params_copy and p != "transitspot_u":
-                params_copy[p] = self.parameters[p].value
+            if p not in params_copy:
+                if p != f"{self.name}_u":
+                    params_copy[p] = self.parameters[p].value
+                else:
+                    # consider the limb-darkening as a special case:
+                    if isinstance(self.parameters[p], WavelikeFixed):
+                        params_copy[p] = self.parameters[p].values[i]
+                        assert len(params_copy[p]) == self.udeg
+                    elif isinstance(self.parameters[p], Fixed):
+                        if len(self.parameters[p].value) == self.udeg:
+                            params_copy[p] = self.parameters[p].value
+                        else:
+                            params_copy[p] = self.parameters[p].value
+                        assert len(params_copy[p]) == self.udeg
+                    else:
+                        try:
+                            if len(params_copy[p]) == self.udeg:
+                                params_copy[p] = params_copy[p]
+                            else:
+                                params_copy[p] = params_copy[p][i]
+                            assert len(params_copy[p]) == self.udeg
+                        except:
+                            pass
             else:
                 try:
-                    params_copy[p] = params_copy[p][0]
+                    if p != f"{self.name}_u":
+                        if len(params_copy[p]) == self.data.nwave:
+                            params_copy[p] = params_copy[p][i]
+                        else:
+                            params_copy[p] = params_copy[p][0]
+                    else:
+                        # dealing with LD:
+                        if self.udeg == self.data.nwave:
+                            print(f"""
+                            WARNING: The number of wavelengths and number of LD coefficients = {self.udeg}.
+                            This may lead to difficulties in chromatic_fitting.
+                            """)
+                        if len(np.shape(params_copy[p])) == 1:
+                            if np.shape(params_copy[p])[0] == self.udeg:
+                                params_copy[p] = params_copy[p]
+                            else:
+                                params_copy[p] = params_copy[p][i]
+                        else:
+                            if np.shape(params_copy[p])[0] == self.data.nwave:
+                                params_copy[p] = params_copy[p][i]
                 except:
                     pass
 
-        flux_model, sys = self.setup_star_and_planet(name=f"{self.name}_",
-                                                     method="starry",
-                                                     param_i=params_copy,
-                                                     time=self.data.time.value,
-                                                     flux_model=[])
+        if f"{self.name}_u_0" in params_copy:
+            try:
+                params_copy[f"{self.name}_u"] = params_copy[f"{self.name}_u_{i}"]
+            except:
+                pass
 
-        plt.plot(self.data.time.value, self.data.flux[0] / np.nanmedian(self.data.flux[0, :10]), 'k.')
-        with self._pymc3_model:
-            plt.plot(self.data.time.value, eval_in_model(flux_model[0]))
-        if xlims is not None:
-            plt.xlim(xlims[0], xlims[1])
-        if ylims is not None:
-            plt.ylim(ylims[0], ylims[1])
+        fig, ax = plt.subplots(ncols=nplots, nrows=2, figsize=figsize, height_ratios=[2, 1])
 
-        sys.primary.map.show()
+        for j in range(nplots):
+            time = self.data.time.value
+
+            if nplots == 1:
+                plt.sca(ax[0])
+
+            if tlims is not None:
+                time0 = find_nearest(time, tlims[j][0])
+                time1 = find_nearest(time, tlims[j][1])
+                time = time[time0:time1]
+                if nplots > 1:
+                    plt.sca(ax[0, j])  # row, col
+            elif xlims is not None:
+                time = time[xlims[j][0]:xlims[j][1]]
+                if nplots > 1:
+                    plt.sca(ax[0, j])
+
+            flux_model, sys = self.setup_star_and_planet(name=f"{self.name}_",
+                                                         method="starry",
+                                                         param_i=params_copy,
+                                                         time=time,
+                                                         flux_model=[])
+
+            with self._pymc3_model:
+                f = eval_in_model(flux_model[0])
+
+            plt.plot(self.data.time.value, self.data.flux[i] / np.nanmedian(self.data.flux[i, :10]), 'k.')
+            plt.plot(time, f / f[0], color='orange')
+            if tlims is not None:
+                plt.xlim(tlims[j][0], tlims[j][1])
+            elif xlims is not None:
+                plt.xlim(self.data.time.value[xlims[j][0]], self.data.time.value[xlims[j][1]])
+
+            if ylims is not None:
+                plt.ylim(ylims[0], ylims[1])
+
+            if self.nplanets == 1:
+                t0_model = [params_copy[f"{self.name}_t0"]]
+            else:
+                t0_model = []
+                for n in range(self.nplanets):
+                    t0_model.append(params_copy[f"{self.name}_planet_{n + 1}_t0"])
+
+            if t0 is None:
+                theta0 = 360 * (((time[0] - t0_model[0]) / params_copy[f"{self.name}_prot"]) % 1)
+            else:
+                theta0 = 360 * (((t0 - t0_model[0]) / params_copy[f"{self.name}_prot"]) % 1)
+
+            if nplots == 1:
+                ax_i = ax[1]
+            else:
+                ax_i = ax[1, j]  # row, col
+
+            sys.primary.map.show(theta=theta0, ax=ax_i, **starrykw)
+
+            for n in range(self.nplanets):
+                with self._pymc3_model:
+                    x, y, z = sys.position(time)
+                    planet_i = n + 1
+                    rs = eval_in_model(sys.primary.r) * sys.primary.length_unit
+                    rp = (eval_in_model(sys.secondaries[n].r) * sys.secondaries[n].length_unit / rs).decompose()
+                    x = (eval_in_model(x[planet_i]) * sys.secondaries[n].length_unit / rs).decompose()
+                    y = (eval_in_model(y[planet_i]) * sys.secondaries[n].length_unit / rs).decompose()
+
+                    ax_i.plot(x, y, color='k', linestyle='--', zorder=100)
+                    ax_i.fill_between(x, y - rp, y + rp, color='k', alpha=0.2, zorder=100)
+                    ax_i.set_xlim(-1 - rp, 1 + rp)
+                    ax_i.set_ylim(-1, 1)
+        plt.tight_layout()
+        plt.show()
 
     def show_system(self, i=0, **kw):
         if self.method == "starry":

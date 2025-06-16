@@ -248,7 +248,7 @@ class PolynomialModel(LightcurveModel):
                 else:
                     self.initial_guess[f"wavelength_{j}"] += initial_guess
 
-    def polynomial_model(self, params: dict, i: int = 0) -> np.array:
+    def polynomial_model(self, params: dict, i: int = 0, x=None) -> np.array:
         """
         Return a polynomial model, given a dictionary of parameters.
 
@@ -269,24 +269,25 @@ class PolynomialModel(LightcurveModel):
         else:
             data = self.get_data()
 
-        # for speed extract the variable used during the fit:
-        if hasattr(self, "independant_variable_normalised"):
-            x = self.independant_variable_normalised
-        else:
-            # get the independent variable from the Rainbow object:
-            x = data.get(self.independant_variable)
-            # if the independant variable is time, convert to days:
-            if self.independant_variable == "time":
-                x = x.to_value("day")
-            if self.normalize:
-                # normalize:
-                x = (x - np.mean(x)) / np.std(x)
-
-        if len(np.shape(x)) > 1:
-            if np.shape(x)[0] > 1:
-                x = x[i, :]
+        if x is None:
+            # for speed extract the variable used during the fit:
+            if hasattr(self, "independant_variable_normalised"):
+                x = self.independant_variable_normalised
             else:
-                x = x[0, :]
+                # get the independent variable from the Rainbow object:
+                x = data.get(self.independant_variable)
+                # if the independant variable is time, convert to days:
+                if self.independant_variable == "time":
+                    x = x.to_value("day")
+                if self.normalize:
+                    # normalize:
+                    x = (x - np.mean(x)) / np.std(x)
+
+            if len(np.shape(x)) > 1:
+                if np.shape(x)[0] > 1:
+                    x = x[i, :]
+                else:
+                    x = x[0, :]
 
         self.check_and_fill_missing_parameters(params, i)
 

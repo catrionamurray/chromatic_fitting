@@ -1,4 +1,4 @@
-__version__ = "0.13.9"
+__version__ = "0.15.1"
 
 
 def version():
@@ -56,4 +56,6 @@ def version():
 #    v 0.13.7  - added try/except statements for poly model in case there are no Fitted parameters
 #    v 0.13.8  - added extract_init_vals function to lightcurve
 #    v 0.13.9  - added check_starry_map function to TransitSpotModel
+# v 0.14.0 - add capacity for multiple planet transits
+# v 0.15.0 - add CustomModel
 

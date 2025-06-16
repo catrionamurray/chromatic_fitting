@@ -11,6 +11,7 @@ from .phase_curve import *
 from .sinusoid import *
 from .gp import *
 from .flare import *
+from .custom import *
 
 # from .spot import *
 

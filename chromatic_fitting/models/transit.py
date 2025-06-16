@@ -173,7 +173,7 @@ class TransitModel(LightcurveModel):
                         **kw
                     ),
                     # ecc=self.parameters[name + "eccentricity"].get_prior(j),
-                    # omega=self.parameters[name + "omega"].get_prior(j),
+                    omega=self.parameters[name + "omega"].get_prior(j),
                 )
 
                 if self.optimization == "separate":

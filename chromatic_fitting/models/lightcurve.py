@@ -758,14 +758,17 @@ class LightcurveModel:
                 self.plot_optimization(opt, **plotkw)
             return opt
 
-    def plot_optimization(self, map_soln, figsize=(12, 5), **kw):
+    def plot_optimization(self, map_soln, figsize=(12, 5), ylims=None, svname=None, split_models=False, **kw):
         datas, models, opts = self.choose_model_based_on_optimization_method(map_soln)
 
         for i, (opt_sep, data, model) in enumerate(zip(opts, datas, models)):
             for j in range(data.nwave):
                 # create a new plot for each wavelength
-                plt.figure(figsize=figsize)
+                fig, ax = plt.subplots(nrows=2, figsize=figsize, height_ratios=[2, 1], sharex=True,)
+
+                plt.sca(ax[0])
                 plt.title(f"Wavelength: {data.wavelength[j]}")
+                plt.ylabel("relative flux", fontsize=12)
                 # plot the data and errors
                 plt.plot(
                     data.time,
@@ -783,6 +786,7 @@ class LightcurveModel:
                     alpha=0.1,
                     linestyle="None",
                 )
+
 
                 if hasattr(self, "initial_guess"):
                     # plot the initial guess from priors
@@ -814,6 +818,24 @@ class LightcurveModel:
                             alpha=0.7
                         )
 
+                        if split_models:
+                            opts = {}
+                            for l, (k, v) in enumerate(self._chromatic_models.items()):
+                                opts[k] = np.array(pmx.eval_in_model(v.every_light_curve[f"wavelength_{i}"],
+                                                            opt_sep,
+                                                            model=model
+                                                            )[j])
+                                if np.nanmedian(opts[k]) < 0.1:
+                                    opts[k] = opts[k] + 1
+                                plt.plot(
+                                    self.data.time,
+                                    opts[k],
+                                    f"C{l}-",
+                                    label=f"{k}",
+                                    lw=2,
+                                    alpha=0.7
+                                )
+
                         if hasattr(self, 'has_gp'):
                             if self.has_gp:
                                 gp_model = self.generate_gp_model_from_params(params=opt_sep)
@@ -821,7 +843,6 @@ class LightcurveModel:
                                                                               t=self.data.time,
                                                                               return_var=True), model=model)
                                 opt_y = opt_y + mu
-
                                 plt.plot(
                                     self.data.time,
                                     mu + 1,
@@ -838,9 +859,29 @@ class LightcurveModel:
                                     label="MAP optimization (with GP)",
                                     lw=2,
                                 )
-                plt.legend(fontsize=10, numpoints=5)
-                plt.xlabel("time [days]", fontsize=24)
-                plt.ylabel("relative flux", fontsize=24)
+
+                        plt.legend(fontsize=10, numpoints=5)
+
+                        plt.sca(ax[1])
+                        plt.axhline(0, color='k', alpha=0.6, linestyle='--')
+                        plt.errorbar(
+                            data.time,
+                            1e6 * (data.flux[j] - opt_y),
+                            1e6 * data.uncertainty[j],
+                            fmt='C1,',
+                            capsize=2,
+                            label=f"stddev={np.nanstd(1e6 * (data.flux[j] - opt_y)):.0f}ppm"
+                        )
+                        plt.legend(fontsize=10)
+                        plt.ylabel("residuals [ppm]", fontsize=12)
+                        plt.ylim(-700, 700)
+                plt.xlabel("time [days]", fontsize=12)
+
+                if ylims is not None:
+                    plt.ylim(ylims[0], ylims[1])
+
+                if svname is not None:
+                    plt.savefig(svname + f"{i+j}.png")
 
     def sample_individual(self, i, **kw):
         """
@@ -1331,7 +1372,7 @@ class LightcurveModel:
 
         return fv
 
-    def extract_init_vals(self):
+    def extract_init_vals(self, i=0):
         """
         Extract the initial values provided by the user for each parameter.
         Returns
@@ -1341,8 +1382,9 @@ class LightcurveModel:
         """
         p = {}
         for k, v in self.parameters.items():
-            # print(k,v)
-            if isinstance(v, Fixed):
+            if isinstance(v, WavelikeFixed):
+                p[k] = v.values[i]
+            elif isinstance(v, Fixed):
                 p[k] = v.value
             else:
                 if 'testval' in v.inputs:
@@ -1350,7 +1392,7 @@ class LightcurveModel:
                 else:
                     if 'mu' in v.inputs:
                         p[k] = v.inputs['mu']
-                    if v.distribution == pymc3.distributions.continuous.Uniform:
+                    if v.distribution == Uniform:
                         p[k] = (v.inputs['lower'] + v.inputs['upper']) / 2
 
         return p

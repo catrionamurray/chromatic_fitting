@@ -3,19 +3,20 @@ from .lightcurve import *
 
 allowed_kernels = ["sho", "quasi_periodic", "matern32"]
 possible_params = {
-    "sho": ["sigma", "rho", "Q", "w0", "tau"],
-    "quasi_periodic": ["sigma", "period", "Q0", "dQ", "f"],
-    "matern32":["sigma", "rho", "eps"],
+    "sho": ["logsigma", "logrho", "logQ", "logw0", "logtau"],
+    "quasi_periodic": ["logsigma", "logperiod", "logQ0", "logdQ", "f"],
+    "matern32": ["logsigma", "logrho", "logeps"],
 }
 required_params = {
-    "sho": ["sigma"],
-    "quasi_periodic": ["sigma", "period", "Q0", "dQ", "f"],
-    "matern32": ["sigma", "rho"],
+    "sho": ["logsigma"],
+    "quasi_periodic": ["logsigma", "logperiod", "logQ0", "logdQ", "f"],
+    "matern32": ["logsigma", "logrho"],
 }
 defaults = {
-    "sho": dict(sigma=1.0),
-    "quasi_periodic": dict(sigma=1.0, period=1.0, dQ=1.0, Q0=1.0 / np.sqrt(2.0), f=0.0),
-    "matern32": dict(sigma=1.0, rho=1.0),
+    "sho": dict(logsigma=np.log(1.0)),
+    "quasi_periodic": dict(logsigma=np.log(1.0), logperiod=np.log(1.0), logdQ=np.log(1.0),
+                           logQ0=np.log(1.0 / np.sqrt(2.0)), f=0.0),
+    "matern32": dict(logsigma=np.log(1.0), logrho=np.log(1.0)),
 }
 
 try:
@@ -61,6 +62,7 @@ class GPModel(LightcurveModel):
         self.set_name(name)
         self.model = self.gp_model
         self.kernel_func = kernel_func[self.kernel]
+        self.has_gp = True
 
     def set_defaults(self):
         self.defaults = defaults[self.kernel]
@@ -74,7 +76,10 @@ class GPModel(LightcurveModel):
         # run quick check on parameters with kernel:
         test_params = {}
         for p in self.parameters.keys():
-            test_params[p.replace(f"{self.name}_", "")] = 0.1
+            pn = p.replace(f"{self.name}_", "")
+            if "log" in pn:
+                pn = pn.replace("log","")
+            test_params[pn] = 0.1
         try:
             kernel_func[self.kernel](**test_params)
         except Exception as e:
@@ -155,14 +160,30 @@ class GPModel(LightcurveModel):
 
                     param_i = {}
                     for pname, param in parameters_to_loop_over.items():
+                        pn = pname.replace(f"{self.name}_", "")
                         if isinstance(self.parameters[pname], WavelikeFitted):
-                            param_i[pname.replace(f"{self.name}_", "")] = param[j][i]
+                            if "log" in pname:
+                                pn = pn.replace(f"log", "")
+                                p = Deterministic(name=pn, var=pm.math.exp(param[j][i]))
+                                param_i[pn] = p
+                            else:
+                                param_i[pn] = param[j][i]
                         elif isinstance(self.parameters[pname], Fixed):
-                            param_i[pname.replace(f"{self.name}_", "")] = param[0]
+                            if "log" in pname:
+                                pn = pn.replace(f"log", "")
+                                p = Deterministic(name=pn, var=pm.math.exp(param[0]))
+                                param_i[pn] = p
+                            else:
+                                param_i[pn] = param[0]
                         else:
-                            param_i[pname.replace(f"{self.name}_", "")] = param[j][0]
+                            if "log" in pname:
+                                pn = pn.replace(f"log", "")
+                                p = Deterministic(name=pn, var=pm.math.exp(param[j][0]))
+                                param_i[pn] = p
+                            else:
+                                param_i[pn] = param[j][0]
 
-                    print(param_i)
+                    # print(param_i)
                     kernel.append(self.kernel_func(**param_i))
 
                     if type(self.mean) == float or type(self.mean) == int:
@@ -313,13 +334,23 @@ class GPModel(LightcurveModel):
 
     def gp_model(self, params, i=0):
         gp = self.generate_gp_model_from_params(params=params, i=i)
-        return gp.predict(y=y)
+        return gp.predict(y=self.data.flux[i])#.eval()
 
 
     def generate_gp_model_from_params(self, params, i=0):
         new_params = remove_all_keys_with_string_from_dictionary(params, 'interval')
+        new_params = remove_all_keys_with_string_from_dictionary(new_params, '_log_')
+        new_params = remove_all_keys_with_string_from_dictionary(new_params, 'logp_w')
         new_params = remove_string_from_each_dictionary_key(new_params, f"{self.name}_")
         new_params = remove_string_from_each_dictionary_key(new_params, f"[{i}]")
+
+        for parname, par in new_params.items():
+            if parname != "log_jitter":
+                try:
+                    new_params[parname] = par[0]
+                except IndexError:
+                    pass
+
         # for parname, par in params.items():
         #     if "interval" not in parname:
         #         # parname_without_modelname = parname.replace(f"{self.name}_", "")

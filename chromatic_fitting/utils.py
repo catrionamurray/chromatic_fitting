@@ -1,7 +1,13 @@
 from .imports import *
 
 import numpy as np
-
+from .parameters import *
+from pymc3 import (
+    Normal,
+    Uniform,
+    TruncatedNormal,
+)
+from exoplanet.distributions import QuadLimbDark
 
 def wavecal(x):
     """
@@ -431,3 +437,57 @@ def import_patricio_model():
     # set up a new model spectrum
     model = PlanetarySpectrumModel(table=table, label="injected model")
     return model, planet_params, wavelength, transmission
+
+
+def convert_param_file_to_dict(ts_params):
+    p = ts_params.to_dict()
+    pnew = {}
+    for pname in p['Unnamed: 0'].keys():
+        if p['paramtype'][pname] == "Fixed":
+            pnew[pname] = Fixed(p['testval'][pname])
+        elif p['paramtype'][pname] == "Fitted":
+            if p['distribution'][pname] == "Uniform":
+                pnew[pname] = Fitted(Uniform, lower=p['lower'][pname], upper=p['upper'][pname],
+                                     testval=p['testval'][pname])
+            elif p['distribution'][pname] == "Normal":
+                pnew[pname] = Fitted(Normal, mu=p['mu'][pname], sigma=p['sigma'][pname], testval=p['testval'][pname])
+            elif p['distribution'][pname] == "TruncatedNormal":
+                if np.isnan(p['lower'][pname]):
+                    pnew[pname] = Fitted(TruncatedNormal, upper=p['upper'][pname], mu=p['mu'][pname], sigma=p['sigma'][pname],
+                                         testval=p['testval'][pname])
+                elif np.isnan(p['upper'][pname]):
+                    pnew[pname] = Fitted(TruncatedNormal, lower=p['lower'][pname], mu=p['mu'][pname], sigma=p['sigma'][pname],
+                                         testval=p['testval'][pname])
+                else:
+                    pnew[pname] = Fitted(TruncatedNormal, lower=p['lower'][pname], upper=p['upper'][pname], mu=p['mu'][pname],
+                                         sigma=p['sigma'][pname], testval=p['testval'][pname])
+            elif p['distribution'][pname] == "QuadLimbDark":
+                pnew[pname] = Fitted(QuadLimbDark, testval=p['testval'][pname], shape=2)
+            else:
+                print(f"{p['distribution'][pname]} is none of: Uniform, Normal, TruncatedNormal or QuadLimbDark.")
+
+        elif p['paramtype'][pname] == "WavelikeFitted":
+            if p['distribution'][pname] == "Uniform":
+                pnew[pname] = WavelikeFitted(Uniform, lower=p['lower'][pname], upper=p['upper'][pname],
+                                             testval=p['testval'][pname])
+            elif p['distribution'][pname] == "Normal":
+                pnew[pname] = WavelikeFitted(Normal, mu=p['mu'][pname], sigma=p['sigma'][pname],
+                                             testval=p['testval'][pname])
+            elif p['distribution'][pname] == "TruncatedNormal":
+                if np.isnan(p['lower'][pname]):
+                    pnew[pname] = WavelikeFitted(TruncatedNormal, upper=p['upper'][pname], mu=p['mu'][pname],
+                                                 sigma=p['sigma'][pname], testval=p['testval'][pname])
+                elif np.isnan(p['upper'][pname]):
+                    pnew[pname] = WavelikeFitted(TruncatedNormal, lower=p['lower'][pname], mu=p['mu'][pname],
+                                                 sigma=p['sigma'][pname], testval=p['testval'][pname])
+                else:
+                    pnew[pname] = WavelikeFitted(TruncatedNormal, lower=p['lower'][pname], upper=p['upper'][pname],
+                                                 mu=p['mu'][pname], sigma=p['sigma'][pname],
+                                                 testval=p['testval'][pname])
+            elif p['distribution'][pname] == "QuadLimbDark":
+                pnew[pname] = WavelikeFitted(QuadLimbDark, testval=p['testval'][pname], shape=2)
+            else:
+                print(f"{p['distribution'][pname]} is none of: Uniform, Normal, TruncatedNormal or QuadLimbDark.")
+        else:
+            print(f"{pname} is none of: Fitted, Fixed or WavelikeFitted.")
+    return pnew

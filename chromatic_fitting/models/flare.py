@@ -356,7 +356,7 @@ class FlareModel(LightcurveModel):
                                               10 ** params[f"{self.name}_logA"], pymc)
         return flare
 
-    def flare_model(self, params: dict, i: int = 0) -> np.array:
+    def flare_model(self, params: dict, i: int = 0, x: list = None) -> np.array:
         """
         Return a flare model, given a dictionary of parameters.
 
@@ -369,21 +369,22 @@ class FlareModel(LightcurveModel):
         -------
         np.array: flare model with the given parameters
         """
-        flare = []
+        # flare = []
 
-        # if the optimization method is "separate" then extract wavelength {i}'s data
-        if self.optimization == "separate":
-            data = self.get_data(i)
-        else:
-            data = self.get_data()
+        if x is None:
+            # if the optimization method is "separate" then extract wavelength {i}'s data
+            if self.optimization == "separate":
+                data = self.get_data(i)
+            else:
+                data = self.get_data()
 
-        x = data.get(self.independant_variable)
-        # if the independant variable is time, convert to days:
-        if self.independant_variable == "time":
-            x = x.to_value("day")
+            x = data.get(self.independant_variable)
+            # if the independant variable is time, convert to days:
+            if self.independant_variable == "time":
+                x = x.to_value("day")
 
-        if len(np.shape(x)) > 1:
-            x = x[i, :]
+            if len(np.shape(x)) > 1:
+                x = x[i, :]
 
         self.check_and_fill_missing_parameters(params, i)
         flare = self.flare(params, x)
